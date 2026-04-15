@@ -1,0 +1,107 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from PySide6.QtCore import QSettings
+
+from app_state import AppSettings, LoggingPreferences, PlotPreferences, WindowPreferences
+from protocol_constants import BLE_MODE
+from recording_io import recording_directory
+
+
+class SettingsStore:
+    def __init__(self) -> None:
+        self._settings = QSettings("zss-demokit", "gui-prototype")
+
+    def load(self) -> AppSettings:
+        settings = AppSettings()
+        settings.last_mode = str(self._settings.value("mode/last_mode", BLE_MODE))
+
+        settings.plot = PlotPreferences(
+            time_span=str(self._settings.value("plot/time_span", settings.plot.time_span)),
+            axis_mode=str(self._settings.value("plot/axis_mode", settings.plot.axis_mode)),
+            auto_scale=self._to_bool(self._settings.value("plot/auto_scale", settings.plot.auto_scale)),
+            selected_plot=str(self._settings.value("plot/selected_plot", settings.plot.selected_plot)),
+            x_follow_enabled=self._to_bool(self._settings.value("plot/x_follow_enabled", settings.plot.x_follow_enabled)),
+            manual_y_ranges=self._load_manual_ranges(),
+        )
+
+        default_recording_directory = str(recording_directory())
+        settings.logging = LoggingPreferences(
+            recording_directory=str(
+                self._settings.value("logging/recording_directory", default_recording_directory)
+            ),
+            partial_recovery_notice_enabled=self._to_bool(
+                self._settings.value("logging/partial_recovery_notice_enabled", True)
+            ),
+        )
+
+        settings.windows = WindowPreferences(
+            main_window_width=int(self._settings.value("windows/main_window_width", settings.windows.main_window_width)),
+            main_window_height=int(self._settings.value("windows/main_window_height", settings.windows.main_window_height)),
+            launcher_window_width=int(
+                self._settings.value("windows/launcher_window_width", settings.windows.launcher_window_width)
+            ),
+            launcher_window_height=int(
+                self._settings.value("windows/launcher_window_height", settings.windows.launcher_window_height)
+            ),
+        )
+        return settings
+
+    def save(self, settings: AppSettings) -> None:
+        self._settings.setValue("mode/last_mode", settings.last_mode)
+        self._settings.setValue("plot/time_span", settings.plot.time_span)
+        self._settings.setValue("plot/axis_mode", settings.plot.axis_mode)
+        self._settings.setValue("plot/auto_scale", settings.plot.auto_scale)
+        self._settings.setValue("plot/selected_plot", settings.plot.selected_plot)
+        self._settings.setValue("plot/x_follow_enabled", settings.plot.x_follow_enabled)
+        self._settings.setValue("plot/manual_y_ranges", json.dumps(self._normalize_ranges(settings.plot.manual_y_ranges)))
+        self._settings.setValue("logging/recording_directory", settings.logging.recording_directory)
+        self._settings.setValue(
+            "logging/partial_recovery_notice_enabled",
+            settings.logging.partial_recovery_notice_enabled,
+        )
+        self._settings.setValue("windows/main_window_width", settings.windows.main_window_width)
+        self._settings.setValue("windows/main_window_height", settings.windows.main_window_height)
+        self._settings.setValue("windows/launcher_window_width", settings.windows.launcher_window_width)
+        self._settings.setValue("windows/launcher_window_height", settings.windows.launcher_window_height)
+        self._settings.sync()
+
+    def recording_directory_path(self, settings: AppSettings) -> Path:
+        raw_value = settings.logging.recording_directory.strip()
+        return Path(raw_value) if raw_value else recording_directory()
+
+    @staticmethod
+    def _to_bool(value: object) -> bool:
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, str):
+            return value.lower() in {"1", "true", "yes", "on"}
+        return bool(value)
+
+    def _load_manual_ranges(self) -> dict[str, tuple[float, float]]:
+        raw = self._settings.value("plot/manual_y_ranges", "")
+        if not raw:
+            return {}
+        try:
+            parsed = json.loads(str(raw))
+        except json.JSONDecodeError:
+            return {}
+
+        manual_ranges: dict[str, tuple[float, float]] = {}
+        if isinstance(parsed, dict):
+            for key, value in parsed.items():
+                if isinstance(value, list) and len(value) == 2:
+                    try:
+                        manual_ranges[str(key)] = (float(value[0]), float(value[1]))
+                    except (TypeError, ValueError):
+                        continue
+        return manual_ranges
+
+    @staticmethod
+    def _normalize_ranges(ranges: dict[str, tuple[float, float]]) -> dict[str, list[float]]:
+        normalized: dict[str, list[float]] = {}
+        for key, value in ranges.items():
+            normalized[key] = [float(value[0]), float(value[1])]
+        return normalized

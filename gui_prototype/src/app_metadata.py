@@ -1,0 +1,5 @@
+APP_ORGANIZATION = "zss-demokit"
+APP_ID = "zss_demokit_gui_prototype"
+APP_NAME = "ZSS Demo Kit"
+APP_VERSION = "0.1.0-prototype"
+APP_SUBTITLE = "Desktop UI prototype for BLE and Wired sensor workflows"

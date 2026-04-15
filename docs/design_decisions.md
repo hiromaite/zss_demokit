@@ -1,0 +1,165 @@
+# Design Decisions
+
+本書は、2026-04-08 時点で確定した設計判断をまとめたメモである。
+
+未確定の詳細項目は各ドラフト文書の `Open Questions` を参照すること。
+
+## 1. 運用モード
+
+- GUI は `BLE mode` と `Wired mode` の 2 モードを持つ
+- 起動時には、インタラクティブなスプラッシュ / ランチャー画面でモードを選択する
+- 起動後も、設定画面または設定モーダルからモード変更できるようにする
+- 同時接続は行わない
+
+補足:
+
+- 実装上は、モード変更時に接続中デバイスの切断を要求する構成を推奨する
+
+## 2. デバイス構成
+
+- Wired デバイスのハードウェアは、BLE デバイスと同系統の構成を想定する
+- Wired firmware は BLE firmware の改造版または派生設計を許容する
+- Wired モードの GUI から見える接続形態は `Windows COM port` とする
+- v1 の wired serial default は `115200 baud`, `8N1` とする
+
+補足:
+
+- 基板側の実装が USB CDC か USB-UART bridge かは問わず、GUI 契約上は byte-stream serial として扱う
+
+## 3. BLE 識別子
+
+- BLE の device name と既存 UUID は、可能な限り維持する
+
+理由:
+
+- 既存資産の移行を容易にするため
+- GUI 実装とデバッグ時の混乱を減らすため
+
+変更を検討する条件:
+
+- 現行 characteristic の責務分割では新仕様を無理なく載せられない場合
+- 旧仕様と新仕様を同時運用したい場合
+
+## 4. v1 の必須操作
+
+- `Pump ON/OFF`
+- `Get Status`
+- `Get Capabilities`
+
+方針:
+
+- BLE / Wired の両モードで、同一の論理機能セットを持たせる
+
+## 5. v1 の表示項目
+
+両モードで共通の主要表示項目は以下とする。
+
+- `Zirconia Output Voltage` [V]
+- `Heater RTD Resistance` [Ohm]
+- `Flow Rate` [L/min]
+
+補足:
+
+- v1 の UI 文言は英語表記を採用する
+
+## 6. サンプリング要求
+
+- BLE: `50 to 100 ms` は目標値
+- Wired: `10 ms` は必須要件
+
+設計上の意味:
+
+- Wired では parser 負荷や描画負荷よりも、まず通信安定性を優先する
+
+## 7. タイムスタンプ方針
+
+- 記録ファイルには GUI 受信時刻のみを残す
+- デバイス側タイムスタンプは v1 の必須要件にしない
+
+補足:
+
+- 欠落検知のため、`sequence` などの連番は引き続き推奨する
+
+## 8. 記録フォーマット
+
+- BLE / Wired で共通フォーマットを採用する
+
+## 9. グラフ UI 方針
+
+- `example_gui` の方向性をそのまま踏襲する
+- 可視化ライブラリが持つ操作性と、`example_gui` で意図的に実装された操作性を維持する
+- manual pan / zoom / scale の挙動は BLE / Wired で一致させる
+- plot history は数分で暗黙に消えない方針とし、pruning が必要なら explicit policy にする
+
+## 10. GUI レイアウト方針
+
+- `LauncherWindow` は compact に保ち、初期 mode 選択のためだけに過剰な面積を使わない
+- `MainWindow` に redundant な top bar は設けない
+- mode、connection、recording、warning の主要状態は left-side panels と log に集約する
+- `Settings` button は left-side `Connection` panel に配置する
+- left / right の主要カラム幅は content length に依存させない
+- 長い status text や recording path は、panel を広げず省略表示または折り返しで扱う
+- visual theme は `example_gui` に寄せた dark direction を採用する
+
+## 11. 通信異常時の動作
+
+- v1 では警告表示のみを要求とする
+- 自動再接続は必須にしない
+- 自動安全停止も必須にしない
+
+## 12. 派生値の計算責務
+
+推奨判断:
+
+- 表示・解析寄りの派生値は GUI 側で計算する
+- ハードウェア依存が強い値は device 側の canonical measurement として送る
+
+v1 の解釈:
+
+- `Flow Rate` のような表示寄りの換算値は GUI 側計算を第一候補とする
+- transport では、必要に応じて `flow_sensor_voltage_v` のような元信号を送る
+- v1 実装では `dummy_linear_v1` を使い、`flow_rate_lpm = max(0.0, 1.0 * flow_sensor_voltage_v + 0.0)` とする
+
+補足:
+
+- 実センサに合わせた正式換算式は後続フェーズで置き換える
+
+## 13. v1 対象外
+
+- 校正機能
+- 旧ログ / 旧 GUI / 旧 firmware との後方互換
+- インストーラ作成
+- オンライン配布
+
+## 14. 配布条件
+
+- `PyInstaller` によるパッケージ化
+- 実行環境は `Windows 11 Pro`
+- インストーラなし
+- 管理者権限なし
+
+補足:
+
+- release 前の試作確認とローカルテストは macOS 上で行う
+- local GUI prototype とその仮想環境は `Python 3.12` を前提とする
+
+## 15. 優先順位
+
+優先度は以下の順とする。
+
+1. 通信安定性
+2. UI / UX
+3. 将来拡張性
+
+## 16. 次フェーズで回収する user feedback
+
+- serial mode でも BLE mode と同じ manual plot interaction を保証する
+- plot の古い履歴が数分で暗黙に消えないよう、retention policy を見直す
+- GUI theme を `example_gui` の dark palette 方向へ戻す
+- `SettingsDialog` からの BLE / Wired mode switch を正式に機能させる
+- intended BLE device / serial port は filter と auto-preselect を行う
+
+## 17. 直近の未確定事項
+
+- BLE extension service / response carrier の最終方針
+- raw payload の debug 保存方針

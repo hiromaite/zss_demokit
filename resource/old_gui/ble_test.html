@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>M5Stack BLE Sensor Monitor</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom/dist/chartjs-plugin-zoom.min.js"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            overflow: hidden; /* Disable full page scroll */
+        }
+        h1 { text-align: center; color: #333; }
+        #main-container { 
+            display: flex; 
+            gap: 1.5em; 
+            width: 100%; 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            height: 100vh; /* Make container full height */
+            padding: 1em;
+        }
+        #chart-container { 
+            flex: 3;
+            background: white; 
+            padding: 1.5em; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        #info-panel { 
+            flex: 1;
+            display: flex; 
+            flex-direction: column; 
+            gap: 1.5em;
+            overflow-y: auto; /* Enable vertical scroll only for this panel */
+            height: 100%; /* Ensure it respects the container height */
+        }
+        .panel { 
+            width: 100%;
+            background: white; 
+            padding: 1.5em; 
+            border-radius: 8px; 
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+        .panel h2 { 
+            margin-top: 0; 
+            margin-bottom: 1em;
+            border-bottom: 1px solid #e8e8e8; 
+            padding-bottom: 0.5em; 
+            font-size: 1.2em;
+            color: #555;
+        }
+        .status-item, .value-item { 
+            display: flex; 
+            justify-content: space-between; 
+            padding: 0.6em 0; 
+            font-size: 0.95em;
+        }
+        .status-item:last-child, .value-item:last-child { border-bottom: none; }
+        .status-item span:first-child, .value-item span:first-child { color: #666; }
+        .status-item span:last-child, .value-item span:last-child { font-weight: 600; }
+        #interval-status .error { color: #dc3545; font-weight: bold; }
+
+        /* Button Styles */
+        .button-group { display: flex; flex-direction: column; gap: 1em; }
+        .btn {
+            width: 100%;
+            font-size: 1em;
+            padding: 0.8em 1.2em;
+            cursor: pointer;
+            border-radius: 6px;
+            border: none;
+            color: white;
+            transition: background-color 0.2s ease;
+            text-align: center;
+        }
+        .btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.65;
+        }
+
+        /* Color Modifiers */
+        .btn-primary { background-color: #007bff; }
+        .btn-primary:hover:not(:disabled) { background-color: #0056b3; }
+
+        .btn-secondary { background-color: #6c757d; }
+        .btn-secondary:hover:not(:disabled) { background-color: #5a6268; }
+
+        .btn-success { background-color: #28a745; }
+        .btn-success:hover:not(:disabled) { background-color: #1e7e34; }
+
+        .btn-danger { background-color: #dc3545; }
+        .btn-danger:hover:not(:disabled) { background-color: #b21f2d; }
+
+        .chart-controls button {
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+        }
+        .chart-controls button:hover {
+            background-color: #e0e0e0;
+        }
+
+        /* Collapsible Panel Styles */
+        .collapsible {
+            cursor: pointer;
+            user-select: none;
+        }
+        .collapsible:after {
+            content: '\25BC'; /* Down arrow */
+            float: right;
+            transition: transform 0.2s ease;
+        }
+        .collapsible.active:after {
+            transform: rotate(180deg); /* Up arrow */
+        }
+        .panel-content {
+            display: block;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            max-height: 500px; /* Set a large enough max-height */
+        }
+        .panel-content.collapsed {
+            max-height: 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="main-container">
+        <div class="chart-container" style="position: relative; height:90vh; width:70%">
+            <div class="chart-controls">
+                <label for="timespan-select">Time Span:</label>
+                <select id="timespan-select">
+                    <option value="5">5 seconds</option>
+                    <option value="20">20 seconds</option>
+                    <option value="60" selected>60 seconds</option>
+                    <option value="300">5 minutes</option>
+                    <option value="1200">20 minutes</option>
+                    <option value="3600">1 hour</option>
+                </select>
+                <button id="reset-zoom-button">Reset Zoom</button>
+                <button id="toggle-graph-update">Pause Graph</button>
+                <button id="export-csv-button">Export to CSV</button>
+            </div>
+            <canvas id="sensor-chart"></canvas>
+        </div>
+        <div id="info-panel">
+            <div id="controls-container" class="panel">
+                <h2 class="collapsible">Connection & Control</h2>
+                <div class="panel-content collapsed">
+                    <div class="button-group">
+                        <button id="bleConnectButton" class="btn btn-primary">Connect BLE Device</button>
+                        <button id="serialConnectButton" class="btn btn-secondary">Connect Serial Device</button>
+                        <button id="pump-toggle-button" class="btn btn-success" disabled>Turn Pump ON</button>
+                        <button id="calibrate-zero-point-button" class="btn btn-secondary">Calibrate Zero Point</button>
+                        <button id="toggle-flow-invert-button" class="btn btn-success">Invert Flow OFF</button>
+                    </div>
+                    <p id="serialStatus" style="font-style: italic; color: #555; margin-top: 1em;">Not connected. Please connect a device.</p>
+                </div>
+            </div>
+            <div id="status-container" class="panel">
+                <h2>System Status</h2>
+                <div class="status-item"><span>BLE Connection:</span> <span id="connection-status">Disconnected</span></div>
+                <div class="status-item"><span>Serial Connection:</span> <span id="serial-status">Disconnected</span></div>
+                <div class="status-item"><span>Pump:</span> <span id="pump-status">OFF</span></div>
+                <div class="status-item"><span>ADC Error:</span> <span id="adc-status">None</span></div>
+                <div class="status-item"><span>Update Interval (Target/Actual):</span> <span id="interval-status">- / - ms</span></div>
+            </div>
+            <div id="values-container" class="panel">
+                <h2>Real-time Values</h2>
+                <div class="value-item"><span>Internal Voltage:</span> <span id="internal-voltage">-.-- V</span></div>
+                <div class="value-item"><span>Zirconia Ip Voltage:</span> <span id="ip-voltage">-.-- V</span></div>
+                <div class="value-item"><span>Heater RTD Resistance:</span> <span id="rtd-resistance">-.-- Ohm</span></div>
+                <div class="value-item"><span>Zirconia Output Voltage:</span> <span id="output-voltage">-.-- V</span></div>
+                <div class="value-item"><span>Flow Rate:</span> <span id="flow-rate">-.-- cc/min</span></div>
+                <div class="value-item"><span>O2 Concentration (ZSS 1-Cell):</span> <span id="o2-concentration-zirconia">-.-- %</span></div>
+            </div>
+
+            <div id="zss2-calibration-container" class="panel">
+                <h2 class="collapsible">ZSS 2-Cell Calibration</h2>
+                <div class="panel-content collapsed">
+                    <table id="zss2-calibration-table">
+                        <thead>
+                            <tr><th>O2 %</th><th>Voltage (V)</th><th></th></tr>
+                        </thead>
+                        <tbody>
+                            <!-- Calibration points will be inserted here by JavaScript -->
+                        </tbody>
+                    </table>
+                    <button id="add-calibration-point" class="btn btn-primary">Add Point</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // UUIDs
+        const MONITORING_SERVICE_UUID = "0000181a-0000-1000-8000-00805f9b34fb";
+        const SENSOR_DATA_CHARACTERISTIC_UUID = "00002a58-0000-1000-8000-00805f9b34fb";
+        const CONTROL_SERVICE_UUID = "0000180f-0000-1000-8000-00805f9b34fb";
+        const PUMP_CONTROL_CHARACTERISTIC_UUID = "00002a19-0000-1000-8000-00805f9b34fb";
+
+        // O2 Calibration Constants (Editable)
+        const O2_CAL_VOLTAGE_ZERO_PERCENT = 0.0; // V
+        const O2_CAL_PERCENT_ZERO_VOLTAGE = 0.0; // %
+        const O2_CAL_VOLTAGE_AT_KNOWN_PERCENTAGE = 0.640; // V
+        const O2_CAL_KNOWN_PERCENTAGE = 21.0; // %
+
+        // Calculated Slope for O2 Conversion (Y = mX + C)
+        const O2_CAL_SLOPE = (O2_CAL_KNOWN_PERCENTAGE - O2_CAL_PERCENT_ZERO_VOLTAGE) / (O2_CAL_VOLTAGE_AT_KNOWN_PERCENTAGE - O2_CAL_VOLTAGE_ZERO_PERCENT);
+        const O2_CAL_INTERCEPT = O2_CAL_PERCENT_ZERO_VOLTAGE - (O2_CAL_SLOPE * O2_CAL_VOLTAGE_ZERO_PERCENT);
+
+        // DOM Elements
+        const bleConnectButton = document.getElementById('bleConnectButton'); // Renamed to avoid conflict
+        const pumpToggleButton = document.getElementById('pump-toggle-button');
+        const connectionStatusElem = document.getElementById('connection-status');
+        const pumpStatusElem = document.getElementById('pump-status');
+        const adcStatusElem = document.getElementById('adc-status');
+        const intervalStatusElem = document.getElementById('interval-status');
+        const internalVoltageElem = document.getElementById('internal-voltage');
+        const ipVoltageElem = document.getElementById('ip-voltage');
+        const rtdResistanceElem = document.getElementById('rtd-resistance');
+        const outputVoltageElem = document.getElementById('output-voltage');
+        const flowRateElem = document.getElementById('flow-rate');
+        const o2ConcentrationZirconiaElem = document.getElementById('o2-concentration-zirconia');
+
+        // New DOM Elements for Graph Control
+        const toggleGraphUpdateButton = document.getElementById('toggle-graph-update');
+        const exportCsvButton = document.getElementById('export-csv-button');
+
+        // New DOM Elements for Serial Control
+        const calibrateZeroPointButton = document.getElementById('calibrate-zero-point-button');
+        const toggleFlowInvertButton = document.getElementById('toggle-flow-invert-button');
+
+        // Serial DOM Elements
+        const serialConnectButton = document.getElementById('serialConnectButton');
+        const serialStatusDisplay = document.getElementById('serial-status');
+
+        // ZSS 2-Cell Calibration Globals
+        let zss2CalibrationPoints = JSON.parse(localStorage.getItem('zss2CalibrationPoints')) || [
+            { o2: 0, voltage: 0.0 },
+            { o2: 21, voltage: 5.0 } // Default points if no data in localStorage
+        ];
+
+        // Globals
+        let sensorChart;
+        let pumpControlCharacteristic;
+        let isPumpOn = false;
+        let isGraphPaused = false; // New: Graph pause status
+        let isFlowInverted = false; // New: Flow inversion status
+        let lastNotificationTimestamp = 0;
+        let lastSerialTimestamp = 0;
+
+        // Serial Globals
+        let serialPort;
+        let serialReader;
+        let lineBuffer = '';
+
+        // Initialize Chart.js
+        function initChart() {
+            const ctx = document.getElementById('sensor-chart').getContext('2d');
+            sensorChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: [
+                        // BLE Sensor Data
+                        { label: 'Internal Voltage', borderColor: 'rgba(255, 99, 132, 1)', data: [], fill: false, yAxisID: 'y-voltage', hidden: true },
+                        { label: 'Zirconia Ip Voltage', borderColor: 'rgba(54, 162, 235, 1)', data: [], fill: false, yAxisID: 'y-voltage', hidden: true },
+                        { label: 'Heater RTD Resistance', borderColor: 'rgba(75, 192, 192, 1)', data: [], fill: false, yAxisID: 'y-resistance', hidden: true }, // Default hidden
+                        { label: 'Zirconia Output Voltage', borderColor: 'rgba(153, 102, 255, 1)', data: [], fill: false, yAxisID: 'y-voltage' },
+                        { label: 'Flow Rate', borderColor: 'rgba(255, 159, 64, 1)', data: [], fill: false, yAxisID: 'y-flow', hidden: true }, // Default hidden
+                        { label: 'O2 Concentration (ZSS 2-Cell)', borderColor: 'rgba(255, 206, 86, 1)', data: [], fill: false, yAxisID: 'y-percentage', hidden: true },
+                        { label: 'O2 Concentration (ZSS 1-Cell)', borderColor: 'rgba(255, 99, 132, 0.5)', data: [], fill: false, yAxisID: 'y-percentage', hidden: true },
+                        { label: 'ZSS 2-Cell Raw Voltage', data: [], hidden: true, yAxisID: 'y-voltage', hidden: true }, // Hidden dataset for recalculation
+                        
+                        // Serial Data (up to 3 channels)
+                        { label: 'Flow Rate (Serial)', borderColor: 'rgba(0, 123, 255, 0.7)', data: [], fill: false, yAxisID: 'y-serial', hidden: true },
+                        { label: 'Pressure In', borderColor: 'rgba(40, 167, 69, 0.7)', data: [], fill: false, yAxisID: 'y-serial', hidden: true },
+                        { label: 'Pressure Out', borderColor: 'rgba(220, 53, 69, 0.7)', data: [], fill: false, yAxisID: 'y-serial', hidden: true },
+                    ]
+                },
+                options: {
+                    maintainAspectRatio: false, // Disable aspect ratio to allow full height utilization
+                    elements: { point: { radius: 0 } },
+                    scales: {
+                        x: { type: 'linear', min: -60, max: 0, title: { display: true, text: 'Time from Present (s)' } },
+                        'y-voltage': { type: 'linear', position: 'left', title: { display: true, text: 'Voltage (V)' } },
+                        'y-resistance': { type: 'linear', position: 'right', title: { display: true, text: 'Resistance (Ohm)' }, grid: { drawOnChartArea: false }, display: false }, // Default hidden
+                        'y-flow': { type: 'linear', position: 'right', title: { display: true, text: 'Flow (cc/min)' }, grid: { drawOnChartArea: false }, display: false }, // Default hidden
+                        'y-percentage': { type: 'linear', position: 'left', title: { display: true, text: 'Concentration (%)' }, grid: { drawOnChartArea: false }, offset: true },
+                        'y-serial': { type: 'linear', position: 'right', title: { display: true, text: 'Serial Value' }, grid: { drawOnChartArea: false }, display: false }, // Default hidden
+                    },
+                    animation: { duration: 0 },
+                    plugins: {
+                        legend: {
+                            onClick: (e, legendItem, legend) => {
+                                const chart = legend.chart;
+                                const index = legendItem.datasetIndex;
+                                const meta = chart.getDatasetMeta(index);
+
+                                // Toggle visibility
+                                meta.hidden = meta.hidden === null ? !chart.data.datasets[index].hidden : null;
+
+                                // Handle associated Y-axis visibility
+                                const yAxisID = chart.data.datasets[index].yAxisID;
+                                if (yAxisID) {
+                                    const axis = chart.scales[yAxisID];
+                                    if (axis) {
+                                        // Check if any other dataset using this axis is visible
+                                        const isAnyotherDatasetVisible = chart.data.datasets.some((ds, i) => {
+                                            return ds.yAxisID === yAxisID && !chart.getDatasetMeta(i).hidden;
+                                        });
+                                        axis.options.display = isAnyotherDatasetVisible;
+                                    }
+                                }
+
+                                chart.update();
+                            }
+                        },
+                        zoom: {
+                            pan: {
+                                enabled: true,
+                                mode: 'y', // Default pan mode
+                            },
+                            zoom: {
+                                wheel: {
+                                    enabled: true,
+                                    mode: 'y', // Default wheel zoom is y-axis only
+                                    // Use Alt key to zoom only the axis under the cursor
+                                    modifierKey: 'alt',
+                                },
+                                drag: {
+                                    enabled: true, // Enable drag-to-zoom
+                                    mode: 'xy', // Allow drag selection for both X and Y axes
+                                },
+                                pinch: {
+                                    enabled: true, // Keep pinch zoom enabled
+                                    mode: 'xy',
+                                },
+                                mode: 'xy', // Overall mode
+                                scaleMode: 'xy', // Required for modifier-based single-axis zoom
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // --- Data Export Function ---
+        function exportDataToCSV() {
+            if (!sensorChart || !sensorChart.data || !sensorChart.data.datasets) {
+                console.warn('No chart data to export.');
+                return;
+            }
+
+            const datasets = sensorChart.data.datasets; // Export all datasets
+            if (datasets.length === 0) {
+                alert('No datasets to export.');
+                return;
+            }
+
+            // Collect all unique timestamps
+            const allTimestamps = new Set();
+            datasets.forEach(ds => {
+                ds.data.forEach(point => allTimestamps.add(point.x));
+            });
+            const sortedTimestamps = Array.from(allTimestamps).sort((a, b) => a - b);
+
+            // Create header row
+            let csvContent = 'Timestamp (s)';
+            datasets.forEach(ds => {
+                csvContent += `,${ds.label}`;
+            });
+            csvContent += '\n';
+
+            // Create data rows
+            sortedTimestamps.forEach(ts => {
+                let row = `${ts}`;
+                datasets.forEach(ds => {
+                    const point = ds.data.find(p => p.x === ts);
+                    row += `,${point ? point.y : ''}`;
+                });
+                csvContent += row + '\n';
+            });
+
+            // Create Blob and download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            
+            const now = new Date();
+            const filename = `sensor_data_${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}-${now.getSeconds().toString().padStart(2, '0')}.csv`;
+            a.download = filename;
+            
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        // --- Event Listeners Setup ---
+        function setupEventListeners() {
+            bleConnectButton.addEventListener('click', connectBLE);
+            pumpToggleButton.addEventListener('click', () => {
+                const command = isPumpOn ? 0xAA : 0x55;
+                sendPumpCommand(command);
+            });
+            serialConnectButton.addEventListener('click', connectSerial);
+            document.getElementById('add-calibration-point').addEventListener('click', addCalibrationPoint);
+
+            document.getElementById('timespan-select').addEventListener('change', (event) => {
+                const seconds = parseInt(event.target.value, 10);
+                if (sensorChart) {
+                    sensorChart.options.scales.x.min = -seconds;
+                    sensorChart.update();
+                }
+            });
+
+            document.getElementById('reset-zoom-button').addEventListener('click', () => {
+                if(sensorChart) {
+                    sensorChart.resetZoom();
+                }
+            });
+
+            toggleGraphUpdateButton.addEventListener('click', () => {
+                isGraphPaused = !isGraphPaused;
+                toggleGraphUpdateButton.textContent = isGraphPaused ? 'Resume Graph' : 'Pause Graph';
+            });
+
+            exportCsvButton.addEventListener('click', exportDataToCSV);
+
+            calibrateZeroPointButton.addEventListener('click', () => {
+                sendSerialCommand(0xCC);
+            });
+
+            toggleFlowInvertButton.addEventListener('click', () => {
+                isFlowInverted = !isFlowInverted;
+                if (isFlowInverted) {
+                    toggleFlowInvertButton.textContent = 'Invert Flow ON';
+                    toggleFlowInvertButton.classList.remove('btn-success');
+                    toggleFlowInvertButton.classList.add('btn-danger');
+                } else {
+                    toggleFlowInvertButton.textContent = 'Invert Flow OFF';
+                    toggleFlowInvertButton.classList.remove('btn-danger');
+                    toggleFlowInvertButton.classList.add('btn-success');
+                }
+                sendSerialCommand(isFlowInverted ? 0x55 : 0xAA);
+            });
+
+            // Collapsible Panel Logic
+            document.querySelectorAll('.collapsible').forEach(header => {
+                header.addEventListener('click', () => {
+                    header.classList.toggle('active');
+                    const content = header.nextElementSibling;
+                    content.classList.toggle('collapsed');
+                });
+            });
+        }
+
+        // Handle incoming BLE notifications        // --- ZSS 2-Cell Calibration Table Management ---
+        function renderCalibrationTable() {
+            const tableBody = document.querySelector('#zss2-calibration-table tbody');
+            tableBody.innerHTML = ''; // Clear existing rows
+
+            zss2CalibrationPoints.sort((a, b) => a.voltage - b.voltage); // Sort by voltage
+
+            zss2CalibrationPoints.forEach((point, index) => {
+                const row = tableBody.insertRow();
+                const o2Cell = row.insertCell();
+                const voltageCell = row.insertCell();
+                const removeCell = row.insertCell();
+
+                o2Cell.contentEditable = true;
+                voltageCell.contentEditable = true;
+
+                o2Cell.textContent = point.o2;
+                voltageCell.textContent = point.voltage;
+
+                o2Cell.addEventListener('blur', (e) => {
+                    const val = parseFloat(e.target.textContent);
+                    if (!isNaN(val)) point.o2 = val;
+                    renderCalibrationTable(); // Re-sort and render
+                });
+                voltageCell.addEventListener('blur', (e) => {
+                    const val = parseFloat(e.target.textContent);
+                    if (!isNaN(val)) point.voltage = val;
+                    renderCalibrationTable(); // Re-sort and render
+                });
+                
+                const removeButton = document.createElement('button');
+                removeButton.textContent = 'Remove';
+                removeButton.onclick = () => {
+                    zss2CalibrationPoints.splice(index, 1);
+                    renderCalibrationTable();
+                };
+                removeCell.appendChild(removeButton);
+            });
+
+            localStorage.setItem('zss2CalibrationPoints', JSON.stringify(zss2CalibrationPoints)); // Save to localStorage
+            recalculateAndRedrawZss2Data(); // Recalculate and redraw the graph
+        }
+
+        // --- Recalculate and Redraw ZSS O2 Data ---
+        function recalculateAndRedrawZss2Data() {
+            if (!sensorChart) return;
+
+            const zss2Dataset = sensorChart.data.datasets[5]; // O2 Concentration (ZSS 2-Cell)
+            const zss2RawVoltageDataset = sensorChart.data.datasets[6]; // Hidden raw voltage data
+
+            if (!zss2RawVoltageDataset) return; // Exit if raw data isn't stored yet
+
+            // Recalculate all O2 points from the raw voltage history
+            zss2Dataset.data = zss2RawVoltageDataset.data.map(point => {
+                return { 
+                    x: point.x,
+                    y: getO2FromZss2Voltage(point.y) 
+                };
+            });
+
+            sensorChart.update('none'); // Update the chart without animation
+        }
+
+        function addCalibrationPoint() {
+            zss2CalibrationPoints.push({ o2: 0, voltage: 0.0 });
+            renderCalibrationTable();
+        }
+
+        function getO2FromZss2Voltage(voltage) {
+            if (zss2CalibrationPoints.length < 2) return 0; // Not enough points
+
+            // Find the two points the voltage is between
+            let p1 = zss2CalibrationPoints[0];
+            let p2 = zss2CalibrationPoints[zss2CalibrationPoints.length - 1];
+
+            if (voltage <= p1.voltage) return p1.o2;
+            if (voltage >= p2.voltage) return p2.o2;
+
+            for (let i = 0; i < zss2CalibrationPoints.length - 1; i++) {
+                if (voltage >= zss2CalibrationPoints[i].voltage && voltage <= zss2CalibrationPoints[i+1].voltage) {
+                    p1 = zss2CalibrationPoints[i];
+                    p2 = zss2CalibrationPoints[i+1];
+                    break;
+                }
+            }
+
+            // Linear interpolation
+            const slope = (p2.o2 - p1.o2) / (p2.voltage - p1.voltage);
+            return p1.o2 + slope * (voltage - p1.voltage);
+        }
+
+        // --- Data Downsampling for Performance ---
+        function downsampleData() {
+            const DOWNSAMPLE_THRESHOLD = 5000; // Trigger downsampling when a dataset has this many points
+            const DOWNSAMPLE_FACTOR = 10; // Keep 1 in every 10 points for old data
+            const DOWNSAMPLE_TIME_LIMIT = -60; // Downsample data older than 60 seconds
+
+            const excludedLabels = [
+                'Zirconia Output Voltage',
+                'O2 Concentration (ZSS 1-Cell)',
+                'ZSS 2-Cell Raw Voltage'
+            ];
+
+            sensorChart.data.datasets.forEach(dataset => {
+                // Skip if dataset is excluded or doesn't have enough data
+                if (excludedLabels.includes(dataset.label) || dataset.data.length < DOWNSAMPLE_THRESHOLD) {
+                    return;
+                }
+
+                const originalData = dataset.data;
+                const recentData = originalData.filter(p => p.x > DOWNSAMPLE_TIME_LIMIT);
+                const oldData = originalData.filter(p => p.x <= DOWNSAMPLE_TIME_LIMIT);
+
+                const thinnedOldData = oldData.filter((p, i) => i % DOWNSAMPLE_FACTOR === 0);
+
+                dataset.data = [...recentData, ...thinnedOldData];
+            });
+        }
+
+        async function sendSerialCommand(command) {
+            if (!serialPort || !serialPort.writable) {
+                console.warn('Serial port not connected or not writable.');
+                return;
+            }
+            try {
+                const writer = serialPort.writable.getWriter();
+                await writer.write(new Uint8Array([command]));
+                writer.releaseLock();
+                console.log(`Sent serial command: 0x${command.toString(16).toUpperCase()}`);
+            } catch (error) {
+                console.error('Failed to send serial command:', error);
+            }
+        }
+
+        // Handle incoming BLE notifications
+        function handleNotifications(event) {
+            const currentTime = performance.now();
+            const value = event.target.value;
+            const dataView = new DataView(value.buffer);
+
+            const internalVoltage = dataView.getFloat32(0, true);
+            const zirconiaIpVoltage = dataView.getFloat32(4, true);
+            const heaterRtdResistance = dataView.getFloat32(8, true);
+            const zirconiaOutputVoltage = dataView.getFloat32(12, true);
+            const systemState = dataView.getUint32(16, true);
+            const targetInterval = dataView.getUint32(20, true);
+            const flowSensorVoltage = dataView.getFloat32(24, true);
+            const zss2CellValue = dataView.getFloat32(28, true);
+
+            // Unit Conversion
+            const flowRate = (flowSensorVoltage / 3.3) * 400 - 200;
+            const o2ConcentrationZss2 = getO2FromZss2Voltage(zss2CellValue); // Use new interpolation function
+            const o2ConcentrationZirconia = (O2_CAL_SLOPE * zirconiaOutputVoltage) + O2_CAL_INTERCEPT; // New calculation
+
+            const actualInterval = (lastNotificationTimestamp > 0) ? currentTime - lastNotificationTimestamp : targetInterval;
+            lastNotificationTimestamp = currentTime;
+
+            isPumpOn = (systemState & 1) > 0;
+
+            internalVoltageElem.textContent = `${internalVoltage.toFixed(2)} V`;
+            ipVoltageElem.textContent = `${zirconiaIpVoltage.toFixed(3)} V`;
+            rtdResistanceElem.textContent = `${heaterRtdResistance.toFixed(1)} Ohm`;
+            outputVoltageElem.textContent = `${zirconiaOutputVoltage.toFixed(3)} V`;
+            flowRateElem.textContent = `${flowRate.toFixed(1)} cc/min`;
+            o2ConcentrationZirconiaElem.textContent = `${o2ConcentrationZirconia.toFixed(1)} %`; // Update info panel
+
+            pumpStatusElem.textContent = isPumpOn ? 'ON' : 'OFF';
+            adcStatusElem.textContent = (systemState & 4) ? 'Error' : 'None';
+            updateToggleButton();
+
+            const deviation = Math.abs(actualInterval - targetInterval) / targetInterval;
+            intervalStatusElem.innerHTML = `${targetInterval}ms / <span class="${deviation > 0.05 ? 'error' : ''}">${actualInterval.toFixed(0)}ms</span>`;
+
+            if (isGraphPaused) return; // Skip chart update if paused
+
+            const timeStep = actualInterval / 1000.0;
+
+            sensorChart.data.datasets.forEach(dataset => {
+                dataset.data.forEach(point => { point.x -= timeStep; });
+            });
+            sensorChart.data.datasets[0].data.push({x: 0, y: internalVoltage});
+            sensorChart.data.datasets[1].data.push({x: 0, y: zirconiaIpVoltage});
+            sensorChart.data.datasets[2].data.push({x: 0, y: heaterRtdResistance});
+            sensorChart.data.datasets[3].data.push({x: 0, y: zirconiaOutputVoltage});
+            sensorChart.data.datasets[4].data.push({x: 0, y: flowRate});
+            sensorChart.data.datasets[5].data.push({x: 0, y: o2ConcentrationZss2});
+            sensorChart.data.datasets[6].data.push({x: 0, y: o2ConcentrationZirconia}); // Zirconia O2 to main chart
+            sensorChart.data.datasets[7].data.push({x: 0, y: zss2CellValue}); // Store raw voltage
+            sensorChart.update('none');
+            downsampleData(); // Downsample data if necessary
+        }
+
+        function updateToggleButton() {
+            if (isPumpOn) {
+                pumpToggleButton.textContent = 'Turn Pump OFF';
+                pumpToggleButton.classList.remove('btn-success');
+                pumpToggleButton.classList.add('btn-danger');
+            } else {
+                pumpToggleButton.textContent = 'Turn Pump ON';
+                pumpToggleButton.classList.remove('btn-danger');
+                pumpToggleButton.classList.add('btn-success');
+            }
+        }
+
+        async function connectBLE() { // Renamed from connect to connectBLE
+            try {
+                connectionStatusElem.textContent = 'Connecting...';
+                const device = await navigator.bluetooth.requestDevice({
+                    filters: [{ name: 'M5STAMP-MONITOR' }],
+                    optionalServices: [MONITORING_SERVICE_UUID, CONTROL_SERVICE_UUID]
+                });
+                console.log('Device found:', device.name);
+
+                const server = await device.gatt.connect();
+                console.log('GATT server connected.');
+
+                const monitorService = await server.getPrimaryService(MONITORING_SERVICE_UUID);
+                const sensorCharacteristic = await monitorService.getCharacteristic(SENSOR_DATA_CHARACTERISTIC_UUID);
+                await sensorCharacteristic.startNotifications();
+                sensorCharacteristic.addEventListener('characteristicvaluechanged', handleNotifications);
+                console.log('Monitoring notifications started.');
+
+                const controlService = await server.getPrimaryService(CONTROL_SERVICE_UUID);
+                pumpControlCharacteristic = await controlService.getCharacteristic(PUMP_CONTROL_CHARACTERISTIC_UUID);
+                console.log('Control characteristic obtained.');
+
+                connectionStatusElem.textContent = 'Connected';
+                pumpToggleButton.disabled = false;
+                lastNotificationTimestamp = 0;
+                updateToggleButton();
+
+                device.addEventListener('gattserverdisconnected', () => {
+                    connectionStatusElem.textContent = 'Disconnected';
+                    pumpToggleButton.disabled = true;
+                    pumpControlCharacteristic = null;
+                    console.log('Device disconnected.');
+                });
+
+            } catch (error) {
+                console.error('BLE Connection Error:', error);
+                connectionStatusElem.textContent = 'Connection Failed';
+            }
+        }
+
+        async function sendPumpCommand(command) {
+            if (!pumpControlCharacteristic) return;
+            try {
+                await pumpControlCharacteristic.writeValue(new Uint8Array([command]));
+            } catch (error) {
+                console.error('Failed to send command:', error);
+            }
+        }
+
+        // Serial Port Logic
+        async function connectSerial() {
+            // Disconnect logic
+            if (serialPort) {
+                if (serialReader) {
+                    await serialReader.cancel().catch(() => {}); // Ignore errors
+                    serialReader = null;
+                }
+                await serialPort.close().catch(() => {}); // Ignore errors
+                serialPort = null;
+                serialConnectButton.textContent = 'Connect Serial Device';
+                serialStatusDisplay.textContent = 'Disconnected';
+                console.log('Serial port disconnected.');
+                return;
+            }
+
+            // Connection logic
+            try {
+                const port = await navigator.serial.requestPort();
+                await port.open({ baudRate: 115200 });
+                serialPort = port; // Assign to global variable only after successful open
+
+                serialConnectButton.textContent = 'Disconnect';
+                serialStatusDisplay.textContent = 'Connected. Reading data...';
+                console.log('Serial port connected.');
+
+                // Start the read loop
+                readFromSerial();
+
+            } catch (error) {
+                // This error usually happens if the user cancels the port selection dialog.
+                serialStatusDisplay.textContent = `Error: ${error.message}`;
+                console.error('Serial Port Connection Error:', error);
+                serialPort = null; // Ensure port is null on connection failure
+            }
+        }
+
+        async function readFromSerial() {
+            while (serialPort && serialPort.readable) {
+                const textDecoder = new TextDecoderStream();
+                try {
+                    const readableStreamClosed = serialPort.readable.pipeTo(textDecoder.writable);
+                    serialReader = textDecoder.readable.getReader();
+
+                    while (true) {
+                        const { value, done } = await serialReader.read();
+                        if (done) {
+                            break; // Reader has been cancelled
+                        }
+                        const lines = (lineBuffer + value).split('\n');
+                        lineBuffer = lines.pop();
+
+                        lines.forEach(line => {
+                            if (line.trim() === '') return;
+                            const values = line.split(',').map(Number);
+                            if (values.length > 0 && !values.some(isNaN)) {
+                                if (isGraphPaused) return; // Skip chart update if paused
+
+                                const currentTime = performance.now();
+                                const timeStep = (lastSerialTimestamp > 0) ? (currentTime - lastSerialTimestamp) / 1000.0 : 0.1;
+                                lastSerialTimestamp = currentTime;
+
+                                sensorChart.data.datasets.forEach(dataset => {
+                                    dataset.data.forEach(point => { point.x -= timeStep; });
+                                });
+
+                                for (let i = 0; i < Math.min(values.length, 3); i++) { // Limit to 3 serial data channels
+                                    const datasetIndex = 8 + i;
+                                    sensorChart.data.datasets[datasetIndex].data.push({x: 0, y: values[i]});
+                                    if (sensorChart.getDatasetMeta(datasetIndex).hidden) {
+                                        sensorChart.getDatasetMeta(datasetIndex).hidden = false;
+                                        const yAxisID = sensorChart.data.datasets[datasetIndex].yAxisID;
+                                        if (yAxisID) sensorChart.scales[yAxisID].options.display = true;
+                                    }
+                                }
+                                sensorChart.update('none');
+                                downsampleData(); // Downsample data if necessary
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.log('Read loop error:', error);
+                } finally {
+                    if(serialReader) {
+                        serialReader.releaseLock();
+                    }
+                }
+            }
+            // When the loop exits, it means the port has been closed or lost
+            if (serialPort) {
+                // This is a defensive check in case of an unexpected exit
+                await serialPort.close().catch(()=>{});
+                serialPort = null;
+                serialConnectButton.textContent = 'Connect Serial Device';
+                serialStatusDisplay.textContent = 'Disconnected';
+                console.log('Serial port was closed unexpectedly.');
+            }
+        }
+
+        window.onload = () => {
+            initChart();
+            renderCalibrationTable();
+            setupEventListeners();
+        };
+
+    </script>
+</body>
+</html>

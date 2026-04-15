@@ -1,0 +1,19 @@
+# PlatformIO build artifacts
+.pio/
+
+# Python virtual environments and caches
+.venv*/
+__pycache__/
+*.py[cod]
+
+# macOS / editor metadata
+.DS_Store
+.idea/
+
+# VS Code: keep shareable recommendations, ignore generated/local state
+.vscode/*
+!.vscode/extensions.json
+
+# Common local build outputs
+build/
+dist/
