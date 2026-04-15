@@ -149,6 +149,7 @@
 - v1 では baudrate を通常 UI から変更しない
 - 高頻度受信時の事故を避けるため、advanced override は v1 対象外とする
 - serial port list は intended device を優先表示し、1 候補だけなら auto-select する
+- settings の mode page は current mode と switch outcome を明示し、mode change がある場合は save action を `Save and Switch` と表示する
 
 ## 7. Device Status and Controls
 

@@ -46,9 +46,9 @@
 | `GUI-VAL-013` | BLE backend reconnect smoke | BLE backend が reconnect / event log / post-command status refresh を維持する | `PASS` | `tools/ble_backend_smoke.py` で fake client による connect / disconnect / reconnect / `Pump ON/OFF` / `Ping` を確認 |
 | `GUI-VAL-014` | Wired manual plot parity | wired mode でも BLE mode と同じ manual pan / zoom / scale が使える | `PASS` | axis/viewbox manual interaction hook を追加し、helper smoke で `x_follow` 解除と manual Y range 化を確認 |
 | `GUI-VAL-015` | Plot history retention | 数分以上の session でも古い plot data が暗黙に消えない | `PASS` | `PlotController` を time-based history retention へ変更し、helper smoke で `1800 s / 180000 points` retention を確認 |
-| `GUI-VAL-016` | Settings mode switch flow | `SettingsDialog` から BLE / Wired mode switch を実行できる | `TODO` | user feedback として、settings menu から mode を切り替えられないとの報告あり |
+| `GUI-VAL-016` | Settings mode switch flow | `SettingsDialog` から BLE / Wired mode switch を実行できる | `PASS` | helper smoke で `Save and Switch` 表示と mode switch 後の `Mode switched to Wired.` log を確認 |
 | `GUI-VAL-017` | Device filtering and preselect | intended device / port が自動的に絞り込まれ、候補が 1 つなら preselect される | `PASS` | backend filter/preselect logic を追加し、`M5STAMP-MONITOR*` と `usbmodem/usbserial` 候補が優先されることを helper smoke で確認 |
-| `GUI-VAL-018` | Visual theme parity | GUI theme が `example_gui` の dark direction に整合する | `TODO` | user feedback として、現行 GUI は reference より light 方向に見えるとの指摘あり |
+| `GUI-VAL-018` | Visual theme parity | GUI theme が `example_gui` の dark direction に整合する | `PASS` | stylesheet を dark blue/slate direction へ更新し、theme 変更後も GUI session probe が継続動作することを確認 |
 | `GUI-VAL-019` | Wired GUI session probe | offscreen GUI 経由で wired connect / recording / pump toggle / CSV finalize が継続する | `PASS` | `tools/gui_wired_session_probe.py --duration-s 18 --toggle-interval-s 3` で `1909` telemetry、CSV `1740` rows、non-unit gap `0` を確認 |
 
 ## 5. Firmware Checklist
@@ -150,6 +150,8 @@
 - plot interaction helper smoke により bottom axis manual interaction 後の `x_follow=False`、left axis interaction 後の manual Y range 化を確認
 - plot history helper smoke により `10 ms` 相当入力で `1800 s` の time-based retention と `180000` retained points を確認
 - `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 10 --toggle-interval-s 2.5` を再実施し、manual/history 修正後も offscreen GUI wired session が継続動作することを確認
+- settings dialog helper smoke により mode page の OK label が `Save Settings` / `Save and Switch` へ切り替わり、mode switch 後に connection stack と log が追従することを確認
+- dark theme への stylesheet 更新後に `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 8 --toggle-interval-s 2.5` を再実施し、GUI wired session が継続動作することを確認
 
 ## 8. 更新ルール
 

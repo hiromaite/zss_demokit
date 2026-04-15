@@ -151,16 +151,13 @@ v1 の解釈:
 2. UI / UX
 3. 将来拡張性
 
-## 16. 次フェーズで回収する user feedback
-
-- GUI theme を `example_gui` の dark palette 方向へ戻す
-- `SettingsDialog` からの BLE / Wired mode switch を正式に機能させる
-
-完了済み:
+## 16. 反映済みの user feedback
 
 - serial mode でも BLE mode と同じ manual plot interaction を保証する
 - plot の古い履歴が数分で暗黙に消えないよう、retention policy を見直す
 - intended BLE device / serial port は filter と auto-preselect を行う
+- GUI theme を `example_gui` の dark palette 方向へ戻す
+- `SettingsDialog` からの BLE / Wired mode switch を正式に機能させる
 
 ## 17. 直近の未確定事項
 

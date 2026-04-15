@@ -163,7 +163,7 @@
 | `GUI-007` | `PARTIAL` | `bleak` ベースの live BLE path は実装済みで、local Mac で scan / connect / capabilities / command request を確認済み。live reconnect continuity の追加確認が残る |
 | `GUI-008` | `PARTIAL` | warning log と telemetry health monitor は実装済み。backend reconnect smoke で BLE event / status refresh 回帰をカバーしつつ、live continuity の追加確認が残る |
 | `GUI-009` | `PENDING` | Windows packaging 準備は release 前に対応 |
-| `GUI-010` | `PARTIAL` | device auto-filter / preselect、wired manual plot parity、plot history retention は実装済み。remaining は dark theme parity と settings mode switch flow の確認 |
+| `GUI-010` | `COMPLETE` | user feedback integration と GUI parity hardening を回収済み。dark theme direction、settings mode switch flow、device auto-filter / preselect、manual plot parity、plot history retention を実装・確認 |
 
 補足:
 

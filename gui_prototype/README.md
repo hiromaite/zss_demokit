@@ -20,6 +20,7 @@ Notes:
 - the wired mode uses the approved default `115200 baud / 8N1` in the UI
 - BLE scan results and wired port lists now prefer intended device candidates and preselect the first filtered result
 - plot history now uses an explicit `1800 s` retention window, and manual axis/view interactions disable auto-follow consistently in both BLE and wired modes
+- the Settings mode page now makes mode changes explicit with a `Save and Switch` action and disconnected reopen copy
 - `flow_rate_lpm` uses the approved placeholder policy `dummy_linear_v1`
 - settings are persisted locally with `QSettings`
 - recording directory, plot defaults, and launcher / main window sizes are restored on next startup

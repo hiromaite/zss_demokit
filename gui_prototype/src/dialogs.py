@@ -180,9 +180,11 @@ class SettingsDialog(QDialog):
 
         button_box = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
         _style_dialog_buttons(button_box)
+        self.button_box = button_box
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
+        self._update_mode_page_state()
 
     @property
     def requested_mode(self) -> str:
@@ -239,9 +241,16 @@ class SettingsDialog(QDialog):
             self.ble_mode_radio.setChecked(True)
         else:
             self.wired_mode_radio.setChecked(True)
+        self.ble_mode_radio.toggled.connect(self._update_mode_page_state)
+        self.wired_mode_radio.toggled.connect(self._update_mode_page_state)
+
+        self.mode_status_label = QLabel("")
+        self.mode_status_label.setObjectName("ModeStatusLabel")
+        self.mode_status_label.setWordWrap(True)
 
         card_layout.addWidget(self.ble_mode_radio)
         card_layout.addWidget(self.wired_mode_radio)
+        card_layout.addWidget(self.mode_status_label)
         layout.addWidget(card)
         layout.addStretch(1)
         return page
@@ -333,3 +342,21 @@ class SettingsDialog(QDialog):
         selected_dir = QFileDialog.getExistingDirectory(self, "Select Recording Directory", start_dir)
         if selected_dir:
             self.recording_directory_edit.setText(selected_dir)
+
+    def _update_mode_page_state(self) -> None:
+        requested = self.requested_mode
+        if requested == self._settings.last_mode:
+            self.mode_status_label.setText(
+                f"Current mode is {self._settings.last_mode}. Save will keep the current session type."
+            )
+            ok_button = self.button_box.button(QDialogButtonBox.Ok)
+            if ok_button is not None:
+                ok_button.setText("Save Settings")
+            return
+
+        self.mode_status_label.setText(
+            f"Current mode is {self._settings.last_mode}. Save will request a switch to {requested} mode and reopen the main window in a disconnected state."
+        )
+        ok_button = self.button_box.button(QDialogButtonBox.Ok)
+        if ok_button is not None:
+            ok_button.setText("Save and Switch")

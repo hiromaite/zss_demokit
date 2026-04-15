@@ -2,20 +2,20 @@ from __future__ import annotations
 
 
 COLORS = {
-    "canvas": "#F5F1E8",
-    "surface": "#FFFDF8",
-    "surface_alt": "#FBF7F0",
-    "topbar": "#E6E9ED",
-    "border": "#C9D2DC",
-    "text": "#13212E",
-    "muted": "#667482",
-    "accent": "#DCE7F2",
-    "accent_strong": "#315C8C",
-    "metric": "#EEF5EC",
-    "metric_border": "#8AA67A",
-    "warning": "#F7EEDC",
+    "canvas": "#0B1220",
+    "surface": "#111827",
+    "surface_alt": "#182133",
+    "topbar": "#0F172A",
+    "border": "#243041",
+    "text": "#E5E7EB",
+    "muted": "#94A3B8",
+    "accent": "#16263A",
+    "accent_strong": "#3B82F6",
+    "metric": "#10261E",
+    "metric_border": "#1F7A5A",
+    "warning": "#2A1E12",
     "warning_border": "#C68D26",
-    "danger": "#9B4D4D",
+    "danger": "#F87171",
 }
 
 
@@ -87,6 +87,12 @@ def app_stylesheet() -> str:
         font-weight: 700;
         background: transparent;
     }}
+    QLabel#ModeStatusLabel {{
+        font-size: 12px;
+        font-weight: 600;
+        color: {c["text"]};
+        background: transparent;
+    }}
     QLabel#TopCardTitle {{
         font-size: 10px;
         letter-spacing: 0.6px;
@@ -139,7 +145,7 @@ def app_stylesheet() -> str:
         font-weight: 700;
     }}
     QPushButton#PrimaryButton:hover {{
-        background: #234766;
+        background: #2563EB;
     }}
     QPushButton#SecondaryButton {{
         background: {c["accent"]};
@@ -162,7 +168,7 @@ def app_stylesheet() -> str:
         padding: 6px 10px;
     }}
     QPlainTextEdit#LogPane {{
-        background: #FBF8F2;
+        background: #0F172A;
         font-family: "SF Mono";
         font-size: 11px;
     }}
