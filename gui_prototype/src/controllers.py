@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import csv
 from collections import deque
 from dataclasses import dataclass
@@ -177,24 +178,34 @@ class PlotController:
                 "xmax": 0.0,
             }
 
-        x_values = list(self.time_values)
-        series = {
-            "zirconia": list(self.zirconia_values),
-            "heater": list(self.heater_values),
-            "flow": list(self.flow_rate_values),
-        }
         span_map = {"30 s": 30.0, "2 min": 120.0, "10 min": 600.0}
+        max_render_points = {"30 s": 3000, "2 min": 4000, "10 min": 6000, "All": 8000}
         span = span_map.get(time_span)
+        x_latest = self.time_values[-1]
         if span is None:
-            xmin = x_values[0]
-            xmax = x_values[-1]
+            xmin = self.time_values[0]
+            xmax = x_latest
+            x_values, zirconia_values, heater_values, flow_values = self._extract_visible_series()
         else:
-            xmax = x_values[-1]
+            xmax = x_latest
             xmin = max(0.0, xmax - span)
+            x_values, zirconia_values, heater_values, flow_values = self._extract_visible_series(cutoff=xmin)
+
+        x_values, zirconia_values, heater_values, flow_values = self._downsample_series(
+            x_values,
+            zirconia_values,
+            heater_values,
+            flow_values,
+            max_points=max_render_points.get(time_span, 8000),
+        )
 
         return {
             "x_values": x_values,
-            "series": series,
+            "series": {
+                "zirconia": zirconia_values,
+                "heater": heater_values,
+                "flow": flow_values,
+            },
             "xmin": xmin,
             "xmax": xmax,
         }
@@ -215,6 +226,61 @@ class PlotController:
             self.heater_values.popleft()
             self.flow_voltage_values.popleft()
             self.flow_rate_values.popleft()
+
+    def _extract_visible_series(
+        self,
+        *,
+        cutoff: float | None = None,
+    ) -> tuple[list[float], list[float], list[float], list[float]]:
+        if cutoff is None:
+            return (
+                list(self.time_values),
+                list(self.zirconia_values),
+                list(self.heater_values),
+                list(self.flow_rate_values),
+            )
+
+        x_values_reversed: list[float] = []
+        zirconia_reversed: list[float] = []
+        heater_reversed: list[float] = []
+        flow_reversed: list[float] = []
+        for elapsed, zirconia, heater, flow in zip(
+            reversed(self.time_values),
+            reversed(self.zirconia_values),
+            reversed(self.heater_values),
+            reversed(self.flow_rate_values),
+        ):
+            if elapsed < cutoff:
+                break
+            x_values_reversed.append(elapsed)
+            zirconia_reversed.append(zirconia)
+            heater_reversed.append(heater)
+            flow_reversed.append(flow)
+
+        x_values_reversed.reverse()
+        zirconia_reversed.reverse()
+        heater_reversed.reverse()
+        flow_reversed.reverse()
+        return x_values_reversed, zirconia_reversed, heater_reversed, flow_reversed
+
+    @staticmethod
+    def _downsample_series(
+        x_values: list[float],
+        zirconia_values: list[float],
+        heater_values: list[float],
+        flow_values: list[float],
+        *,
+        max_points: int,
+    ) -> tuple[list[float], list[float], list[float], list[float]]:
+        if len(x_values) <= max_points:
+            return x_values, zirconia_values, heater_values, flow_values
+
+        step = max(1, math.ceil(len(x_values) / max_points))
+        x_values = x_values[::step]
+        zirconia_values = zirconia_values[::step]
+        heater_values = heater_values[::step]
+        flow_values = flow_values[::step]
+        return x_values, zirconia_values, heater_values, flow_values
 
 
 class TelemetryHealthMonitor:

@@ -152,6 +152,10 @@
 - `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 10 --toggle-interval-s 2.5` を再実施し、manual/history 修正後も offscreen GUI wired session が継続動作することを確認
 - settings dialog helper smoke により mode page の OK label が `Save Settings` / `Save and Switch` へ切り替わり、mode switch 後に connection stack と log が追従することを確認
 - dark theme への stylesheet 更新後に `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 8 --toggle-interval-s 2.5` を再実施し、GUI wired session が継続動作することを確認
+- graph performance feedback を受けて描画設定を再確認し、`antialias=True` が有効だったことを確認
+- `pg.setConfigOptions(antialias=False)` へ変更し、あわせて `render_data()` を span-aware / downsample 対応へ更新して full-history `setData()` の負荷を削減
+- helper smoke で `30 s=1501 points`, `2 min=3001 points`, `10 min=5455 points`, `All=7827 points` まで描画点数が抑制されることを確認
+- 軽量化後に `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 8 --toggle-interval-s 2.5` を再実施し、GUI wired session が継続動作することを確認
 
 ## 8. 更新ルール
 

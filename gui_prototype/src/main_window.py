@@ -439,7 +439,7 @@ class MainWindow(QMainWindow):
         toolbar_layout.addLayout(row)
         layout.addWidget(toolbar)
 
-        pg.setConfigOptions(antialias=True)
+        pg.setConfigOptions(antialias=False)
         self.plot_widgets: dict[str, pg.PlotWidget] = {}
         self.plot_curves: dict[str, object] = {}
 
@@ -467,6 +467,7 @@ class MainWindow(QMainWindow):
             view_box.sigRangeChangedManually.connect(self._on_plot_range_changed_manually)
             self._viewbox_to_plot_key[view_box] = key
             curve = plot.plot(pen=pg.mkPen(color=color, width=2.2))
+            curve.setSkipFiniteCheck(True)
             plot_layout.addWidget(plot)
             layout.addWidget(plot_frame, 1)
             self.plot_widgets[key] = plot
