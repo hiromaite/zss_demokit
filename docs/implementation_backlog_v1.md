@@ -159,11 +159,11 @@
 | `GUI-003` | `COMPLETE` | `QSettings` による mode / plot / logging / window persistence を実装済み |
 | `GUI-004` | `PARTIAL` | initial manual plot 操作は実装済みだが、user feedback として wired mode の manual interaction parity と plot history retention の見直しが残る |
 | `GUI-005` | `COMPLETE` | 共通 CSV recording、partial file handling、configured recording directory を実装済み |
-| `GUI-006` | `COMPLETE` | wired mode は real serial transport で connect / telemetry / status / command を確認済み |
+| `GUI-006` | `COMPLETE` | wired mode は real serial transport に加え、offscreen GUI session probe で connect / recording / `Pump ON/OFF` / CSV finalize まで確認済み |
 | `GUI-007` | `PARTIAL` | `bleak` ベースの live BLE path は実装済みで、local Mac で scan / connect / capabilities / command request を確認済み。live reconnect continuity の追加確認が残る |
 | `GUI-008` | `PARTIAL` | warning log と telemetry health monitor は実装済み。backend reconnect smoke で BLE event / status refresh 回帰をカバーしつつ、live continuity の追加確認が残る |
 | `GUI-009` | `PENDING` | Windows packaging 準備は release 前に対応 |
-| `GUI-010` | `PENDING` | user feedback integration と GUI parity hardening を次フェーズで回収する |
+| `GUI-010` | `PARTIAL` | device auto-filter / preselect は実装済み。remaining は wired manual plot parity、plot history retention、dark theme parity、settings mode switch flow の確認 |
 
 補足:
 
@@ -347,7 +347,7 @@
 - scan loop と connect loop の分離に伴う `Future attached to a different loop` は修正済み
 - extension status / capabilities が使えない場合の degraded fallback はコード化済み
 - disconnect 時の BLE notify / capabilities availability flags cleanup は実装済み
-- `tools/ble_smoke.py` は reconnect cycles と telemetry continuity summary を扱える形に更新済み
+- `tools/ble_smoke.py` は reconnect cycles、`observe-duration`、telemetry continuity summary を扱える形に更新済み
 - `tools/ble_backend_smoke.py` により fake client ベースの reconnect、event log、post-command status refresh 回帰を確認可能
 - live disconnect / reconnect と telemetry continuity の追加実地確認が残る
 
@@ -703,7 +703,9 @@
 - host inter-arrival は USB / host buffering の影響を含むため、device-side cadence は sequence gap と併せて評価する
 - `tools/wired_soak_probe.py --duration-s 30 --toggle-interval-s 2.5` により continuous run と pump repetition の初回実測を完了
 - current soak run では `3001` telemetry samples、sequence gap `0`、`Pump ON/OFF` toggle `12` 回、telemetry 上の status flags は `[2, 3]` で安定した
-- wired 側の次の深掘りは longer soak と GUI recording / plot を含む session-level stress、BLE 側の次の深掘りは live continuity / reconnect の長時間確認
+- `tools/gui_wired_session_probe.py --duration-s 18 --toggle-interval-s 3` により offscreen GUI 経由の session-level stress 初回実測を完了
+- current GUI session probe では `1909` telemetry samples、pump toggle request `5` 回、warning/error log `0`、final CSV `1740` rows、non-unit gap `0` を確認
+- wired 側の次の深掘りは longer soak と GUI plot history / manual parity を含む session hardening、BLE 側の次の深掘りは live continuity / reconnect の長時間確認
 
 ## 8. Integration Backlog
 

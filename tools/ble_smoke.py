@@ -69,6 +69,11 @@ class BleCycleResult:
             samples.append((current.received_at_monotonic - previous.received_at_monotonic) * 1000.0)
         return samples
 
+    def telemetry_duration_s(self) -> float:
+        if len(self.telemetry) < 2:
+            return 0.0
+        return self.telemetry[-1].received_at_monotonic - self.telemetry[0].received_at_monotonic
+
 
 class BleCycleCollector:
     def __init__(self) -> None:
@@ -97,6 +102,14 @@ class BleCycleCollector:
         raise AssertionError(
             f"Expected at least {minimum_count} telemetry packets, got {len(self.result.telemetry)}"
         )
+
+    async def extend_observation_window(self, observe_duration_s: float) -> None:
+        if observe_duration_s <= 0 or not self.result.telemetry:
+            return
+        first_received_at = self.result.telemetry[0].received_at_monotonic
+        deadline = first_received_at + observe_duration_s
+        while time.monotonic() < deadline:
+            await asyncio.sleep(0.05)
 
 
 async def discover_target(name: str, address: str | None, timeout_s: float) -> str:
@@ -135,6 +148,7 @@ async def run_cycle(
     target_identifier: str,
     telemetry_count: int,
     telemetry_timeout_s: float,
+    observe_duration_s: float,
     cycle_index: int,
 ) -> BleCycleResult:
     collector = BleCycleCollector()
@@ -171,6 +185,7 @@ async def run_cycle(
             await read_status_directly_if_needed(client, collector)
 
         await collector.wait_for_telemetry(telemetry_count, telemetry_timeout_s)
+        await collector.extend_observation_window(observe_duration_s)
 
         await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_SET_PUMP_ON]), response=False)
         print(f"cycle_{cycle_index}_pump_on_sent")
@@ -236,11 +251,15 @@ def print_cycle_summary(result: BleCycleResult, cycle_index: int) -> None:
         "status_notify_available": result.status_notify_available,
         "event_notify_available": result.event_notify_available,
         "capabilities_read_available": result.capabilities_read_available,
+        "telemetry_duration_s": round(result.telemetry_duration_s(), 2),
     }
     if inter_arrivals:
+        ordered = sorted(inter_arrivals)
+        p95_index = max(0, min(len(ordered) - 1, int(round(0.95 * (len(ordered) - 1)))))
         summary["inter_arrival_avg_ms"] = round(sum(inter_arrivals) / len(inter_arrivals), 2)
         summary["inter_arrival_min_ms"] = round(min(inter_arrivals), 2)
         summary["inter_arrival_max_ms"] = round(max(inter_arrivals), 2)
+        summary["inter_arrival_p95_ms"] = round(ordered[p95_index], 2)
 
     print(f"cycle_{cycle_index}_summary", summary)
     if result.status_packets:
@@ -256,6 +275,7 @@ async def run_smoke(
     scan_timeout_s: float,
     telemetry_count: int,
     telemetry_timeout_s: float,
+    observe_duration_s: float,
     reconnect_cycles: int,
 ) -> None:
     target_identifier = await discover_target(name, address, scan_timeout_s)
@@ -267,6 +287,7 @@ async def run_smoke(
             target_identifier=target_identifier,
             telemetry_count=telemetry_count,
             telemetry_timeout_s=telemetry_timeout_s,
+            observe_duration_s=observe_duration_s,
             cycle_index=cycle_index,
         )
         assert_cycle_result(result, telemetry_count, cycle_index)
@@ -294,6 +315,7 @@ def main() -> int:
     parser.add_argument("--scan-timeout", type=float, default=8.0)
     parser.add_argument("--telemetry-count", type=int, default=8)
     parser.add_argument("--telemetry-timeout", type=float, default=6.0)
+    parser.add_argument("--observe-duration", type=float, default=0.0)
     parser.add_argument("--reconnect-cycles", type=int, default=2)
     args = parser.parse_args()
 
@@ -305,6 +327,7 @@ def main() -> int:
                 scan_timeout_s=args.scan_timeout,
                 telemetry_count=args.telemetry_count,
                 telemetry_timeout_s=args.telemetry_timeout,
+                observe_duration_s=args.observe_duration,
                 reconnect_cycles=args.reconnect_cycles,
             )
         )

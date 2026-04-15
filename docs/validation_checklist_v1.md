@@ -47,8 +47,9 @@
 | `GUI-VAL-014` | Wired manual plot parity | wired mode でも BLE mode と同じ manual pan / zoom / scale が使える | `TODO` | user feedback として、serial connection 時は manual plot 操作後に view が戻る現象あり |
 | `GUI-VAL-015` | Plot history retention | 数分以上の session でも古い plot data が暗黙に消えない | `TODO` | user feedback として、数分程度の動作後に古い表示が消えていくとの報告あり |
 | `GUI-VAL-016` | Settings mode switch flow | `SettingsDialog` から BLE / Wired mode switch を実行できる | `TODO` | user feedback として、settings menu から mode を切り替えられないとの報告あり |
-| `GUI-VAL-017` | Device filtering and preselect | intended device / port が自動的に絞り込まれ、候補が 1 つなら preselect される | `TODO` | user feedback として、自動フィルタと auto-select の要望あり |
+| `GUI-VAL-017` | Device filtering and preselect | intended device / port が自動的に絞り込まれ、候補が 1 つなら preselect される | `PASS` | backend filter/preselect logic を追加し、`M5STAMP-MONITOR*` と `usbmodem/usbserial` 候補が優先されることを helper smoke で確認 |
 | `GUI-VAL-018` | Visual theme parity | GUI theme が `example_gui` の dark direction に整合する | `TODO` | user feedback として、現行 GUI は reference より light 方向に見えるとの指摘あり |
+| `GUI-VAL-019` | Wired GUI session probe | offscreen GUI 経由で wired connect / recording / pump toggle / CSV finalize が継続する | `PASS` | `tools/gui_wired_session_probe.py --duration-s 18 --toggle-interval-s 3` で `1909` telemetry、CSV `1740` rows、non-unit gap `0` を確認 |
 
 ## 5. Firmware Checklist
 
@@ -78,7 +79,7 @@
 | `INT-VAL-004` | Get Status end-to-end | GUI で status snapshot を取得できる | `PASS` | wired backend smoke と host smoke の両方で `status_snapshot` を確認 |
 | `INT-VAL-005` | Shared CSV recording | 実データを共通 schema で保存できる | `PASS` | BLE mock と wired 実機の両方で `.partial.csv -> .csv` finalize と schema header を確認 |
 | `INT-VAL-006` | Wired 10 ms transport validation | `10 ms` path を end-to-end 検証できる | `PASS` | `wired_serial_smoke` と wired backend smoke で `nominal_sample_period_ms=10` を確認 |
-| `INT-VAL-007` | BLE 50-100 ms validation | BLE telemetry 周期を検証できる | `TODO` | live telemetry continuity / period observation は追加確認待ち。`tools/ble_smoke.py` は reconnect cycles と inter-arrival summary、`tools/ble_backend_smoke.py` は backend reconnect 回帰を出力可能 |
+| `INT-VAL-007` | BLE 50-100 ms validation | BLE telemetry 周期を検証できる | `TODO` | live telemetry continuity / period observation は追加確認待ち。`tools/ble_smoke.py` は reconnect cycles、`--observe-duration`、inter-arrival summary を出力可能だが、この exec 環境では CoreBluetooth discover が無言終了するため live CLI 実測は保留 |
 | `INT-VAL-008` | Wired event propagation | firmware event が GUI warning log に届く | `PASS` | `command_error` と `warning_raised` を wired 実機 + GUI backend smoke で確認 |
 
 ## 7. 実施ログ
@@ -141,6 +142,11 @@
 - `pio run -t upload --upload-port /dev/cu.usbmodem4101` で clean state に戻した後、`tools/wired_soak_probe.py --port /dev/cu.usbmodem4101 --baudrate 115200 --duration-s 30 --toggle-interval-s 2.5` を実施
 - current soak run では `3001` telemetry samples、sequence `575 -> 3575`、non-unit gap `0`、telemetry 上の pump states `[False, True]`、status flags `[2, 3]`、pump toggle `12` 回を確認
 - soak 中の host inter-arrival summary は `mean=9.996 ms / p95=20.083 ms / max=20.748 ms` で、host buffering を含みつつも continuity は維持された
+- `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 18 --toggle-interval-s 3` を実施し、offscreen GUI 経由で wired connect、recording start/stop、`Pump ON/OFF` request、CSV finalize まで継続することを確認
+- current GUI session probe では `1909` telemetry samples、pump toggle request `5` 回、warning/error log `0`、final CSV `1740` rows、non-unit gap `0` を確認
+- `tools/ble_smoke.py` に `--observe-duration` を追加し、BLE continuity を reconnect cycle ごとに数秒以上観測できるよう更新
+- helper smoke により BLE candidate filter と wired port filter の優先順位ロジックを確認し、`M5STAMP-MONITOR*` と `usbmodem/usbserial` が preselect 対象になることを確認
+- exec 環境からの `BleakScanner.discover()` は `before discover` 出力後に無言終了するため、BLE live CLI continuity の実測は引き続きローカル GUI / 手元実行ベースで進める
 
 ## 8. 更新ルール
 

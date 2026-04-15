@@ -18,6 +18,7 @@ Notes:
 - if BLE extension reads are unavailable, the UI degrades to telemetry-first operation instead of aborting the session
 - telemetry continuity is monitored in the GUI so delayed start / stalled stream conditions appear in the warning log
 - the wired mode uses the approved default `115200 baud / 8N1` in the UI
+- BLE scan results and wired port lists now prefer intended device candidates and preselect the first filtered result
 - `flow_rate_lpm` uses the approved placeholder policy `dummy_linear_v1`
 - settings are persisted locally with `QSettings`
 - recording directory, plot defaults, and launcher / main window sizes are restored on next startup
@@ -43,5 +44,6 @@ python gui_prototype/main.py
 ## Smoke Tools
 
 - wired end-to-end smoke: `python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem5101 --baudrate 115200`
-- BLE live smoke: `python3.12 tools/ble_smoke.py --name M5STAMP-MONITOR --telemetry-count 8 --telemetry-timeout 8 --reconnect-cycles 2`
+- wired GUI session probe: `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 18 --toggle-interval-s 3`
+- BLE live smoke: `python3.12 tools/ble_smoke.py --name M5STAMP-MONITOR --telemetry-count 20 --telemetry-timeout 10 --observe-duration 8 --reconnect-cycles 3`
 - BLE backend reconnect smoke: `python3.12 tools/ble_backend_smoke.py`

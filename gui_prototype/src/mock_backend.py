@@ -73,6 +73,8 @@ BLE_TELEMETRY_CHARACTERISTIC_UUID = "00002A58-0000-1000-8000-00805F9B34FB"
 BLE_STATUS_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10001"
 BLE_CAPABILITIES_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10002"
 BLE_EVENT_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10003"
+PREFERRED_BLE_NAME_PREFIXES = ("M5STAMP-MONITOR",)
+PREFERRED_WIRED_PORT_TOKENS = ("usbmodem", "usbserial", "tty.usb", "cu.usb")
 
 
 @dataclass
@@ -167,7 +169,8 @@ class MockBackend(QObject):
     def refresh_ports(self) -> None:
         ports: List[str] = []
         if list_ports is not None:
-            ports = [port.device for port in list_ports.comports()]
+            discovered_ports = list(list_ports.comports())
+            ports = self._preferred_wired_ports(discovered_ports)
         if not ports:
             ports = ["Prototype-Port", "/dev/cu.usbmodem-prototype"]
         self.ports_discovered.emit(ports)
@@ -366,9 +369,18 @@ class MockBackend(QObject):
             labels.append(label)
             mapped[label] = target_identifier
 
-        self._ble_discovered_devices = mapped
-        self.ble_devices_discovered.emit(labels)
-        self.log_generated.emit("info", f"BLE scan completed with {len(labels)} device(s).")
+        filtered_labels = self._preferred_ble_labels(labels)
+        filtered_mapped = {label: mapped[label] for label in filtered_labels}
+
+        self._ble_discovered_devices = filtered_mapped
+        self.ble_devices_discovered.emit(filtered_labels)
+        if filtered_labels != labels:
+            self.log_generated.emit(
+                "info",
+                f"BLE scan filtered to {len(filtered_labels)} preferred device(s) from {len(labels)} discovered device(s).",
+            )
+        else:
+            self.log_generated.emit("info", f"BLE scan completed with {len(labels)} device(s).")
 
     def _connect_mock_ble_device(self, identifier: str) -> None:
         self._ble_session_kind = "mock"
@@ -754,6 +766,41 @@ class MockBackend(QObject):
             "firmware_version": FIRMWARE_VERSION_PLACEHOLDER,
             "protocol_version": PROTOCOL_VERSION_TEXT,
         }
+
+    @staticmethod
+    def _preferred_ble_labels(labels: List[str]) -> List[str]:
+        preferred = [
+            label
+            for label in labels
+            if any(label.startswith(prefix) for prefix in PREFERRED_BLE_NAME_PREFIXES)
+        ]
+        return preferred or labels
+
+    @staticmethod
+    def _preferred_wired_ports(port_infos: List[Any]) -> List[str]:
+        scored_ports: list[tuple[int, str]] = []
+        for port_info in port_infos:
+            device = str(getattr(port_info, "device", "") or "")
+            description = str(getattr(port_info, "description", "") or "")
+            manufacturer = str(getattr(port_info, "manufacturer", "") or "")
+            haystack = " ".join([device.lower(), description.lower(), manufacturer.lower()])
+            score = 0
+            if any(token in haystack for token in PREFERRED_WIRED_PORT_TOKENS):
+                score += 5
+            if "usb" in haystack:
+                score += 2
+            if "bluetooth" in haystack:
+                score -= 3
+            scored_ports.append((score, device))
+
+        if not scored_ports:
+            return []
+
+        scored_ports.sort(key=lambda item: (-item[0], item[1]))
+        best_score = scored_ports[0][0]
+        if best_score > 0:
+            return [device for score, device in scored_ports if score == best_score]
+        return [device for _, device in scored_ports]
 
     def _emit_sample(self) -> None:
         if not self._connected or self._mode != BLE_MODE or self._ble_session_kind != "mock":
