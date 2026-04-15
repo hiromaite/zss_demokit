@@ -103,13 +103,13 @@ class ConnectionController(QObject):
 
 
 class PlotController:
-    def __init__(self, max_points: int = 2400) -> None:
-        self.max_points = max_points
-        self.time_values: deque[float] = deque(maxlen=max_points)
-        self.zirconia_values: deque[float] = deque(maxlen=max_points)
-        self.heater_values: deque[float] = deque(maxlen=max_points)
-        self.flow_voltage_values: deque[float] = deque(maxlen=max_points)
-        self.flow_rate_values: deque[float] = deque(maxlen=max_points)
+    def __init__(self, history_window_s: float = 1800.0) -> None:
+        self.history_window_s = history_window_s
+        self.time_values: deque[float] = deque()
+        self.zirconia_values: deque[float] = deque()
+        self.heater_values: deque[float] = deque()
+        self.flow_voltage_values: deque[float] = deque()
+        self.flow_rate_values: deque[float] = deque()
         self.last_sequence: int | None = None
         self.plot_sequence_origin: int | None = None
         self.sequence_gap_total = 0
@@ -128,6 +128,7 @@ class PlotController:
         self.heater_values.append(point.heater_rtd_resistance_ohm)
         self.flow_voltage_values.append(point.flow_sensor_voltage_v)
         self.flow_rate_values.append(flow_rate)
+        self._trim_history(elapsed)
 
         sequence_gap = 0
         if self.last_sequence is not None and point.sequence != self.last_sequence + 1:
@@ -152,6 +153,11 @@ class PlotController:
         self.plot_sequence_origin = None
         self.sequence_gap_total = 0
         self.x_follow_enabled = True
+
+    def history_duration_s(self) -> float:
+        if len(self.time_values) < 2:
+            return 0.0
+        return self.time_values[-1] - self.time_values[0]
 
     def metric_snapshot(self) -> dict[str, float]:
         if not self.time_values:
@@ -198,6 +204,17 @@ class PlotController:
 
     def manual_y_range_for(self, plot_key: str) -> tuple[float, float] | None:
         return self.manual_y_ranges.get(plot_key)
+
+    def _trim_history(self, latest_elapsed: float) -> None:
+        cutoff = latest_elapsed - self.history_window_s
+        if cutoff <= 0:
+            return
+        while self.time_values and self.time_values[0] < cutoff:
+            self.time_values.popleft()
+            self.zirconia_values.popleft()
+            self.heater_values.popleft()
+            self.flow_voltage_values.popleft()
+            self.flow_rate_values.popleft()
 
 
 class TelemetryHealthMonitor:

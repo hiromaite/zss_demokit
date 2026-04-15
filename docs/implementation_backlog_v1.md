@@ -157,13 +157,13 @@
 | `GUI-001` | `COMPLETE` | `gui_prototype/` は Python 3.12 上の実装ベースとして整理済み |
 | `GUI-002` | `COMPLETE` | `AppUiState` と controller layer の基盤を導入済み |
 | `GUI-003` | `COMPLETE` | `QSettings` による mode / plot / logging / window persistence を実装済み |
-| `GUI-004` | `PARTIAL` | initial manual plot 操作は実装済みだが、user feedback として wired mode の manual interaction parity と plot history retention の見直しが残る |
+| `GUI-004` | `COMPLETE` | axis/viewbox interaction hook と time-based history retention により manual plot parity と plot history retention を回収済み |
 | `GUI-005` | `COMPLETE` | 共通 CSV recording、partial file handling、configured recording directory を実装済み |
 | `GUI-006` | `COMPLETE` | wired mode は real serial transport に加え、offscreen GUI session probe で connect / recording / `Pump ON/OFF` / CSV finalize まで確認済み |
 | `GUI-007` | `PARTIAL` | `bleak` ベースの live BLE path は実装済みで、local Mac で scan / connect / capabilities / command request を確認済み。live reconnect continuity の追加確認が残る |
 | `GUI-008` | `PARTIAL` | warning log と telemetry health monitor は実装済み。backend reconnect smoke で BLE event / status refresh 回帰をカバーしつつ、live continuity の追加確認が残る |
 | `GUI-009` | `PENDING` | Windows packaging 準備は release 前に対応 |
-| `GUI-010` | `PARTIAL` | device auto-filter / preselect は実装済み。remaining は wired manual plot parity、plot history retention、dark theme parity、settings mode switch flow の確認 |
+| `GUI-010` | `PARTIAL` | device auto-filter / preselect、wired manual plot parity、plot history retention は実装済み。remaining は dark theme parity と settings mode switch flow の確認 |
 
 補足:
 

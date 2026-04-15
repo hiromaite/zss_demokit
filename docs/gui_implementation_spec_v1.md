@@ -210,6 +210,7 @@
 - auto follow は `Reset View` または time span selector の変更で再有効化する
 - user が Y-axis を手動操作した場合、その plot の Y-axis は manual state とみなす
 - manual plot interaction の挙動は BLE / Wired で一致させる
+- axis drag / wheel と plot viewport drag / wheel の両方を manual interaction として扱う
 
 ### 9.3 描画更新方針
 
@@ -220,6 +221,7 @@
 - plot 用の X-axis は host receive timestamp ではなく `sequence + nominal sample period` ベースの shared timeline を使う
 - visible time span の変更は viewport 操作とし、session 中の古い plot data を数分で暗黙に破棄しない
 - memory guard のために pruning が必要な場合は、selected time span より短くならない explicit policy とする
+- current prototype では explicit history retention window を `1800 s` とし、少なくとも数分単位の session では古い data を失わない
 
 補足:
 

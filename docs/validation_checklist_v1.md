@@ -44,8 +44,8 @@
 | `GUI-VAL-011` | BLE window startup smoke | `MainWindow(BLE)` が auto-scan なしで安定起動する | `PASS` | offscreen smoke で `Scan` button 起点へ整理後も起動確認 |
 | `GUI-VAL-012` | Telemetry health monitor smoke | delayed start / stalled stream が warning log 条件として検出できる | `PASS` | `TelemetryHealthMonitor` の direct smoke で waiting / stalled / recovered を確認 |
 | `GUI-VAL-013` | BLE backend reconnect smoke | BLE backend が reconnect / event log / post-command status refresh を維持する | `PASS` | `tools/ble_backend_smoke.py` で fake client による connect / disconnect / reconnect / `Pump ON/OFF` / `Ping` を確認 |
-| `GUI-VAL-014` | Wired manual plot parity | wired mode でも BLE mode と同じ manual pan / zoom / scale が使える | `TODO` | user feedback として、serial connection 時は manual plot 操作後に view が戻る現象あり |
-| `GUI-VAL-015` | Plot history retention | 数分以上の session でも古い plot data が暗黙に消えない | `TODO` | user feedback として、数分程度の動作後に古い表示が消えていくとの報告あり |
+| `GUI-VAL-014` | Wired manual plot parity | wired mode でも BLE mode と同じ manual pan / zoom / scale が使える | `PASS` | axis/viewbox manual interaction hook を追加し、helper smoke で `x_follow` 解除と manual Y range 化を確認 |
+| `GUI-VAL-015` | Plot history retention | 数分以上の session でも古い plot data が暗黙に消えない | `PASS` | `PlotController` を time-based history retention へ変更し、helper smoke で `1800 s / 180000 points` retention を確認 |
 | `GUI-VAL-016` | Settings mode switch flow | `SettingsDialog` から BLE / Wired mode switch を実行できる | `TODO` | user feedback として、settings menu から mode を切り替えられないとの報告あり |
 | `GUI-VAL-017` | Device filtering and preselect | intended device / port が自動的に絞り込まれ、候補が 1 つなら preselect される | `PASS` | backend filter/preselect logic を追加し、`M5STAMP-MONITOR*` と `usbmodem/usbserial` 候補が優先されることを helper smoke で確認 |
 | `GUI-VAL-018` | Visual theme parity | GUI theme が `example_gui` の dark direction に整合する | `TODO` | user feedback として、現行 GUI は reference より light 方向に見えるとの指摘あり |
@@ -147,6 +147,9 @@
 - `tools/ble_smoke.py` に `--observe-duration` を追加し、BLE continuity を reconnect cycle ごとに数秒以上観測できるよう更新
 - helper smoke により BLE candidate filter と wired port filter の優先順位ロジックを確認し、`M5STAMP-MONITOR*` と `usbmodem/usbserial` が preselect 対象になることを確認
 - exec 環境からの `BleakScanner.discover()` は `before discover` 出力後に無言終了するため、BLE live CLI continuity の実測は引き続きローカル GUI / 手元実行ベースで進める
+- plot interaction helper smoke により bottom axis manual interaction 後の `x_follow=False`、left axis interaction 後の manual Y range 化を確認
+- plot history helper smoke により `10 ms` 相当入力で `1800 s` の time-based retention と `180000` retained points を確認
+- `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 10 --toggle-interval-s 2.5` を再実施し、manual/history 修正後も offscreen GUI wired session が継続動作することを確認
 
 ## 8. 更新ルール
 

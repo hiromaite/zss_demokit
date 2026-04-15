@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Callable
 
 import pyqtgraph as pg
 from PySide6.QtCore import QTimer, Qt
@@ -99,6 +100,55 @@ class ElidedLabel(QLabel):
         elided = self.fontMetrics().elidedText(self._full_text, Qt.ElideRight, width)
         super().setText(elided)
         self.setToolTip(self._full_text if elided != self._full_text else "")
+
+
+class PlotInteractionViewBox(pg.ViewBox):
+    def __init__(self, plot_key: str, interaction_callback: Callable[[str, bool, bool], None], *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._plot_key = plot_key
+        self._interaction_callback = interaction_callback
+
+    def wheelEvent(self, ev, axis=None) -> None:  # type: ignore[override]
+        super().wheelEvent(ev, axis=axis)
+        self._notify_manual_interaction(x_changed=True, y_changed=True)
+
+    def mouseDragEvent(self, ev, axis=None) -> None:  # type: ignore[override]
+        super().mouseDragEvent(ev, axis=axis)
+        self._notify_manual_interaction(x_changed=True, y_changed=True)
+
+    def _notify_manual_interaction(self, *, x_changed: bool, y_changed: bool) -> None:
+        self._interaction_callback(self._plot_key, x_changed, y_changed)
+
+
+class PlotInteractionAxisItem(pg.AxisItem):
+    def __init__(
+        self,
+        orientation: str,
+        plot_key: str,
+        axis_kind: str,
+        interaction_callback: Callable[[str, bool, bool], None],
+        *args,
+        **kwargs,
+    ) -> None:
+        super().__init__(orientation=orientation, *args, **kwargs)
+        self._plot_key = plot_key
+        self._axis_kind = axis_kind
+        self._interaction_callback = interaction_callback
+
+    def wheelEvent(self, ev) -> None:  # type: ignore[override]
+        super().wheelEvent(ev)
+        self._notify_manual_interaction()
+
+    def mouseDragEvent(self, ev) -> None:  # type: ignore[override]
+        super().mouseDragEvent(ev)
+        self._notify_manual_interaction()
+
+    def _notify_manual_interaction(self) -> None:
+        self._interaction_callback(
+            self._plot_key,
+            self._axis_kind == "x",
+            self._axis_kind == "y",
+        )
 
 
 class MainWindow(QMainWindow):
@@ -399,7 +449,12 @@ class MainWindow(QMainWindow):
             ("Flow Rate", "flow", "#B5781A"),
         ]:
             plot_frame, plot_layout = _panel(title)
-            plot = pg.PlotWidget()
+            view_box = PlotInteractionViewBox(key, self._handle_plot_user_interaction)
+            axis_items = {
+                "bottom": PlotInteractionAxisItem("bottom", key, "x", self._handle_plot_user_interaction),
+                "left": PlotInteractionAxisItem("left", key, "y", self._handle_plot_user_interaction),
+            }
+            plot = pg.PlotWidget(viewBox=view_box, axisItems=axis_items)
             plot.setBackground(None)
             plot.showGrid(x=True, y=True, alpha=0.22)
             plot.setClipToView(True)
@@ -409,7 +464,6 @@ class MainWindow(QMainWindow):
             plot.getPlotItem().getAxis("left").setPen(QColor(COLORS["muted"]))
             plot.getPlotItem().getAxis("bottom").setPen(QColor(COLORS["muted"]))
             plot.setMinimumHeight(160)
-            view_box = plot.getPlotItem().getViewBox()
             view_box.sigRangeChangedManually.connect(self._on_plot_range_changed_manually)
             self._viewbox_to_plot_key[view_box] = key
             curve = plot.plot(pen=pg.mkPen(color=color, width=2.2))
@@ -689,15 +743,17 @@ class MainWindow(QMainWindow):
         x_changed = bool(axis_flags[0]) if axis_flags else True
         y_changed = bool(axis_flags[1]) if len(axis_flags) > 1 else True
 
+        sender = self.sender()
+        plot_key = self._viewbox_to_plot_key.get(sender)
+        self._handle_plot_user_interaction(plot_key, x_changed, y_changed)
+
+    def _handle_plot_user_interaction(self, plot_key: str | None, x_changed: bool, y_changed: bool) -> None:
+        if self._ignore_manual_range_signal:
+            return
+
         if x_changed:
             self.plot_controller.x_follow_enabled = False
 
-        if not y_changed:
-            self._persist_current_settings()
-            return
-
-        sender = self.sender()
-        plot_key = self._viewbox_to_plot_key.get(sender)
         if plot_key == "zirconia":
             self.plot_selector.setCurrentText("Zirconia")
         elif plot_key == "heater":
@@ -705,12 +761,11 @@ class MainWindow(QMainWindow):
         elif plot_key == "flow":
             self.plot_selector.setCurrentText("Flow")
 
-        if self.auto_scale_check.isChecked():
-            self.auto_scale_check.blockSignals(True)
-            self.auto_scale_check.setChecked(False)
-            self.auto_scale_check.blockSignals(False)
-
-        if plot_key is not None and plot_key in self.plot_widgets:
+        if y_changed and plot_key is not None and plot_key in self.plot_widgets:
+            if self.auto_scale_check.isChecked():
+                self.auto_scale_check.blockSignals(True)
+                self.auto_scale_check.setChecked(False)
+                self.auto_scale_check.blockSignals(False)
             _, y_range = self.plot_widgets[plot_key].getViewBox().viewRange()
             self.plot_controller.set_manual_y_range(plot_key, y_range[0], y_range[1])
 
