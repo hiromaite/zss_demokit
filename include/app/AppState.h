@@ -14,6 +14,7 @@ class AppState {
 
     uint32_t nextSequence();
     void updateMeasurements(uint32_t sequence, const measurement::SensorMeasurements& measurements);
+    void setNominalSamplePeriodMs(uint16_t nominal_sample_period_ms);
     void setTransportSessionActive(bool active);
     void setPumpOn(bool enabled);
     void setStatusFlag(uint32_t mask, bool enabled);

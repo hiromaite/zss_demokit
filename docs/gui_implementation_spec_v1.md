@@ -236,6 +236,7 @@
 - modal error ではなく non-blocking warning banner / log を基本とする
 - warning severity は `info`, `warn`, `error` の 3 段階
 - disconnect や sequence gap は UI で視認できるようにする
+- disconnect 時には telemetry session summary を log に残し、manual BLE continuity validation の補助に使えるようにする
 
 ## 11. GUI State Model
 
@@ -292,12 +293,18 @@ AppUiState
 v1 では placeholder として以下を採用する。
 
 ```text
-flow_rate_lpm = max(0.0, 1.0 * flow_sensor_voltage_v + 0.0)
+differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
+flow_rate_lpm = max(0.0, 1.0 * sqrt(max(0.0, differential_pressure_pa)) + 0.0)
 ```
 
 metadata:
 
-- `derived_metric_policy = dummy_linear_v1`
+- `derived_metric_policy = dummy_orifice_dp_v1`
+
+補足:
+
+- v1 では差圧そのものは transport field として持たず、GUI 側の derived pipeline 内で扱う
+- 正式な差圧変換係数とオリフィス係数は、流量計とガスラインを使った後続評価で更新する
 
 ## 13. 推奨モジュール分割
 

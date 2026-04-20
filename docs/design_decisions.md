@@ -118,11 +118,18 @@ v1 の解釈:
 
 - `Flow Rate` のような表示寄りの換算値は GUI 側計算を第一候補とする
 - transport では、必要に応じて `flow_sensor_voltage_v` のような元信号を送る
-- v1 実装では `dummy_linear_v1` を使い、`flow_rate_lpm = max(0.0, 1.0 * flow_sensor_voltage_v + 0.0)` とする
+- v1 実装では `dummy_orifice_dp_v1` を使い、`flow_sensor_voltage_v -> differential_pressure_pa -> flow_rate_lpm` の 2 段階 placeholder を採用する
+
+placeholder formula:
+
+```text
+differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
+flow_rate_lpm = max(0.0, 1.0 * sqrt(max(0.0, differential_pressure_pa)) + 0.0)
+```
 
 補足:
 
-- 実センサに合わせた正式換算式は後続フェーズで置き換える
+- `flow_sensor_voltage_v` は差圧センサ前段の raw signal とみなし、正式な差圧変換係数とオリフィス係数は後続フェーズで置き換える
 
 ## 13. v1 対象外
 
@@ -163,3 +170,13 @@ v1 の解釈:
 
 - BLE extension service / response carrier の最終方針
 - raw payload の debug 保存方針
+
+## 18. BLE Beta Proposal
+
+- beta 扱いの最低線として、local Mac GUI で `180 s` 以上の BLE live session を 1 回以上完走する
+- 同一 session 中に `Pump ON/OFF`、`Get Status`、recording start/stop を各 1 回以上成功させる
+- 同一 app run 中に manual disconnect / reconnect を 1 回以上行い、capabilities / status / telemetry が `10 s` 以内に復帰する
+- BLE は目標周期系であるため、beta gate は厳密な周期保証ではなく session continuity を重視する
+- planned reconnect を含む probe では、`observed telemetry duration >= session duration - reconnect timeout budget` を目安とする
+- `sequence_gap_total` は connected telemetry segment 内での欠落を数え、planned reconnect downtime は含めない
+- 目安として `sequence_gap_total <= 5`、transient stall warning は最大 1 回までを許容候補とする

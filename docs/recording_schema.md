@@ -64,7 +64,7 @@ session_20260408_153000.partial.csv
 # firmware_version=1.0.0
 # protocol_version=1.0
 # nominal_sample_period_ms=50
-# derived_metric_policy=dummy_linear_v1
+# derived_metric_policy=dummy_orifice_dp_v1
 # source_endpoint=BLE:M5STAMP-MONITOR
 # notes=
 host_received_at_iso,host_received_at_unix_ms,mode,transport_type,sequence,sequence_gap,inter_arrival_ms,nominal_sample_period_ms,status_flags_hex,pump_state,zirconia_output_voltage_v,heater_rtd_resistance_ohm,flow_sensor_voltage_v,flow_rate_lpm
@@ -87,7 +87,7 @@ host_received_at_iso,host_received_at_unix_ms,mode,transport_type,sequence,seque
 | `protocol_version` | Recommended | Protocol version if known |
 | `nominal_sample_period_ms` | Recommended | Target sample period |
 | `source_endpoint` | Recommended | `BLE:<name>` or `COM<n>` など |
-| `derived_metric_policy` | Recommended | Example: `dummy_linear_v1` |
+| `derived_metric_policy` | Recommended | Example: `dummy_orifice_dp_v1` |
 | `notes` | Optional | Free text |
 
 ## 6. CSV Columns
@@ -156,16 +156,22 @@ flow_rate_lpm
 
 ### 7.5 `flow_rate_lpm`
 
-- v1 では placeholder として `dummy_linear_v1` を使う
-- formula は `max(0.0, 1.0 * flow_sensor_voltage_v + 0.0)` とする
-- metadata に `derived_metric_policy=dummy_linear_v1` を残すことを推奨する
+- v1 では placeholder として `dummy_orifice_dp_v1` を使う
+- formula は以下の 2 段階 placeholder とする
+
+```text
+differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
+flow_rate_lpm = max(0.0, 1.0 * sqrt(max(0.0, differential_pressure_pa)) + 0.0)
+```
+
+- metadata に `derived_metric_policy=dummy_orifice_dp_v1` を残すことを推奨する
 
 ## 8. Example Rows
 
 ```csv
-2026-04-08T15:30:00.100+09:00,1775639400100,BLE,ble,100,0,,50,0x00000001,1,0.640,123.4,1.250,0.152
-2026-04-08T15:30:00.150+09:00,1775639400150,BLE,ble,101,0,50.0,50,0x00000001,1,0.642,123.5,1.252,0.153
-2026-04-08T15:30:00.260+09:00,1775639400260,BLE,ble,103,1,110.0,50,0x00000021,1,0.641,123.6,1.255,0.154
+2026-04-08T15:30:00.100+09:00,1775639400100,BLE,ble,100,0,,50,0x00000001,1,0.640,123.4,1.250,11.180340
+2026-04-08T15:30:00.150+09:00,1775639400150,BLE,ble,101,0,50.0,50,0x00000001,1,0.642,123.5,1.252,11.189281
+2026-04-08T15:30:00.260+09:00,1775639400260,BLE,ble,103,1,110.0,50,0x00000021,1,0.641,123.6,1.255,11.202678
 ```
 
 解釈:

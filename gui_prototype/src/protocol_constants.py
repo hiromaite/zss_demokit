@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 BLE_MODE = "BLE"
 WIRED_MODE = "Wired"
 
@@ -19,7 +21,7 @@ BLE_NOMINAL_SAMPLE_PERIOD_MS = 80
 WIRED_NOMINAL_SAMPLE_PERIOD_MS = 10
 
 FIRMWARE_VERSION_PLACEHOLDER = "prototype-ui"
-DERIVED_METRIC_POLICY_ID = "dummy_linear_v1"
+DERIVED_METRIC_POLICY_ID = "dummy_orifice_dp_v1"
 
 DEVICE_TYPE_CODE_ZIRCONIA_SENSOR = 1
 TRANSPORT_TYPE_CODE_BLE = 1
@@ -86,8 +88,10 @@ EVENT_CODE_COMMAND_ERROR = 0x04
 EVENT_CODE_ADC_FAULT_RAISED = 0x05
 EVENT_CODE_ADC_FAULT_CLEARED = 0x06
 
-FLOW_RATE_DUMMY_GAIN = 1.0
-FLOW_RATE_DUMMY_OFFSET = 0.0
+DIFFERENTIAL_PRESSURE_DUMMY_GAIN_PA_PER_V = 100.0
+DIFFERENTIAL_PRESSURE_DUMMY_OFFSET_PA = 0.0
+ORIFICE_FLOW_DUMMY_GAIN_LPM_PER_SQRT_PA = 1.0
+ORIFICE_FLOW_DUMMY_OFFSET_LPM = 0.0
 
 
 def nominal_sample_period_ms_for_mode(mode: str) -> int:
@@ -130,8 +134,24 @@ def format_status_flags(status_flags: int) -> str:
     return f"0x{status_flags:08X}"
 
 
+def derive_differential_pressure_pa(flow_sensor_voltage_v: float) -> float:
+    return (
+        DIFFERENTIAL_PRESSURE_DUMMY_GAIN_PA_PER_V * flow_sensor_voltage_v
+        + DIFFERENTIAL_PRESSURE_DUMMY_OFFSET_PA
+    )
+
+
+def derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa: float) -> float:
+    return max(
+        0.0,
+        ORIFICE_FLOW_DUMMY_GAIN_LPM_PER_SQRT_PA * math.sqrt(max(0.0, differential_pressure_pa))
+        + ORIFICE_FLOW_DUMMY_OFFSET_LPM,
+    )
+
+
 def derive_flow_rate_lpm(flow_sensor_voltage_v: float) -> float:
-    return max(0.0, FLOW_RATE_DUMMY_GAIN * flow_sensor_voltage_v + FLOW_RATE_DUMMY_OFFSET)
+    differential_pressure_pa = derive_differential_pressure_pa(flow_sensor_voltage_v)
+    return derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa)
 
 
 def result_code_to_text(result_code: int) -> str:

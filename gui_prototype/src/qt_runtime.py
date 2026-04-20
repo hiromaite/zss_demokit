@@ -9,6 +9,17 @@ from PySide6 import __file__ as PYSIDE6_FILE
 from PySide6.QtCore import QCoreApplication, QLibraryInfo
 
 
+def bundled_base_path() -> Path:
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        return Path(meipass)
+    return Path(__file__).resolve().parents[1]
+
+
+def resolve_runtime_asset(relative_path: str) -> Path:
+    return bundled_base_path() / relative_path
+
+
 def configure_qt_runtime() -> None:
     plugins_dir: Optional[Path] = None
     qt_lib_dir: Optional[Path] = None
