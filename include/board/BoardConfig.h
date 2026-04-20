@@ -8,6 +8,7 @@ namespace zss::board {
 inline constexpr int8_t kPumpOutputPin = 7;
 inline constexpr int8_t kStatusLedPin = -1;
 inline constexpr int8_t kStatusLedDataPin = 21;
+inline constexpr int8_t kPumpToggleButtonPin = 0;
 inline constexpr int8_t kFlowSensorAdcPin = 1;
 inline constexpr int8_t kLegacyInputAdcPin = 5;
 inline constexpr int8_t kZss2CellAdcPin = 3;
@@ -26,6 +27,9 @@ inline constexpr uint16_t kSerialMaxPayloadBytes = 64;
 inline constexpr uint32_t kI2cClockHz = 400000;
 inline constexpr uint16_t kI2cTimeoutMs = 10;
 inline constexpr uint8_t kInternalAdcOversamplingCount = 16;
+inline constexpr uint8_t kStatusLedBrightness = 50;
+inline constexpr uint16_t kButtonDebounceMs = 30;
+inline constexpr uint16_t kButtonArmDelayMs = 500;
 inline constexpr float kVoltageDividerRatio = 4.0f;
 inline constexpr float kRtdSeriesResistanceOhm = 11000.0f;
 inline constexpr float kRtdSourceVoltageV = 5.0f;

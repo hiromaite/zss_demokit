@@ -19,6 +19,7 @@ class AdcFrontend {
     bool initializeExternalAdc();
     float readOversampledInternalVoltage(int8_t pin) const;
     bool tryReadAdsChannelVoltage(uint8_t channel, float& voltage_out);
+    bool tryReadLegacySensorSet(SensorMeasurements& measurements);
     float convertToActualVoltage(float measured_voltage) const;
     void setError(const char* message);
     void clearError();

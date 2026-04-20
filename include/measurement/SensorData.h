@@ -5,6 +5,7 @@
 namespace zss::measurement {
 
 struct SensorMeasurements {
+    float zirconia_ip_voltage_v = 0.0f;
     float zirconia_output_voltage_v = 0.0f;
     float heater_rtd_resistance_ohm = 0.0f;
     float flow_sensor_voltage_v = 0.0f;

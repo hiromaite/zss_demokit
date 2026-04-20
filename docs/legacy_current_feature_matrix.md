@@ -41,11 +41,11 @@
 | Wired transport | No | Yes | 現行は `115200 8N1` の binary framing を実装 |
 | 共通 command processor (BLE / wired 共有) | No | Yes | 現行は transport 非依存 command path |
 | Pump control via BLE | Yes | Yes | どちらも状態ベース制御 |
-| Pump control via physical on-device button | Yes | No | 旧 firmware では `BtnA` interrupt で切替 |
+| Pump control via physical on-device button | Yes | Partial | 現行 firmware に local button controller を再導入済み。実機 operator validation は残る |
 | Internal ADC measurement: internal voltage | Yes | No | 現行 canonical telemetry には未搭載 |
 | Internal ADC measurement: flow sensor voltage | Yes | Yes | 現行は flow raw を GUI 側で差圧 / 流量へ変換 |
 | Internal ADC measurement: ZSS 2-cell raw voltage | Yes | No | 現行では未搭載 |
-| External ADC measurement: Zirconia Ip voltage | Yes | No | 現行 canonical telemetry には未搭載 |
+| External ADC measurement: Zirconia Ip voltage | Yes | Partial | 現行 firmware で ADS1115 ch0 読み取りを復活。現在は LED 制御向け local measurement |
 | External ADC measurement: Heater RTD resistance | Yes | Yes | 継続搭載 |
 | External ADC measurement: Zirconia output voltage | Yes | Yes | 継続搭載 |
 | ADS1115 初期化失敗時の fault 化 | Yes | Yes | どちらも fault 状態を持つ |
@@ -62,9 +62,9 @@
 | Telemetry diagnostic bits | No | Yes | 現行で boot / ADC / transport readiness 等を埋め始めた |
 | Serial structured logging | Yes | Yes | 旧は color-coded logger、現行も logger を継続 |
 | Capability preview log at boot | No | Yes | 現行で追加 |
-| Rich WS2812 status LED behavior | Yes | Partial | 現行は simple placeholder。旧の多段 state 表示は未移植 |
-| Voltage-target aware LED behavior | Yes | No | 旧のみ |
-| BLE advertising / connected LED patterns | Yes | Partial | 現行は simple status LED で簡略化 |
+| Rich WS2812 status LED behavior | Yes | Partial | 現行 firmware に WS2812 state machine を再導入済み。priority / pattern の実機確認は残る |
+| Voltage-target aware LED behavior | Yes | Partial | 現行 firmware に `zirconia_ip_voltage_v` ベースの target logic を実装済み。GUI / protocol 載せは未対応 |
+| BLE advertising / connected LED patterns | Yes | Partial | 現行 firmware に advertising / connected pattern を再導入済み。実機目視確認は残る |
 | Sensor power enable control | Yes | Yes | 現行も board config に集約 |
 | Legacy-first single-transport architecture | Yes | No | 現行は BLE / wired 共通コア設計へ移行 |
 

@@ -11,6 +11,7 @@
 #include "measurement/MeasurementCore.h"
 #include "protocol/PayloadBuilders.h"
 #include "services/Logger.h"
+#include "services/InputButtonController.h"
 #include "services/PumpController.h"
 #include "services/StatusLedController.h"
 #include "transport/BleTransport.h"
@@ -21,7 +22,8 @@ namespace {
 zss::measurement::AdcFrontend g_adc_frontend;
 zss::measurement::MeasurementCore g_measurement_core(g_adc_frontend);
 zss::services::PumpController g_pump_controller(zss::board::kPumpOutputPin);
-zss::services::StatusLedController g_status_led(zss::board::kStatusLedPin);
+zss::services::InputButtonController g_pump_toggle_button(zss::board::kPumpToggleButtonPin);
+zss::services::StatusLedController g_status_led(zss::board::kStatusLedDataPin);
 zss::app::AppState g_app_state(zss::board::kDefaultNominalSamplePeriodMs);
 zss::app::CommandProcessor g_command_processor(g_app_state, g_pump_controller);
 zss::transport::BleTransport g_ble_transport;
@@ -194,6 +196,7 @@ void runSamplingStep(uint32_t now_ms) {
     g_app_state.setStatusFlag(zss::protocol::kStatusFlagAdcFaultMask, !g_measurement_core.isHealthy());
     const bool sensor_fault =
         !g_measurement_core.lastReadSucceeded() ||
+        !isfinite(measurements.zirconia_ip_voltage_v) ||
         !isfinite(measurements.zirconia_output_voltage_v) ||
         !isfinite(measurements.heater_rtd_resistance_ohm) ||
         !isfinite(measurements.flow_sensor_voltage_v);
@@ -207,7 +210,6 @@ void runSamplingStep(uint32_t now_ms) {
     const auto telemetry_payload = zss::protocol::buildTelemetryPayload(g_app_state);
     g_ble_transport.publishTelemetry(telemetry_payload);
     g_serial_transport.publishTelemetry(telemetry_payload);
-    g_status_led.updateStatus(g_app_state.statusFlags());
 }
 
 void emitSummaryLog(uint32_t now_ms) {
@@ -220,14 +222,26 @@ void emitSummaryLog(uint32_t now_ms) {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Sample",
-        "seq=%lu Vout=%.3fV RTD=%.1fOhm FlowRaw=%.3fV flags=0x%08lX diag=0x%08lX overruns=%lu",
+        "seq=%lu Vip=%.3fV Vout=%.3fV RTD=%.1fOhm FlowRaw=%.3fV flags=0x%08lX diag=0x%08lX overruns=%lu",
         static_cast<unsigned long>(g_app_state.latestSequence()),
+        measurements.zirconia_ip_voltage_v,
         measurements.zirconia_output_voltage_v,
         measurements.heater_rtd_resistance_ohm,
         measurements.flow_sensor_voltage_v,
         static_cast<unsigned long>(g_app_state.statusFlags()),
         static_cast<unsigned long>(g_app_state.diagnosticBits()),
         static_cast<unsigned long>(g_app_state.sampleOverrunCount()));
+}
+
+void updateStatusLedContext() {
+    zss::services::StatusLedContext context{};
+    context.status_flags = g_app_state.statusFlags();
+    context.ble_ready = g_ble_transport_ready;
+    context.ble_connected = g_ble_transport.isConnected();
+    context.recording_active = false;
+    context.measurement_ready = g_app_state.latestSequence() > 0u;
+    context.zirconia_ip_voltage_v = g_app_state.latestMeasurements().zirconia_ip_voltage_v;
+    g_status_led.setContext(context);
 }
 
 }  // namespace
@@ -244,6 +258,7 @@ void setup() {
 
     g_pump_controller.begin();
     g_status_led.begin();
+    g_pump_toggle_button.begin(millis());
 
     g_measurement_core_ready = g_measurement_core.begin();
     if (!g_measurement_core_ready) {
@@ -286,14 +301,17 @@ void setup() {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Boot",
-        "Board config: pump=%d flow=%d i2c=(%d,%d) power_en=%d",
+        "Board config: pump=%d button=%d led=%d flow=%d i2c=(%d,%d) power_en=%d",
         zss::board::kPumpOutputPin,
+        zss::board::kPumpToggleButtonPin,
+        zss::board::kStatusLedDataPin,
         zss::board::kFlowSensorAdcPin,
         zss::board::kI2cSdaPin,
         zss::board::kI2cSclPin,
         zss::board::kSensorPowerEnablePin);
     g_app_state.setDiagnosticBit(zss::protocol::kDiagnosticBitBootCompleteMask, true);
     emitEvent(zss::protocol::EventCode::BootComplete, kEventSeverityInfo, g_app_state.diagnosticBits());
+    updateStatusLedContext();
 }
 
 void loop() {
@@ -301,6 +319,7 @@ void loop() {
     g_serial_transport.update();
     g_app_state.setTransportSessionActive(g_serial_transport.isConnected() || g_ble_transport.isConnected());
     updateDiagnosticBits();
+    g_pump_toggle_button.poll(millis());
 
     auto handleCommandForTransport =
         [](auto& transport, zss::transport::TransportKind transport_kind) {
@@ -358,8 +377,31 @@ void loop() {
     handleCommandForTransport(g_ble_transport, zss::transport::TransportKind::Ble);
     handleCommandForTransport(g_serial_transport, zss::transport::TransportKind::Serial);
 
+    if (g_pump_toggle_button.takeToggleRequest()) {
+        const uint32_t previous_status_flags = g_app_state.statusFlags();
+        zss::app::CommandRequest local_request{};
+        local_request.command_id = zss::protocol::CommandId::SetPumpState;
+        local_request.arg0_u32 = g_pump_controller.isEnabled() ? 0u : 1u;
+        local_request.source_transport = zss::transport::TransportKind::Local;
+        const auto result = g_command_processor.handle(local_request);
+        if (result.result_code != zss::protocol::ResultCode::Ok) {
+            emitEvent(
+                zss::protocol::EventCode::CommandError,
+                kEventSeverityError,
+                static_cast<uint32_t>(local_request.command_id));
+        }
+        emitStatusTransitionEvents(previous_status_flags, g_app_state.statusFlags());
+        zss::services::Logger::log(
+            zss::services::LogLevel::Info,
+            "Input",
+            "Local pump button toggled state=%u",
+            static_cast<unsigned>(local_request.arg0_u32));
+    }
+
     const uint32_t now_ms = millis();
     updateSamplingCadenceForActiveTransport(now_ms);
     runSamplingStep(now_ms);
+    updateStatusLedContext();
+    g_status_led.tick(now_ms);
     emitSummaryLog(now_ms);
 }

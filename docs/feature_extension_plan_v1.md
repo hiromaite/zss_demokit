@@ -466,6 +466,13 @@ else:
 - parity restore の quick win
 - operator feedback 改善
 
+現状:
+
+- `Bundle A` は初期コード実装まで着手済み
+- 具体的には `local button controller`, `ADS1115 ch0 zirconia_ip_voltage_v`, `WS2812 LED state machine` を firmware に追加済み
+- build / upload / wired regression smoke は通過済み
+- 残る確認は、physical button と LED pattern の実機 operator validation
+
 ### Step 2
 
 `Bundle C`
@@ -515,4 +522,3 @@ else:
 - O2 1-cell の factory coefficient
 
 これらは実測フェーズで決める前提でよい。
-

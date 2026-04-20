@@ -72,6 +72,7 @@
 | `FW-VAL-012` | Wired timing probe | wired `10 ms` path を sequence gap と host inter-arrival で観測できる | `PASS` | `tools/wired_timing_probe.py --samples 1200 --warmup 20` で `1200` samples、gap `0`、host inter-arrival `mean=9.131 ms / p95=20.095 ms / max=20.320 ms` を確認 |
 | `FW-VAL-013` | Wired soak probe | `30 s` continuous run と periodic `Pump ON/OFF` repetition が破綻せず継続する | `PASS` | `tools/wired_soak_probe.py --duration-s 30 --toggle-interval-s 2.5` で `3001` telemetry samples、gap `0`、toggle `12` 回、status flags `[2, 3]` を確認 |
 | `FW-VAL-014` | Diagnostic payload wiring build smoke | diagnostic bits 追加後も firmware build と shared regression が壊れない | `PASS` | `pio run` と `tools/protocol_fixture_smoke.py` により AppState / payload builder の diagnostic wiring 後も build/regression が継続することを確認 |
+| `FW-VAL-015` | Bundle A regression smoke | physical button / ADS1115 ch0 / WS2812 parity 追加後も wired path が退行しない | `PASS` | `pio run`, upload, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` を実施し、capabilities / status / telemetry / `Pump ON/OFF` / command error event が継続動作することを確認 |
 
 ## 6. Integration Checklist
 
@@ -194,6 +195,8 @@
 - left column の横スクロール問題を再現し、content width を viewport width に同期する修正を加えた後に `viewport_width == content_width` と `ScrollBarAlwaysOff` を確認した
 - firmware 側の diagnostics hardening として `diagnostic_bits` を AppState / telemetry payload に配線し、`boot_complete` event の `detail_u32` に diagnostic bits を載せるよう更新した
 - `python3.12 -m compileall gui_prototype/src tools/protocol_fixture_smoke.py`、`./.venv_gui_prototype/bin/python3.12 tools/protocol_fixture_smoke.py`、`./.venv_pio/bin/pio run` を実施し、diagnostic wiring 後も GUI compile、shared protocol regression、firmware build が継続して成立することを確認した
+- Bundle A の初期実装として `InputButtonController`、ADS1115 ch0 `zirconia_ip_voltage_v` 読み取り、WS2812 `StatusLedController` state machine を追加した
+- `./.venv_pio/bin/pio run`、`./.venv_pio/bin/pio run -t upload --upload-port /dev/cu.usbmodem3101`、`source .venv_gui_prototype/bin/activate && python3.12 tools/protocol_fixture_smoke.py`、`source .venv_gui_prototype/bin/activate && python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` を実施し、Bundle A 追加後も build / upload / shared regression / wired transport が継続して成立することを確認した
 
 ## 8. 更新ルール
 

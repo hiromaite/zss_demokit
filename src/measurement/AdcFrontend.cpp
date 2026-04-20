@@ -43,6 +43,7 @@ SensorMeasurements AdcFrontend::readMeasurements() {
     if (!initialized_) {
         last_read_succeeded_ = false;
         return {
+            .zirconia_ip_voltage_v = NAN,
             .zirconia_output_voltage_v = NAN,
             .heater_rtd_resistance_ohm = NAN,
             .flow_sensor_voltage_v = NAN,
@@ -50,6 +51,7 @@ SensorMeasurements AdcFrontend::readMeasurements() {
     }
 
     SensorMeasurements measurements{
+        .zirconia_ip_voltage_v = NAN,
         .zirconia_output_voltage_v = NAN,
         .heater_rtd_resistance_ohm = NAN,
         .flow_sensor_voltage_v = readOversampledInternalVoltage(zss::board::kFlowSensorAdcPin),
@@ -63,25 +65,13 @@ SensorMeasurements AdcFrontend::readMeasurements() {
         }
     }
 
-    float heater_rtd_voltage = NAN;
-    if (external_adc_available_) {
-        const bool zirconia_ok = tryReadAdsChannelVoltage(2, measurements.zirconia_output_voltage_v);
-        const bool heater_ok = tryReadAdsChannelVoltage(1, heater_rtd_voltage);
-        if (!zirconia_ok || !heater_ok) {
-            external_adc_available_ = false;
-        }
-    }
-
-    if (isfinite(heater_rtd_voltage)) {
-        const float denominator = zss::board::kRtdSourceVoltageV - heater_rtd_voltage;
-        if (fabsf(denominator) > 1.0e-6f) {
-            measurements.heater_rtd_resistance_ohm =
-                (heater_rtd_voltage * zss::board::kRtdSeriesResistanceOhm) / denominator;
-        }
+    if (external_adc_available_ && !tryReadLegacySensorSet(measurements)) {
+        external_adc_available_ = false;
     }
 
     last_read_succeeded_ =
         external_adc_available_ &&
+        isfinite(measurements.zirconia_ip_voltage_v) &&
         isfinite(measurements.zirconia_output_voltage_v) &&
         isfinite(measurements.heater_rtd_resistance_ohm) &&
         isfinite(measurements.flow_sensor_voltage_v);
@@ -164,6 +154,27 @@ bool AdcFrontend::tryReadAdsChannelVoltage(uint8_t channel, float& voltage_out) 
     setError("Failed to read ADS1115 channel");
     voltage_out = NAN;
     return false;
+}
+
+bool AdcFrontend::tryReadLegacySensorSet(SensorMeasurements& measurements) {
+    float heater_rtd_voltage = NAN;
+    const bool vip_ok = tryReadAdsChannelVoltage(0, measurements.zirconia_ip_voltage_v);
+    const bool heater_ok = tryReadAdsChannelVoltage(1, heater_rtd_voltage);
+    const bool zirconia_ok = tryReadAdsChannelVoltage(2, measurements.zirconia_output_voltage_v);
+    if (!vip_ok || !heater_ok || !zirconia_ok) {
+        measurements.heater_rtd_resistance_ohm = NAN;
+        return false;
+    }
+
+    if (isfinite(heater_rtd_voltage)) {
+        const float denominator = zss::board::kRtdSourceVoltageV - heater_rtd_voltage;
+        if (fabsf(denominator) > 1.0e-6f) {
+            measurements.heater_rtd_resistance_ohm =
+                (heater_rtd_voltage * zss::board::kRtdSeriesResistanceOhm) / denominator;
+        }
+    }
+
+    return isfinite(measurements.heater_rtd_resistance_ohm);
 }
 
 float AdcFrontend::convertToActualVoltage(float measured_voltage) const {
