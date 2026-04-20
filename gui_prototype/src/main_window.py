@@ -245,6 +245,14 @@ class CollapsiblePanel(QFrame):
         self.hint_label.setVisible(expanded and bool(self.hint_label.text()))
 
 
+class VerticalOnlyScrollArea(QScrollArea):
+    def resizeEvent(self, event) -> None:  # type: ignore[override]
+        super().resizeEvent(event)
+        content = self.widget()
+        if content is not None:
+            content.setFixedWidth(self.viewport().width())
+
+
 class MainWindow(QMainWindow):
     def __init__(self, mode: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -303,7 +311,7 @@ class MainWindow(QMainWindow):
 
         self.left_column_content = self._build_left_column()
         self.left_column_content.setMinimumWidth(0)
-        self.left_column = QScrollArea()
+        self.left_column = VerticalOnlyScrollArea()
         self.left_column.setWidgetResizable(True)
         self.left_column.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.left_column.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -1041,10 +1049,18 @@ class MainWindow(QMainWindow):
         available_width = max(640, self.width() - 36)
         left_width = max(272, min(360, int(available_width * 0.26)))
         self.left_column.setFixedWidth(left_width)
+        self._sync_left_column_content_width()
 
     def _apply_plot_splitter_sizes(self) -> None:
         if hasattr(self, "plot_splitter"):
             self.plot_splitter.setSizes([420, 220])
+
+    def _sync_left_column_content_width(self) -> None:
+        if not hasattr(self, "left_column") or not hasattr(self, "left_column_content"):
+            return
+        viewport_width = self.left_column.viewport().width()
+        if viewport_width > 0:
+            self.left_column_content.setFixedWidth(viewport_width)
 
     def _configure_plot_widget(self, plot: pg.PlotWidget) -> None:
         plot.setBackground(None)
