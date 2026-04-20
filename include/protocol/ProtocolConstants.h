@@ -107,6 +107,7 @@ inline constexpr uint16_t kTelemetryFieldBits =
     (1u << 0) |
     (1u << 1) |
     (1u << 2);
+inline constexpr uint16_t kTelemetryFieldDifferentialPressureSelectedMask = 1u << 3;
 
 inline constexpr uint32_t kBleFeatureBits =
     (1u << 0) |

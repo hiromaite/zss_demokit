@@ -38,6 +38,16 @@ void AppState::setDiagnosticBit(uint32_t mask, bool enabled) {
     assignStatusFlag(diagnostic_bits_, mask, enabled);
 }
 
+void AppState::setDifferentialPressureSelectedPa(float value) {
+    has_differential_pressure_selected_pa_ = true;
+    latest_differential_pressure_selected_pa_ = value;
+}
+
+void AppState::clearDifferentialPressureSelectedPa() {
+    has_differential_pressure_selected_pa_ = false;
+    latest_differential_pressure_selected_pa_ = 0.0f;
+}
+
 void AppState::incrementSampleOverrunCount(uint32_t amount) {
     sample_overrun_count_ += amount;
     assignStatusFlag(status_flags_, protocol::kStatusFlagSamplingOverrunMask, true);
@@ -66,6 +76,14 @@ uint16_t AppState::nominalSamplePeriodMs() const {
 
 const measurement::SensorMeasurements& AppState::latestMeasurements() const {
     return latest_measurements_;
+}
+
+bool AppState::hasDifferentialPressureSelectedPa() const {
+    return has_differential_pressure_selected_pa_;
+}
+
+float AppState::latestDifferentialPressureSelectedPa() const {
+    return latest_differential_pressure_selected_pa_;
 }
 
 const char* AppState::firmwareVersion() const {

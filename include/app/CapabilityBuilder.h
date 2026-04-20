@@ -27,7 +27,8 @@ class CapabilityBuilder {
   public:
     static DeviceCapabilities build(
         transport::TransportKind transport_kind,
-        uint16_t nominal_sample_period_ms);
+        uint16_t nominal_sample_period_ms,
+        bool advertise_differential_pressure_selected = false);
 };
 
 }  // namespace zss::app

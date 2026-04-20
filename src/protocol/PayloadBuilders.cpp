@@ -10,6 +10,11 @@ TelemetryPayloadV1 buildTelemetryPayload(const app::AppState& app_state) {
     payload.zirconia_output_voltage_v = measurements.zirconia_output_voltage_v;
     payload.heater_rtd_resistance_ohm = measurements.heater_rtd_resistance_ohm;
     payload.flow_sensor_voltage_v = measurements.flow_sensor_voltage_v;
+    payload.telemetry_field_bits = kTelemetryFieldBits;
+    if (app_state.hasDifferentialPressureSelectedPa()) {
+        payload.flow_sensor_voltage_v = app_state.latestDifferentialPressureSelectedPa();
+        payload.telemetry_field_bits |= kTelemetryFieldDifferentialPressureSelectedMask;
+    }
     payload.nominal_sample_period_ms = app_state.nominalSamplePeriodMs();
     payload.diagnostic_bits = app_state.diagnosticBits();
     return payload;
@@ -25,6 +30,11 @@ StatusSnapshotPayloadV1 buildStatusSnapshotPayload(const app::AppState& app_stat
     payload.zirconia_output_voltage_v = measurements.zirconia_output_voltage_v;
     payload.heater_rtd_resistance_ohm = measurements.heater_rtd_resistance_ohm;
     payload.flow_sensor_voltage_v = measurements.flow_sensor_voltage_v;
+    payload.telemetry_field_bits = kTelemetryFieldBits;
+    if (app_state.hasDifferentialPressureSelectedPa()) {
+        payload.flow_sensor_voltage_v = app_state.latestDifferentialPressureSelectedPa();
+        payload.telemetry_field_bits |= kTelemetryFieldDifferentialPressureSelectedMask;
+    }
     return payload;
 }
 

@@ -54,10 +54,12 @@ TELEMETRY_FIELDS = (
     "zirconia_output_voltage_v",
     "heater_rtd_resistance_ohm",
     "flow_sensor_voltage_v",
+    "differential_pressure_selected_pa",
 )
 
 SUPPORTED_COMMAND_BITS = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
 TELEMETRY_FIELD_BITS = (1 << 0) | (1 << 1) | (1 << 2)
+TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED = 1 << 3
 
 BLE_OPCODE_SET_PUMP_ON = 0x55
 BLE_OPCODE_SET_PUMP_OFF = 0xAA

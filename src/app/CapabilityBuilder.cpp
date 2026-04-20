@@ -6,9 +6,14 @@ namespace zss::app {
 
 DeviceCapabilities CapabilityBuilder::build(
     transport::TransportKind transport_kind,
-    uint16_t nominal_sample_period_ms) {
+    uint16_t nominal_sample_period_ms,
+    bool advertise_differential_pressure_selected) {
     DeviceCapabilities capabilities{};
     capabilities.nominal_sample_period_ms = nominal_sample_period_ms;
+    if (advertise_differential_pressure_selected) {
+        capabilities.telemetry_field_bits |=
+            protocol::kTelemetryFieldDifferentialPressureSelectedMask;
+    }
 
     if (transport_kind == transport::TransportKind::Serial) {
         capabilities.transport_type_code = protocol::TransportTypeCode::Serial;

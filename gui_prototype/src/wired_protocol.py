@@ -14,6 +14,7 @@ from protocol_constants import (
     PROTOCOL_VERSION_TEXT,
     STATUS_FLAG_PUMP_ON,
     SUPPORTED_COMMANDS,
+    TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED,
     TELEMETRY_FIELDS,
     TRANSPORT_BLE,
     TRANSPORT_SERIAL,
@@ -174,6 +175,8 @@ def decode_capabilities(frame: WiredFrame) -> dict[str, object]:
         telemetry_fields.append(TELEMETRY_FIELDS[1])
     if telemetry_bits & (1 << 2):
         telemetry_fields.append(TELEMETRY_FIELDS[2])
+    if telemetry_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED:
+        telemetry_fields.append(TELEMETRY_FIELDS[3])
 
     return {
         "protocol_version": build_protocol_version_text(frame),
@@ -199,6 +202,9 @@ def decode_status_snapshot(frame: WiredFrame) -> dict[str, object]:
         "<IHHfff",
         frame.payload,
     )
+    differential_pressure_selected_pa = None
+    if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED:
+        differential_pressure_selected_pa = flow_raw
     return {
         "protocol_version": build_protocol_version_text(frame),
         "status_flags": status_flags,
@@ -207,6 +213,7 @@ def decode_status_snapshot(frame: WiredFrame) -> dict[str, object]:
         "zirconia_output_voltage_v": zirconia,
         "heater_rtd_resistance_ohm": heater,
         "flow_sensor_voltage_v": flow_raw,
+        "differential_pressure_selected_pa": differential_pressure_selected_pa,
         "pump_on": (status_flags & STATUS_FLAG_PUMP_ON) != 0,
     }
 

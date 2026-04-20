@@ -19,6 +19,8 @@ class AppState {
     void setPumpOn(bool enabled);
     void setStatusFlag(uint32_t mask, bool enabled);
     void setDiagnosticBit(uint32_t mask, bool enabled);
+    void setDifferentialPressureSelectedPa(float value);
+    void clearDifferentialPressureSelectedPa();
     void incrementSampleOverrunCount(uint32_t amount = 1u);
     void incrementCommandErrorCount();
 
@@ -27,6 +29,8 @@ class AppState {
     uint32_t diagnosticBits() const;
     uint16_t nominalSamplePeriodMs() const;
     const measurement::SensorMeasurements& latestMeasurements() const;
+    bool hasDifferentialPressureSelectedPa() const;
+    float latestDifferentialPressureSelectedPa() const;
     const char* firmwareVersion() const;
     uint32_t sampleOverrunCount() const;
     uint32_t commandErrorCount() const;
@@ -37,6 +41,8 @@ class AppState {
     uint32_t diagnostic_bits_ = 0;
     uint16_t nominal_sample_period_ms_ = 0;
     measurement::SensorMeasurements latest_measurements_{};
+    bool has_differential_pressure_selected_pa_ = false;
+    float latest_differential_pressure_selected_pa_ = 0.0f;
     uint32_t sample_overrun_count_ = 0;
     uint32_t command_error_count_ = 0;
 };

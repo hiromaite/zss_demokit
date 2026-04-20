@@ -122,10 +122,12 @@ void emitStatusTransitionEvents(uint32_t previous_status_flags, uint32_t current
 void logCapabilitiesPreview() {
     const auto ble_capabilities = zss::app::CapabilityBuilder::build(
         zss::transport::TransportKind::Ble,
-        zss::board::kBleNominalSamplePeriodMs);
+        zss::board::kBleNominalSamplePeriodMs,
+        g_measurement_core.differentialPressureAvailable());
     const auto serial_capabilities = zss::app::CapabilityBuilder::build(
         zss::transport::TransportKind::Serial,
-        zss::board::kWiredNominalSamplePeriodMs);
+        zss::board::kWiredNominalSamplePeriodMs,
+        g_measurement_core.differentialPressureAvailable());
 
     const auto ble_payload = zss::protocol::buildCapabilitiesPayload(ble_capabilities);
     const auto serial_payload = zss::protocol::buildCapabilitiesPayload(serial_capabilities);
@@ -212,6 +214,7 @@ void runSamplingStep(uint32_t now_ms) {
     g_next_sample_deadline_ms += (missed_intervals + 1u) * nominal_period_ms;
 
     const auto measurements = g_measurement_core.acquire();
+    const auto& differential_pressure = g_measurement_core.latestDifferentialPressureMeasurements();
     updateDiagnosticBits();
     g_app_state.setStatusFlag(zss::protocol::kStatusFlagAdcFaultMask, !g_measurement_core.isHealthy());
     const bool sensor_fault =
@@ -221,6 +224,13 @@ void runSamplingStep(uint32_t now_ms) {
         !isfinite(measurements.heater_rtd_resistance_ohm) ||
         !isfinite(measurements.flow_sensor_voltage_v);
     g_app_state.setStatusFlag(zss::protocol::kStatusFlagSensorFaultMask, sensor_fault);
+    if (g_measurement_core.differentialPressureHealthy() &&
+        isfinite(differential_pressure.selected_differential_pressure_pa)) {
+        g_app_state.setDifferentialPressureSelectedPa(
+            differential_pressure.selected_differential_pressure_pa);
+    } else {
+        g_app_state.clearDifferentialPressureSelectedPa();
+    }
     const uint32_t sequence = g_app_state.nextSequence();
     g_app_state.updateMeasurements(sequence, measurements);
 
@@ -306,7 +316,8 @@ void setup() {
 
     const auto ble_capabilities = zss::app::CapabilityBuilder::build(
         zss::transport::TransportKind::Ble,
-        zss::board::kBleNominalSamplePeriodMs);
+        zss::board::kBleNominalSamplePeriodMs,
+        g_measurement_core.differentialPressureAvailable());
     g_ble_transport.publishCapabilities(
         zss::protocol::buildCapabilitiesPayload(ble_capabilities));
     g_ble_transport.publishStatusSnapshot(
@@ -381,7 +392,8 @@ void loop() {
                         transport_kind,
                         transport_kind == zss::transport::TransportKind::Ble
                             ? zss::board::kBleNominalSamplePeriodMs
-                            : g_app_state.nominalSamplePeriodMs());
+                            : g_app_state.nominalSamplePeriodMs(),
+                        g_measurement_core.differentialPressureAvailable());
                     if constexpr (std::is_same_v<std::decay_t<decltype(transport)>, zss::transport::SerialTransport>) {
                         transport.publishCapabilities(
                             zss::protocol::buildCapabilitiesPayload(capabilities),

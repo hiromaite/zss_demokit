@@ -73,6 +73,7 @@
 | `FW-VAL-013` | Wired soak probe | `30 s` continuous run と periodic `Pump ON/OFF` repetition が破綻せず継続する | `PASS` | `tools/wired_soak_probe.py --duration-s 30 --toggle-interval-s 2.5` で `3001` telemetry samples、gap `0`、toggle `12` 回、status flags `[2, 3]` を確認 |
 | `FW-VAL-014` | Diagnostic payload wiring build smoke | diagnostic bits 追加後も firmware build と shared regression が壊れない | `PASS` | `pio run` と `tools/protocol_fixture_smoke.py` により AppState / payload builder の diagnostic wiring 後も build/regression が継続することを確認 |
 | `FW-VAL-015` | Bundle A regression smoke | physical button / ADS1115 ch0 / WS2812 parity 追加後も wired path が退行しない | `PASS` | `pio run`, upload, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` を実施し、capabilities / status / telemetry / `Pump ON/OFF` / command error event が継続動作することを確認 |
+| `FW-VAL-016` | Differential pressure telemetry publication | dual-SDP selected differential pressure が transport payload に反映される | `PASS` | `pio run`, upload, `tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 6`, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` により `telemetry_field_bits=15` と finite `differential_pressure_selected_pa` を確認 |
 
 ## 6. Integration Checklist
 
@@ -90,6 +91,9 @@
 | `INT-VAL-010` | BLE GUI continuity manual validation | local Mac GUI 実行で BLE continuity / reconnect を継続確認できる | `PASS` | `tools/gui_ble_session_probe.py --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60` で `Connect count=2`, `Connected telemetry segments=2`, `sequence_gap_total=0`, `Reconnect recovered=True`, `recovery=3.42 s`, `Recording sessions completed=1`, `gui_ble_session_probe_ok` を確認 |
 | `INT-VAL-011` | BLE GUI session probe logic smoke | GUI-level BLE probe の段取りと gate 判定が fake live backend で回る | `PASS` | `tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6` で `scan -> connect -> recording -> reconnect -> summary` を確認 |
 | `INT-VAL-012` | Windows packaged end-to-end smoke | Windows packaged app で `Wired` / `BLE` の両モードが blocking issue なく動く | `PASS` | user による Windows 11 Pro 実機確認で serial / BLE の両方に問題なしを確認 |
+| `INT-VAL-013` | GUI wired flow integration | GUI が selected differential pressure を含む wired session を継続処理できる | `PASS` | `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5` で `967` telemetry, warning/error `0`, CSV `799` rows, `gui_wired_session_probe_ok` を確認 |
+| `INT-VAL-014` | Wired flow probe baseline | wired transport 上で selected differential pressure と derived flow rate を集計できる | `PASS` | `tools/wired_flow_probe.py --port /dev/cu.usbmodem3101 --duration-s 6` で `telemetry_field_bits=15`, advertised differential pressure, finite no-flow baseline を確認 |
+| `INT-VAL-015` | Wired flow operator sweep | low / medium / high flow で transport-level flow probe が handoff を観測できる | `TODO` | `tools/wired_flow_probe.py` を用いた user-operated flow sweep を次回実施 |
 
 ## 7. 実施ログ
 
@@ -218,6 +222,12 @@
 - Bundle E の事前整備として、GUI は optional `differential_pressure_selected_pa` を受け取れるよう更新し、field がある場合はそれを優先して flow rate を算出する fallback-safe path を導入した
 - `python3.12 -m compileall gui_prototype/src/protocol_constants.py gui_prototype/src/mock_backend.py gui_prototype/src/controllers.py` と `source .venv_gui_prototype/bin/activate && python3.12 tools/protocol_fixture_smoke.py` を実施し、GUI regression がないことを確認した
 - right column scroll 対応後の plot height / vertical splitter 挙動は数回調整したが、この時点では local macOS の見た目を accept とし、Windows / 別解像度環境での follow-up visual validation 項目として扱う
+- flow telemetry integration として `telemetry_field_bits bit3` による selected differential pressure 拡張を導入し、既存 payload サイズを維持したまま wired / BLE decoder を更新した
+- `./.venv_pio/bin/pio run`、`python3.12 -m compileall gui_prototype/src/protocol_constants.py gui_prototype/src/ble_protocol.py gui_prototype/src/wired_protocol.py gui_prototype/src/mock_backend.py gui_prototype/src/controllers.py`、`python3.12 tools/protocol_fixture_smoke.py` を実施し、transport / GUI regression がないことを確認した
+- `/dev/cu.usbmodem3101` へ upload 後、`python3.12 tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 6` により no-flow baseline `DpSel mean=-0.0671 Pa` を確認した
+- `python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` により `telemetry_field_bits=15`, finite `differential_pressure_selected_pa`, `Pump ON/OFF`, command error event を live wired で確認した
+- `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5` により GUI wiring 後も wired session が継続し、`967` telemetry, warning/error `0`, CSV `799` rows, `gui_wired_session_probe_ok` を確認した
+- `python3.12 tools/wired_flow_probe.py --port /dev/cu.usbmodem3101 --duration-s 6` を実施し、no-flow baseline として `telemetry_field_bits=15`, advertised differential pressure, `DpSel mean=-0.0591 Pa`, `Non-unit sequence gap total=0` を確認した
 
 ## 8. 更新ルール
 

@@ -50,8 +50,8 @@
 2. `Bundle B`: GUI recording emphasis `COMPLETE`
 3. `Bundle C`: O2 1-cell display and calibration `COMPLETE`
 4. `Bundle D`: Dual-SDP differential pressure PoC `COMPLETE`
-5. `Bundle E`: Flow algorithm integration and telemetry expansion `IN_PROGRESS`
-6. `Bundle F`: End-to-end hardening and operator validation
+5. `Bundle E`: Flow algorithm integration and telemetry expansion `COMPLETE`
+6. `Bundle F`: End-to-end hardening and operator validation `IN_PROGRESS`
 
 ## 4. Bundle A: Firmware UX Parity
 
@@ -481,6 +481,30 @@ else:
 - high-flow 域で `±500 Pa` センサへ安全に移れる
 - GUI 側の flow rate は selected differential pressure から一貫して計算できる
 
+### 完了メモ
+
+- Bundle E は 2026-04-21 に close した
+- 実装方針として、packet size は広げず、既存 `flow_sensor_voltage_v` slot を
+  `telemetry_field_bits bit3` で `differential_pressure_selected_pa` として再解釈する互換拡張を採用した
+- firmware 側では:
+  - `AppState` に selected differential pressure を保持
+  - telemetry / status / capabilities payload に differential pressure bit を追加
+  - wired / BLE の両 transport で同じ payload builder を共有
+- GUI 側では:
+  - BLE / wired decoder が bit3 を見て `differential_pressure_selected_pa` を復元
+  - `PlotController` と `RecordingController` は field があるときは selected differential pressure を優先して flow rate を算出し、
+    field がないときは旧 placeholder path に fallback する
+- close-out で確認できたもの:
+  - `./.venv_pio/bin/pio run`
+  - `python3.12 -m compileall gui_prototype/src/protocol_constants.py gui_prototype/src/ble_protocol.py gui_prototype/src/wired_protocol.py gui_prototype/src/mock_backend.py gui_prototype/src/controllers.py`
+  - `python3.12 tools/protocol_fixture_smoke.py`
+  - `/dev/cu.usbmodem3101` への upload
+  - `python3.12 tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 6`
+  - `python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200`
+  - `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5`
+- live wired validation では `telemetry_field_bits=15`、finite `differential_pressure_selected_pa`、`gui_wired_session_probe_ok` を確認した
+- BLE live continuity はすでに M3 で通過済みであり、Bundle E 後の BLE operator validation は Bundle F で follow-up する
+
 ## 9. まとめて実装すべき単位
 
 ### Group 1: Low-risk parity restore
@@ -572,6 +596,11 @@ else:
 
 - actual flow feature integration
 - protocol / GUI extension
+
+現状:
+
+- close 済み
+- next focus は `Bundle F` の operator validation と long-run hardening
 
 ## 11. 現時点の重要判断
 

@@ -101,7 +101,7 @@
 | Real-time value: Zirconia Ip Voltage | Yes | No | 現行 UI には未表示 |
 | Real-time value: Heater RTD Resistance | Yes | Yes | 表示あり |
 | Real-time value: Zirconia Output Voltage | Yes | Yes | 表示あり |
-| Real-time value: Flow Rate | Yes | Yes | 現行は placeholder flow formula |
+| Real-time value: Flow Rate | Yes | Yes | 現行は dual-SDP selected differential pressure を優先し、未搭載環境では legacy placeholder へ fallback する |
 | Real-time value: O2 Concentration (1-cell) | Yes | Yes | 現行 GUI に ambient-air calibration / reset / persistence を含む workflow を追加済み |
 | Real-time value: O2 Concentration (2-cell) | Yes | No | 現行未搭載 |
 | ZSS 2-cell calibration table | Yes | No | 現行未搭載 |
