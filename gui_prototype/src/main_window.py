@@ -302,8 +302,10 @@ class MainWindow(QMainWindow):
         layout.setSpacing(14)
 
         self.left_column_content = self._build_left_column()
+        self.left_column_content.setMinimumWidth(0)
         self.left_column = QScrollArea()
         self.left_column.setWidgetResizable(True)
+        self.left_column.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.left_column.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.left_column.setFrameShape(QFrame.NoFrame)
         self.left_column.setWidget(self.left_column_content)
@@ -322,6 +324,7 @@ class MainWindow(QMainWindow):
 
     def _build_left_column(self) -> QWidget:
         shell = QWidget()
+        shell.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         layout = QVBoxLayout(shell)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
