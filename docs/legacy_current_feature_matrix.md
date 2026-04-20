@@ -9,6 +9,7 @@
 - 旧 firmware: `resource/old_firmware/`
 - 現行 firmware: top-level PlatformIO project (`src/`, `include/`)
 - 旧 PC app: `resource/old_gui/ble_test.html`
+- 参考 PC app: `resource/example_gui/`
 - 現行 PC app: `gui_prototype/`
 
 比較時の見方:
@@ -17,6 +18,7 @@
 - `Partial`: 一部のみ実装、または導線 / 表示 / 挙動が限定的
 - `No`: 現時点では未実装
 - `Alternative`: 同じ課題を別の設計で解いている
+- `N/A`: 比較対象のデバイスや運用前提が異なるため、そのまま同等比較しにくい
 
 注記:
 
@@ -123,7 +125,52 @@
 | Warning-oriented continuity monitoring | No | Yes | 現行で delayed start / stalled stream を log に反映 |
 | Windows packaged app smoke validated | No | Yes | 現行で実施済み |
 
-## 4. Same Problem, Different Solution
+## 4. Example GUI vs Current PC App (Abstract GUI Function Comparison)
+
+この節では、`resource/example_gui/` と現行 GUI を、「対象デバイス固有の意味」ではなく、
+desktop GUI / visualizer / logger / device console として見たときの抽象機能で比較する。
+
+| Feature | Example GUI | Current PC App | Notes |
+| :--- | :--- | :--- | :--- |
+| Desktop PySide6 application | Yes | Yes | どちらも desktop native 実装 |
+| Dedicated entrypoint for packaging | Yes | Yes | `main.py` を持つ |
+| Splash / startup presentation | Yes | Yes | どちらも splash / launcher 的導線あり |
+| Single main window with control pane + plot pane | Yes | Yes | UI 構造は近い |
+| Asynchronous transport worker / adapter separation | Yes | Yes | `SerialWorker` vs `DeviceAdapter` / backend |
+| Serial port scan / connect / disconnect | Yes | Yes | どちらも対応 |
+| BLE connect path | No | Yes | 現行 GUI で追加 |
+| Single app handling multiple transport modes | No | Yes | 現行 GUI は BLE / wired mode を持つ |
+| Candidate filtering / auto-preselect for intended device | Partial | Yes | example_gui は port refresh 主体。現行は filter / preselect を持つ |
+| Runtime mode switch | N/A | Yes | example_gui は single-mode serial app |
+| Local settings persistence | Yes | Yes | example_gui は JSON files、現行は `QSettings` |
+| Partial recording detection at startup | Yes | Yes | どちらも `.partial.csv` を検出 |
+| Session recording to CSV during live run | Yes | Yes | どちらも live logging 対応 |
+| Finalize `.partial.csv` to `.csv` on stop | Yes | Yes | どちらも対応 |
+| CSV header metadata | Yes | Yes | どちらもメタデータ行あり |
+| Event / status / capabilities ingest path | Yes | Yes | example_gui は line family、現行は BLE/wired protocol |
+| Log pane for runtime messages | Yes | Yes | どちらも operator 向け log view を持つ |
+| Session summary on disconnect | No | Yes | 現行 GUI で追加 |
+| Plot time span presets | Yes | Yes | どちらも span preset を持つ |
+| Relative / Clock time axis | Yes | Yes | どちらも対応 |
+| Manual pan / zoom / reset on plots | Yes | Yes | どちらも plot interaction 重視 |
+| Adjustable splitter between plot regions | Yes | Yes | どちらも vertical splitter を持つ |
+| Plot redraw throttling / downsampling | Yes | Yes | どちらも重さ対策あり |
+| Partial recovery dialog / review flow | No | Yes | example_gui は startup notice 中心。現行は review dialog あり |
+| Recording directory configurability | Partial | Yes | example_gui は既定 `data/` 前提。現行は settings から変更可 |
+| Windows packaging intent | Partial | Yes | example_gui は packaging 想定 README あり、現行は smoke 済み |
+| Windows packaged app smoke validated | Partial | Yes | example_gui は packaging 想定のみで、実 smoke 記録は同梱されていない |
+| Device status panel | Partial | Yes | example_gui は status label 中心、現行は panel 化 |
+| Warning-oriented telemetry continuity monitoring | No | Yes | 現行 GUI で追加 |
+| Live command actions from GUI | Yes | Yes | example_gui は `GET_CAPS`, `GET_PROFILE`, profile reset 等。現行は pump / status / caps / ping |
+| Device-specific preset management | Yes | No | example_gui の heater profile preset に相当する現行機能は未導入 |
+| Device-specific advanced configuration dialog | Yes | Partial | example_gui は profile / stability dialogs、現行は general settings 中心 |
+| Segment markers / labeled recording regions | Yes | No | example_gui の exposure segment 相当機能は未搭載 |
+| Segment overlay bands on plot | Yes | No | example_gui 特有の解析支援 UI |
+| Stability analyzer / stability lamp UI | Yes | No | example_gui 特有の解析支援 UI |
+| Sleep prevention while connected / recording | Yes | No | example_gui は Windows sleep prevention を持つ |
+| Recording-active visual emphasis | Yes | Partial | example_gui は glow effect、現行は Start/Stop toggle 表示中心 |
+
+## 5. Same Problem, Different Solution
 
 | Topic | Old Approach | Current Approach | Interpretation |
 | :--- | :--- | :--- | :--- |
@@ -134,7 +181,7 @@
 | 接続 UX | BLE browser picker / serial browser picker | app 内 scan, filter, preselect, settings-based mode switch | 現行の方が専用機らしい |
 | エラー確認 | status panel と console 依存 | warning/event log + session summary + firmware events | 現行の方が追跡しやすい |
 
-## 5. Major Gaps If Legacy Parity Is Desired
+## 6. Major Gaps If Legacy Parity Is Desired
 
 現時点で、旧資産にあって現行実装にまだ無い、もしくは明確に別解へ置き換わっている代表項目は以下である。
 
@@ -155,7 +202,7 @@
 - compatibility
   - 旧 GUI が前提としていた BLE payload schema 互換
 
-## 6. Recommended Interpretation for Next Planning
+## 7. Recommended Interpretation for Next Planning
 
 次の計画検討では、旧機能を以下の 3 つに分けて扱うのがよい。
 
