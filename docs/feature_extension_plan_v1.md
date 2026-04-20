@@ -48,8 +48,8 @@
 
 1. `Bundle A`: Firmware UX parity `COMPLETE`
 2. `Bundle B`: GUI recording emphasis `COMPLETE`
-3. `Bundle C`: O2 1-cell display and calibration `IN_PROGRESS`
-4. `Bundle D`: Dual-SDP differential pressure PoC
+3. `Bundle C`: O2 1-cell display and calibration `COMPLETE`
+4. `Bundle D`: Dual-SDP differential pressure PoC `IN_PROGRESS`
 5. `Bundle E`: Flow algorithm integration and telemetry expansion
 6. `Bundle F`: End-to-end hardening and operator validation
 
@@ -290,16 +290,17 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - calibration 後に ambient air で `21 %` 近傍を示す
 - formula, anchor, calibration timestamp が operator から追跡できる
 
-### 実装メモ
+### 完了メモ
 
 - 2026-04-20 時点で first pass を追加済み
 - 追加した内容:
   - `O2 Concentration (1-cell)` metric card
   - `Settings > Device` 内の ambient-air calibration / reset actions
   - `QSettings` への calibration anchor / timestamp persistence
-- まだ残るもの:
-  - 実機上で ambient-air calibration 後に `21 %` 近傍となることの operator validation
-  - 必要なら polarity reverse 対応の有効化判断
+- close-out で確認できたもの:
+  - essential function の operator validation 完了
+  - ambient-air calibration / reset / persistence が workflow として成立すること
+  - 現時点では polarity reverse は不要と判断し、残課題から外した
 
 ## 7. Bundle D: Dual-SDP Differential Pressure PoC
 
@@ -373,6 +374,16 @@ Sensirion の SDP8xx digital datasheet によると:
 - no-flow で両センサとも大きく暴れない
 - range handoff で選択がチャタリングしない
 - I2C bus error が起きても recovery 可能
+
+### 実装メモ
+
+- 2026-04-20 時点で compile-safe な PoC 足場に着手した
+- 追加した内容:
+  - `Sdp8xxSensor` driver
+  - `DifferentialPressureFrontend`
+  - `SDP810-125Pa` / `SDP811-500Pa` product prefix と hysteresis threshold の board constants
+- current slice では `MeasurementCore` や telemetry schema へはまだ接続していない
+- まずは build を通し、次に実機配線上で bus coexistence / readout sanity を確認する
 
 ## 8. Bundle E: Flow Algorithm Integration and Telemetry Expansion
 
@@ -525,6 +536,11 @@ else:
 
 - O2 1-cell の value-added display
 - calibration UX の先行整備
+
+現状:
+
+- close 済み
+- next focus は `Bundle D` の dual-SDP frontend PoC
 
 ### Step 3
 

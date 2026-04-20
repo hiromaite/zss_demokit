@@ -210,6 +210,7 @@
 - Bundle C first pass として `O2 Concentration (1-cell)` card、ambient-air calibration / reset action、`QSettings` persistence を追加した
 - `python3.12 -m compileall gui_prototype/src/app_state.py gui_prototype/src/settings_store.py gui_prototype/src/protocol_constants.py gui_prototype/src/dialogs.py gui_prototype/src/main_window.py` を実施し、GUI 変更後も compile 可能であることを確認した
 - `./.venv_gui_prototype/bin/python` による offscreen smoke で `o2_bundle_c_smoke_ok` を確認し、calibration staging、settings persistence、`21.0 %` 表示、uncalibrated 時の `Calibrate` 表示が成立することを確認した
+- user により Bundle C の essential function validation が完了し、ambient-air calibration workflow を現行 bundle close 条件として受け入れた
 - right column scroll 対応後の plot height / vertical splitter 挙動は数回調整したが、この時点では local macOS の見た目を accept とし、Windows / 別解像度環境での follow-up visual validation 項目として扱う
 
 ## 8. 更新ルール

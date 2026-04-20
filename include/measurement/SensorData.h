@@ -11,6 +11,17 @@ struct SensorMeasurements {
     float flow_sensor_voltage_v = 0.0f;
 };
 
+struct DifferentialPressureMeasurements {
+    float low_range_differential_pressure_pa = 0.0f;
+    float high_range_differential_pressure_pa = 0.0f;
+    float selected_differential_pressure_pa = 0.0f;
+    float low_range_temperature_c = 0.0f;
+    float high_range_temperature_c = 0.0f;
+    bool low_range_valid = false;
+    bool high_range_valid = false;
+    bool selected_from_low_range = false;
+};
+
 struct SampleSnapshot {
     uint32_t sequence = 0;
     uint32_t status_flags = 0;
