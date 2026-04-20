@@ -36,6 +36,8 @@ directory、partial recovery detection、wired real transport まで反映済み
   - v1 の canonical field、status flag、command、capability の一覧
 - `recording_schema.md`
   - BLE / wired 共通の記録ファイルスキーマ案
+- `legacy_current_feature_matrix.md`
+  - 旧 firmware / 旧 GUI と現行 firmware / 現行 GUI の機能比較表
 - `implementation_backlog_v1.md`
   - GUI / firmware / integration を含む実装バックログとマイルストーン
 - `firmware_implementation_plan_v1.md`
@@ -55,10 +57,11 @@ directory、partial recovery detection、wired real transport まで反映済み
 6. `ble_transport_v1.md` と `wired_transport_v1.md` で transport 詳細を確認する
 7. `protocol_catalog_v1.md` で v1 の名前と意味を固定する
 8. `recording_schema.md` で保存形式を確認する
-9. `firmware_implementation_plan_v1.md` で firmware の骨格を確認する
-10. `implementation_backlog_v1.md` で着手順と依存関係を確認する
-11. `validation_checklist_v1.md` で現段階の検証対象を確認する
-12. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
+9. `legacy_current_feature_matrix.md` で旧資産との差分と未回収機能を確認する
+10. `firmware_implementation_plan_v1.md` で firmware の骨格を確認する
+11. `implementation_backlog_v1.md` で着手順と依存関係を確認する
+12. `validation_checklist_v1.md` で現段階の検証対象を確認する
+13. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
 
 ## 運用メモ
 
