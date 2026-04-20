@@ -13,12 +13,10 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
-    QListWidget,
-    QListWidgetItem,
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
+    QScrollArea,
     QSplitter,
     QStackedWidget,
     QSizePolicy,
@@ -282,14 +280,13 @@ class MainWindow(QMainWindow):
         self._csv_flush_timer.setInterval(1000)
         self._csv_flush_timer.setSingleShot(True)
         self._csv_flush_timer.timeout.connect(self._flush_csv)
-        self._left_column_ratio = 0.305
         self._ignore_manual_range_signal = False
         self._viewbox_to_plot_key: dict[object, str] = {}
+        self._active_plot_key = self._plot_key_from_label(self.app_settings.plot.selected_plot)
 
         self._build_ui()
         self._bind_controllers()
         self._prime_mode_specific_lists()
-        QTimer.singleShot(0, self._sync_manual_inputs_to_selected_plot)
         QTimer.singleShot(0, self._sync_recording_controls)
         QTimer.singleShot(0, self._apply_persisted_preferences)
         self._plot_refresh_timer.start()
@@ -304,7 +301,12 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(14)
 
-        self.left_column = self._build_left_column()
+        self.left_column_content = self._build_left_column()
+        self.left_column = QScrollArea()
+        self.left_column.setWidgetResizable(True)
+        self.left_column.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.left_column.setFrameShape(QFrame.NoFrame)
+        self.left_column.setWidget(self.left_column_content)
         self.right_column = self._build_right_column()
         self.left_column.setMinimumWidth(272)
         self.left_column.setMaximumWidth(420)
@@ -344,6 +346,9 @@ class MainWindow(QMainWindow):
 
         row = QHBoxLayout()
         row.setSpacing(8)
+        self.ble_device_selector = QComboBox()
+        self.ble_device_selector.addItem("M5STAMP-MONITOR")
+        row.addWidget(self.ble_device_selector, 1)
         self.ble_scan_button = QPushButton("Scan")
         self.ble_scan_button.setObjectName("SecondaryButton")
         self.ble_scan_button.clicked.connect(self.connection_controller.scan_ble_devices)
@@ -353,16 +358,10 @@ class MainWindow(QMainWindow):
         self.ble_settings_button = QPushButton("Settings")
         self.ble_settings_button.setObjectName("SecondaryButton")
         self.ble_settings_button.clicked.connect(self._open_settings)
-        row.addWidget(self.ble_scan_button)
         row.addWidget(self.ble_connect_button)
+        row.addWidget(self.ble_scan_button)
         row.addWidget(self.ble_settings_button)
-        row.addStretch(1)
         layout.addLayout(row)
-
-        self.ble_device_list = QListWidget()
-        self.ble_device_list.addItem("M5STAMP-MONITOR")
-        self.ble_device_list.setMinimumHeight(120)
-        layout.addWidget(self.ble_device_list)
         return frame
 
     def _build_wired_connection_panel(self) -> QWidget:
@@ -429,7 +428,7 @@ class MainWindow(QMainWindow):
         frame, layout = _panel("Controls", "Commands are routed through the shared controller layer.")
         toggle_row = QHBoxLayout()
         toggle_row.setSpacing(8)
-        self.pump_toggle_button = QPushButton("Pump OFF")
+        self.pump_toggle_button = QPushButton("Start Pump")
         self.pump_toggle_button.setObjectName("ToggleButton")
         self.pump_toggle_button.setCheckable(True)
         self.pump_toggle_button.clicked.connect(self._toggle_pump_from_button)
@@ -442,7 +441,7 @@ class MainWindow(QMainWindow):
         frame, layout = _panel("Recording", "Session files are written as .partial.csv and finalized to .csv on stop.")
         row = QHBoxLayout()
         row.setSpacing(8)
-        self.record_toggle_button = QPushButton("Recording OFF")
+        self.record_toggle_button = QPushButton("Start Recording")
         self.record_toggle_button.setObjectName("ToggleButton")
         self.record_toggle_button.setCheckable(True)
         self.record_toggle_button.clicked.connect(self._toggle_recording_from_button)
@@ -482,7 +481,7 @@ class MainWindow(QMainWindow):
         cards_layout.addWidget(self.metric_flow)
         layout.addWidget(cards)
 
-        toolbar, toolbar_layout = _panel("Plot Toolbar", "Time range, axis display, and scale controls for the active plot.")
+        toolbar, toolbar_layout = _panel("Plot Toolbar", "Time range, time-axis display, and view reset controls.")
         grid = QGridLayout()
         grid.setHorizontalSpacing(8)
         grid.setVerticalSpacing(8)
@@ -497,17 +496,6 @@ class MainWindow(QMainWindow):
         self.auto_scale_check = QCheckBox("Auto scale")
         self.auto_scale_check.setChecked(self.app_settings.plot.auto_scale)
         self.auto_scale_check.toggled.connect(self._on_auto_scale_toggled)
-        self.plot_selector = QComboBox()
-        self.plot_selector.addItems(["Sensor / Flow", "Heater"])
-        self.plot_selector.setCurrentText(self.app_settings.plot.selected_plot)
-        self.plot_selector.currentTextChanged.connect(self._on_plot_selector_changed)
-        self.manual_min_input = QLineEdit()
-        self.manual_min_input.setPlaceholderText("Y min")
-        self.manual_max_input = QLineEdit()
-        self.manual_max_input.setPlaceholderText("Y max")
-        apply_button = QPushButton("Apply Scale")
-        apply_button.setObjectName("SecondaryButton")
-        apply_button.clicked.connect(self._apply_scaling_controls)
         self.reset_view_button = QPushButton("Reset View")
         self.reset_view_button.setObjectName("SecondaryButton")
         self.reset_view_button.clicked.connect(self._reset_plot_view)
@@ -518,12 +506,6 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.axis_mode_combo, 0, 3)
         grid.addWidget(self.auto_scale_check, 0, 4)
         grid.addWidget(self.reset_view_button, 0, 5)
-        grid.addWidget(QLabel("Plot"), 1, 0)
-        grid.addWidget(self.plot_selector, 1, 1)
-        grid.addWidget(QLabel("Manual"), 1, 2)
-        grid.addWidget(self.manual_min_input, 1, 3)
-        grid.addWidget(self.manual_max_input, 1, 4)
-        grid.addWidget(apply_button, 1, 5)
         toolbar_layout.addLayout(grid)
         layout.addWidget(toolbar)
 
@@ -627,7 +609,6 @@ class MainWindow(QMainWindow):
 
     def _apply_persisted_preferences(self) -> None:
         self._update_axis_labels()
-        self._sync_manual_inputs_to_selected_plot()
         self._sync_pump_toggle()
         self._sync_recording_controls()
         self._refresh_plots()
@@ -640,7 +621,7 @@ class MainWindow(QMainWindow):
         self.app_settings.plot.time_span = self.time_span_combo.currentText()
         self.app_settings.plot.axis_mode = self.axis_mode_combo.currentText()
         self.app_settings.plot.auto_scale = self.auto_scale_check.isChecked()
-        self.app_settings.plot.selected_plot = self.plot_selector.currentText()
+        self.app_settings.plot.selected_plot = self._plot_label_for_key(self._active_plot_key)
         self.app_settings.plot.x_follow_enabled = self.plot_controller.x_follow_enabled
         self.app_settings.plot.manual_y_ranges = dict(self.plot_controller.manual_y_ranges)
         self.app_settings.windows.main_window_width = self.width()
@@ -659,7 +640,7 @@ class MainWindow(QMainWindow):
         self.time_span_combo.setCurrentText(self.app_settings.plot.time_span)
         self.axis_mode_combo.setCurrentText(self.app_settings.plot.axis_mode)
         self.auto_scale_check.setChecked(self.app_settings.plot.auto_scale)
-        self.plot_selector.setCurrentText(self.app_settings.plot.selected_plot)
+        self._active_plot_key = self._plot_key_from_label(self.app_settings.plot.selected_plot)
         self.plot_controller.x_follow_enabled = self.app_settings.plot.x_follow_enabled
         self.plot_controller.manual_y_ranges = dict(self.app_settings.plot.manual_y_ranges)
         for plot_key, y_range in self.plot_controller.manual_y_ranges.items():
@@ -668,11 +649,11 @@ class MainWindow(QMainWindow):
                 plot.enableAutoRange(axis="y", enable=False)
                 plot.setYRange(y_range[0], y_range[1], padding=0.02)
         self._update_axis_labels()
-        self._sync_manual_inputs_to_selected_plot()
 
     def _prime_mode_specific_lists(self) -> None:
         if self.mode == BLE_MODE:
-            self.ble_device_list.clear()
+            self.ble_device_selector.clear()
+            self.ble_device_selector.addItem("M5STAMP-MONITOR")
             self._append_log("info", "BLE mode is ready. Click Scan to discover devices.")
             return
 
@@ -688,8 +669,7 @@ class MainWindow(QMainWindow):
             self.connection_controller.disconnect_device()
             return
         if self.mode == BLE_MODE:
-            item = self.ble_device_list.currentItem() or self.ble_device_list.item(0)
-            identifier = item.text() if item else "M5STAMP-MONITOR"
+            identifier = self.ble_device_selector.currentText().strip() or "M5STAMP-MONITOR"
         else:
             identifier = self.port_selector.currentText() or "Prototype-Port"
         self.ui_state.connection.phase = "connecting"
@@ -738,11 +718,14 @@ class MainWindow(QMainWindow):
         self.telemetry_session_stats.update_nominal_sample_period(nominal)
 
     def _on_ble_devices_discovered(self, devices: list[str]) -> None:
-        self.ble_device_list.clear()
-        for device in devices:
-            QListWidgetItem(device, self.ble_device_list)
-        if self.ble_device_list.count():
-            self.ble_device_list.setCurrentRow(0)
+        current = self.ble_device_selector.currentText()
+        self.ble_device_selector.clear()
+        if devices:
+            self.ble_device_selector.addItems(devices)
+            preferred_index = max(0, self.ble_device_selector.findText(current))
+            self.ble_device_selector.setCurrentIndex(preferred_index)
+            return
+        self.ble_device_selector.addItem("M5STAMP-MONITOR")
 
     def _on_ports_discovered(self, ports: list[str]) -> None:
         self.port_selector.clear()
@@ -801,10 +784,6 @@ class MainWindow(QMainWindow):
         self._refresh_plots()
         self._persist_current_settings()
 
-    def _on_plot_selector_changed(self) -> None:
-        self._sync_manual_inputs_to_selected_plot()
-        self._persist_current_settings()
-
     def _on_time_span_changed(self) -> None:
         self.plot_controller.x_follow_enabled = True
         self.app_settings.plot.x_follow_enabled = True
@@ -812,39 +791,11 @@ class MainWindow(QMainWindow):
         self._persist_current_settings()
 
     def _on_auto_scale_toggled(self, checked: bool) -> None:
-        selected_key = self._selected_plot_key()
-        plot = self.plot_widgets[selected_key]
         if checked:
-            plot.enableAutoRange(axis="y", enable=True)
-            if selected_key == "sensor":
-                self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
-            self.plot_controller.manual_y_ranges.pop(selected_key, None)
-            self._sync_manual_inputs_to_selected_plot()
-        self._persist_current_settings()
-
-    def _apply_scaling_controls(self) -> None:
-        selected_key = self._selected_plot_key()
-        plot = self.plot_widgets[selected_key]
-
-        if self.auto_scale_check.isChecked():
-            plot.enableAutoRange(axis="y", enable=True)
-            if selected_key == "sensor":
-                self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
-            self._sync_manual_inputs_to_selected_plot()
-            return
-
-        try:
-            y_min = float(self.manual_min_input.text())
-            y_max = float(self.manual_max_input.text())
-        except ValueError:
-            return
-        if y_max <= y_min:
-            return
-
-        plot.enableAutoRange(axis="y", enable=False)
-        plot.setYRange(y_min, y_max, padding=0.02)
-        self.plot_controller.set_manual_y_range(selected_key, y_min, y_max)
-        self._sync_manual_inputs_to_selected_plot()
+            self.plot_widgets["sensor"].enableAutoRange(axis="y", enable=True)
+            self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
+            self.plot_widgets["heater"].enableAutoRange(axis="y", enable=True)
+            self.plot_controller.manual_y_ranges.clear()
         self._persist_current_settings()
 
     def _reset_plot_view(self) -> None:
@@ -854,15 +805,8 @@ class MainWindow(QMainWindow):
         self.plot_widgets["sensor"].enableAutoRange(axis="y", enable=self.auto_scale_check.isChecked())
         self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
         self.plot_widgets["heater"].enableAutoRange(axis="y", enable=self.auto_scale_check.isChecked())
-        self._sync_manual_inputs_to_selected_plot()
         self._refresh_plots()
         self._persist_current_settings()
-
-    def _selected_plot_key(self) -> str:
-        return {
-            "Sensor / Flow": "sensor",
-            "Heater": "heater",
-        }[self.plot_selector.currentText()]
 
     def _set_plot_x_range(self, xmin: float, xmax: float) -> None:
         if "sensor" not in self.plot_widgets:
@@ -872,20 +816,6 @@ class MainWindow(QMainWindow):
             self.plot_widgets["sensor"].setXRange(xmin, xmax, padding=0.02)
         finally:
             self._ignore_manual_range_signal = False
-
-    def _sync_manual_inputs_to_selected_plot(self) -> None:
-        if not getattr(self, "plot_widgets", None):
-            return
-        selected_key = self._selected_plot_key()
-        if selected_key not in self.plot_widgets:
-            return
-        y_range = self.plot_controller.manual_y_range_for(selected_key)
-        if y_range is None:
-            plot = self.plot_widgets[selected_key]
-            _, current_y_range = plot.getViewBox().viewRange()
-            y_range = (current_y_range[0], current_y_range[1])
-        self.manual_min_input.setText(f"{y_range[0]:0.3f}")
-        self.manual_max_input.setText(f"{y_range[1]:0.3f}")
 
     def _on_plot_range_changed_manually(self, axes_enabled: object) -> None:
         if self._ignore_manual_range_signal:
@@ -906,10 +836,8 @@ class MainWindow(QMainWindow):
         if x_changed:
             self.plot_controller.x_follow_enabled = False
 
-        if plot_key == "sensor":
-            self.plot_selector.setCurrentText("Sensor / Flow")
-        elif plot_key == "heater":
-            self.plot_selector.setCurrentText("Heater")
+        if plot_key is not None:
+            self._active_plot_key = plot_key
 
         if y_changed and plot_key is not None and plot_key in self.plot_widgets:
             if self.auto_scale_check.isChecked():
@@ -919,7 +847,6 @@ class MainWindow(QMainWindow):
             _, y_range = self.plot_widgets[plot_key].getViewBox().viewRange()
             self.plot_controller.set_manual_y_range(plot_key, y_range[0], y_range[1])
 
-        self._sync_manual_inputs_to_selected_plot()
         self._persist_current_settings()
 
     def _sync_recording_controls(self) -> None:
@@ -928,7 +855,7 @@ class MainWindow(QMainWindow):
         checked = self.recording_controller.is_recording
         self.record_toggle_button.blockSignals(True)
         self.record_toggle_button.setChecked(checked)
-        self.record_toggle_button.setText("Recording ON" if checked else "Recording OFF")
+        self.record_toggle_button.setText("Stop Recording" if checked else "Start Recording")
         self.record_toggle_button.blockSignals(False)
 
     def _recording_source_endpoint(self) -> str:
@@ -1020,7 +947,7 @@ class MainWindow(QMainWindow):
         self.pump_toggle_button.setEnabled(self.connection_controller.is_connected())
         self.pump_toggle_button.blockSignals(True)
         self.pump_toggle_button.setChecked(is_on)
-        self.pump_toggle_button.setText("Pump ON" if is_on else "Pump OFF")
+        self.pump_toggle_button.setText("Stop Pump" if is_on else "Start Pump")
         self.pump_toggle_button.blockSignals(False)
 
     def _append_log(self, severity: str, message: str) -> None:
@@ -1140,3 +1067,9 @@ class MainWindow(QMainWindow):
 
     def _session_start_time(self) -> datetime:
         return self._session_started
+
+    def _plot_key_from_label(self, label: str) -> str:
+        return "heater" if label == "Heater" else "sensor"
+
+    def _plot_label_for_key(self, plot_key: str) -> str:
+        return "Heater" if plot_key == "heater" else "Sensor / Flow"

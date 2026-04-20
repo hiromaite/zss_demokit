@@ -238,7 +238,7 @@ class GuiBleSessionProbe(QObject):
 
     def start(self) -> None:
         self.window.show()
-        self.window.ble_device_list.clear()
+        self.window.ble_device_selector.clear()
         self._append_info("Starting BLE GUI session probe.")
         self.window.connection_controller.scan_ble_devices()
         self._scan_timeout_timer.start(max(1000, int(self.scan_timeout_s * 1000)))
