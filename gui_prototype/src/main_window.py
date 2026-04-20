@@ -9,6 +9,7 @@ from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -976,7 +977,7 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         dialog.device_action_requested.connect(self._handle_settings_device_action)
-        if dialog.exec() != dialog.Accepted:
+        if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         previous_mode = self.mode
         requested_mode = dialog.requested_mode
@@ -989,7 +990,7 @@ class MainWindow(QMainWindow):
             return
 
         confirm = ModeSwitchDialog(previous_mode, requested_mode, self)
-        if confirm.exec() != confirm.Accepted:
+        if confirm.exec() != QDialog.DialogCode.Accepted:
             self.app_settings.last_mode = previous_mode
             self._apply_settings_to_widgets()
             self._persist_current_settings()
