@@ -555,7 +555,9 @@ class MainWindow(QMainWindow):
         self.plot_splitter = QSplitter(Qt.Vertical)
         self.plot_splitter.setChildrenCollapsible(False)
         self.plot_splitter.setHandleWidth(10)
-        layout.addWidget(self.plot_splitter, 1)
+        self.plot_splitter.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        self.plot_splitter.setFixedHeight(560)
+        layout.addWidget(self.plot_splitter, 0)
 
         sensor_frame, sensor_layout = _panel("Flow / O2 Concentration", "Blue: flow rate, orange: O2 concentration when calibrated.")
         sensor_view_box = PlotInteractionViewBox("sensor", self._handle_plot_user_interaction)
@@ -1244,7 +1246,7 @@ class MainWindow(QMainWindow):
 
     def _apply_plot_splitter_sizes(self) -> None:
         if hasattr(self, "plot_splitter"):
-            self.plot_splitter.setSizes([420, 220])
+            self.plot_splitter.setSizes([340, 210])
 
     def _sync_left_column_content_width(self) -> None:
         if not hasattr(self, "left_column") or not hasattr(self, "left_column_content"):
