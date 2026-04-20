@@ -10,7 +10,8 @@
 - GUI prototype + protocol constants 導入後
 - firmware skeleton + top-level PlatformIO project 置換後
 - wired transport は firmware / host 側で smoke test 可能な段階
-- BLE transport は firmware 側に最小実装が入り、host 側 smoke は準備済み
+- BLE transport と GUI adapter は実装済みで、basic live connect は確認済み
+- ただし BLE live continuity / reconnect の長時間観測は local Mac GUI 実行ベースで継続する段階
 
 ## 2. ステータス定義
 
@@ -25,7 +26,7 @@
 - GUI は import / 起動 / 画面生成の smoke test を中心に確認する
 - firmware は build / upload / boot / serial log / scheduler の smoke test を中心に確認する
 - wired は実機 serial path で end-to-end smoke を進める
-- BLE は firmware transport の build / boot / advertise までは進め、GUI adapter 実装までは integration を `BLOCKED` とする
+- BLE は basic live connect までは実施済みとし、continuity / reconnect は GUI hand-run と backend smoke を組み合わせて追う
 
 ## 4. GUI Checklist
 
@@ -50,6 +51,8 @@
 | `GUI-VAL-017` | Device filtering and preselect | intended device / port が自動的に絞り込まれ、候補が 1 つなら preselect される | `PASS` | backend filter/preselect logic を追加し、`M5STAMP-MONITOR*` と `usbmodem/usbserial` 候補が優先されることを helper smoke で確認 |
 | `GUI-VAL-018` | Visual theme parity | GUI theme が `example_gui` の dark direction に整合する | `PASS` | stylesheet を dark blue/slate direction へ更新し、theme 変更後も GUI session probe が継続動作することを確認 |
 | `GUI-VAL-019` | Wired GUI session probe | offscreen GUI 経由で wired connect / recording / pump toggle / CSV finalize が継続する | `PASS` | `tools/gui_wired_session_probe.py --duration-s 18 --toggle-interval-s 3` で `1909` telemetry、CSV `1740` rows、non-unit gap `0` を確認 |
+| `GUI-VAL-020` | PyInstaller packaging smoke | PyInstaller spec から GUI bundle を生成できる | `PASS` | `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` で GUI bundle を生成し、offscreen short launch が成立することを確認。version metadata scaffold、beta naming、icon asset 追加後も再通過 |
+| `GUI-VAL-021` | Windows packaged GUI smoke | Windows packaged app が起動し、基本操作が成立する | `PASS` | user による Windows 11 Pro 実機確認で packaging 成功、packaged app 起動成功、blocking issue なしを確認 |
 
 ## 5. Firmware Checklist
 
@@ -79,8 +82,12 @@
 | `INT-VAL-004` | Get Status end-to-end | GUI で status snapshot を取得できる | `PASS` | wired backend smoke と host smoke の両方で `status_snapshot` を確認 |
 | `INT-VAL-005` | Shared CSV recording | 実データを共通 schema で保存できる | `PASS` | BLE mock と wired 実機の両方で `.partial.csv -> .csv` finalize と schema header を確認 |
 | `INT-VAL-006` | Wired 10 ms transport validation | `10 ms` path を end-to-end 検証できる | `PASS` | `wired_serial_smoke` と wired backend smoke で `nominal_sample_period_ms=10` を確認 |
-| `INT-VAL-007` | BLE 50-100 ms validation | BLE telemetry 周期を検証できる | `TODO` | live telemetry continuity / period observation は追加確認待ち。`tools/ble_smoke.py` は reconnect cycles、`--observe-duration`、inter-arrival summary を出力可能だが、この exec 環境では CoreBluetooth discover が無言終了するため live CLI 実測は保留 |
+| `INT-VAL-007` | BLE 50-100 ms validation | BLE telemetry 周期を検証できる | `PASS` | local Mac 実機 probe で `2221` samples / `177.54 s` を観測し、実効 inter-arrival は約 `79.97 ms`、target range 内を確認 |
 | `INT-VAL-008` | Wired event propagation | firmware event が GUI warning log に届く | `PASS` | `command_error` と `warning_raised` を wired 実機 + GUI backend smoke で確認 |
+| `INT-VAL-009` | Golden fixture regression smoke | shared fixture で GUI parser / firmware encoder / CSV row を回帰確認できる | `PASS` | `tools/protocol_fixture_smoke.py` と `tools/firmware_fixture_verify.cpp` により正常系 9 ケース、異常系 4 ケース、CSV row 1 ケースを確認 |
+| `INT-VAL-010` | BLE GUI continuity manual validation | local Mac GUI 実行で BLE continuity / reconnect を継続確認できる | `PASS` | `tools/gui_ble_session_probe.py --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60` で `Connect count=2`, `Connected telemetry segments=2`, `sequence_gap_total=0`, `Reconnect recovered=True`, `recovery=3.42 s`, `Recording sessions completed=1`, `gui_ble_session_probe_ok` を確認 |
+| `INT-VAL-011` | BLE GUI session probe logic smoke | GUI-level BLE probe の段取りと gate 判定が fake live backend で回る | `PASS` | `tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6` で `scan -> connect -> recording -> reconnect -> summary` を確認 |
+| `INT-VAL-012` | Windows packaged end-to-end smoke | Windows packaged app で `Wired` / `BLE` の両モードが blocking issue なく動く | `PASS` | user による Windows 11 Pro 実機確認で serial / BLE の両方に問題なしを確認 |
 
 ## 7. 実施ログ
 
@@ -156,6 +163,27 @@
 - `pg.setConfigOptions(antialias=False)` へ変更し、あわせて `render_data()` を span-aware / downsample 対応へ更新して full-history `setData()` の負荷を削減
 - helper smoke で `30 s=1501 points`, `2 min=3001 points`, `10 min=5455 points`, `All=7827 points` まで描画点数が抑制されることを確認
 - 軽量化後に `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 8 --toggle-interval-s 2.5` を再実施し、GUI wired session が継続動作することを確認
+- `test/fixtures/protocol_golden_v1.json` を追加し、shared golden fixture による parser / encoder / CSV row 回帰基盤を導入
+- `tools/protocol_fixture_smoke.py` を実施し、GUI 側 BLE / wired decoder、invalid-case parser、CSV row formatting、firmware-side C++ encoder の全ケース照合が通ることを確認
+- current fixture smoke では正常系 9 ケース、異常系 4 ケース、CSV row 1 ケースが `PASS` となり、`protocol_fixture_smoke_ok` を確認
+- `flow_rate_lpm` の placeholder policy を `dummy_orifice_dp_v1` へ更新し、`flow_sensor_voltage_v -> differential_pressure_pa -> flow_rate_lpm` の 2 段階換算へ置き換えた
+- `python3.12 -m compileall gui_prototype/src tools/protocol_fixture_smoke.py` を再実施し、derived metric policy と session summary 追加後も compile を確認
+- `tools/protocol_fixture_smoke.py` を再実施し、差圧ベース placeholder へ更新後も shared fixture regression が維持されることを確認
+- direct helper smoke により `TelemetrySessionStats` が disconnect 時に summary log を生成し、sample count / gap total を含むことを確認
+- `tools/gui_ble_session_probe.py` を追加し、GUI-level BLE continuity / reconnect の半自動 probe を導入
+- `python3.12 -m compileall tools/gui_ble_session_probe.py` を実施し、新 probe の compile を確認
+- `tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6` を実施し、fake live backend 上で `recording finalize`, `planned reconnect`, `summary verdict` が通ることを確認
+- BLE 実機 probe の結果を受け、planned reconnect を含む場合の観測時間基準を `session duration - reconnect timeout budget` に調整した
+- firmware 側は active transport に応じて sampling cadence を `wired=10 ms` / `BLE=80 ms` へ動的切替するよう更新し、BLE packet 上の `nominal_sample_period_ms` も payload と一致させた
+- GUI 側は live BLE disconnect を background task で二重に閉じないよう更新し、shutdown 時の pending task warning を解消する方針に変更した
+- local Mac 実機で `tools/gui_ble_session_probe.py --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60` を実施し、`sequence_gap_total=0`, `Reconnect recovered=True`, `recovery=3.42 s`, `Recording sessions completed=1`, `gui_ble_session_probe_ok` を確認
+- probe 後の follow-up として BLE status fallback を harden し、short probe `--duration-s 40 --recording-duration-s 12 --reconnect-at-s 20 --min-observed-duration-s 25` で `Status events=7`, `sequence_gap_total=0`, `gui_ble_session_probe_ok` を確認
+- BLE status direct-read fallback を Qt timer ではなく BLE asyncio loop 側で遅延実行する形へ変更し、probe / backend smoke から `QObject::startTimer` warning を除去した
+- `pyinstaller>=6,<7` を `.venv_gui_prototype` へ導入し、`pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` により `dist/zss_demokit_gui/` を生成できることを確認
+- packaged binary `dist/zss_demokit_gui/zss_demokit_gui` を `QT_QPA_PLATFORM=offscreen` で短時間起動し、bundle が即時クラッシュせず立ち上がることを確認
+- packaging metadata scaffold を追加した後も `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` を再実施し、build と packaged offscreen short launch が継続して成立することを確認
+- beta naming `zss_demokit_gui_win64_beta1`, version `0.1.0-beta.1`, publisher metadata, generated icon asset を反映した後も packaging smoke が継続して成立することを確認
+- user により Windows 11 Pro 上で packaging を実施し、packaged app の起動と `Wired` / `BLE` の両モード実行に問題がないことを確認
 
 ## 8. 更新ルール
 

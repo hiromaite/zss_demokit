@@ -42,6 +42,8 @@ directory、partial recovery detection、wired real transport まで反映済み
   - 新 firmware のモジュール分割案、ランタイムモデル、実装順
 - `validation_checklist_v1.md`
   - 現段階で実施可能な GUI / firmware / integration 検証項目
+- `windows_beta_smoke_checklist_v1.md`
+  - Windows 11 Pro で beta packaging と実機 smoke を行うための手順
 
 ## 読み進め方
 
@@ -56,6 +58,7 @@ directory、partial recovery detection、wired real transport まで反映済み
 9. `firmware_implementation_plan_v1.md` で firmware の骨格を確認する
 10. `implementation_backlog_v1.md` で着手順と依存関係を確認する
 11. `validation_checklist_v1.md` で現段階の検証対象を確認する
+12. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
 
 ## 運用メモ
 
@@ -64,3 +67,4 @@ directory、partial recovery detection、wired real transport まで反映済み
 - 文書内の `TODO` / `TBD` / `Open Questions` は、以後の設計会話で順次確定する
 - GUI 関連文書は、top bar を持たない main layout、compact launcher、stable column width の prototype feedback を取り込んで更新する
 - GUI 関連文書は、controller layer と `QSettings` ベースの persistence 実装進捗も反映して更新する
+- shared regression baseline は `test/fixtures/protocol_golden_v1.json` に置き、protocol / CSV 回帰は `tools/protocol_fixture_smoke.py` で確認する

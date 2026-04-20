@@ -373,6 +373,100 @@ class TelemetryHealthMonitor:
         return timedelta(seconds=seconds)
 
 
+class TelemetrySessionStats:
+    def __init__(self, mode: str, nominal_sample_period_ms: int | None = None) -> None:
+        self.mode = mode
+        self.nominal_sample_period_ms = nominal_sample_period_ms or (80 if mode == BLE_MODE else 10)
+        self.reset()
+
+    def reset(self) -> None:
+        self.connected = False
+        self.identifier = "Disconnected"
+        self.connected_at: datetime | None = None
+        self.first_telemetry_at: datetime | None = None
+        self.last_telemetry_at: datetime | None = None
+        self.first_sequence: int | None = None
+        self.last_sequence: int | None = None
+        self.sample_count = 0
+        self.sequence_gap_total = 0
+        self.max_sequence_gap = 0
+        self.inter_arrival_count = 0
+        self.inter_arrival_total_ms = 0.0
+        self.max_inter_arrival_ms = 0.0
+
+    def set_mode(self, mode: str) -> None:
+        self.mode = mode
+        self.nominal_sample_period_ms = 80 if mode == BLE_MODE else 10
+        self.reset()
+
+    def update_nominal_sample_period(self, nominal_sample_period_ms: int | str) -> None:
+        try:
+            parsed = int(nominal_sample_period_ms)
+        except (TypeError, ValueError):
+            return
+        if parsed > 0:
+            self.nominal_sample_period_ms = parsed
+
+    def on_connection_changed(self, connected: bool, identifier: str) -> list[tuple[str, str]]:
+        if connected:
+            self.reset()
+            self.connected = True
+            self.identifier = identifier
+            self.connected_at = datetime.now()
+            return []
+
+        logs: list[tuple[str, str]] = []
+        if self.sample_count > 0:
+            logs.append(("info", self.summary_message()))
+        self.reset()
+        return logs
+
+    def on_telemetry(self, point: TelemetryPoint) -> None:
+        if self.sample_count == 0:
+            self.first_telemetry_at = point.host_received_at
+            self.first_sequence = point.sequence
+        elif self.last_telemetry_at is not None:
+            inter_arrival_ms = (point.host_received_at - self.last_telemetry_at).total_seconds() * 1000.0
+            self.inter_arrival_count += 1
+            self.inter_arrival_total_ms += inter_arrival_ms
+            self.max_inter_arrival_ms = max(self.max_inter_arrival_ms, inter_arrival_ms)
+
+        if self.last_sequence is not None and point.sequence > self.last_sequence + 1:
+            gap = point.sequence - self.last_sequence - 1
+            self.sequence_gap_total += gap
+            self.max_sequence_gap = max(self.max_sequence_gap, gap)
+
+        self.sample_count += 1
+        self.last_sequence = point.sequence
+        self.last_telemetry_at = point.host_received_at
+
+    def duration_s(self) -> float:
+        if self.first_telemetry_at is None or self.last_telemetry_at is None:
+            return 0.0
+        return max(0.0, (self.last_telemetry_at - self.first_telemetry_at).total_seconds())
+
+    def mean_inter_arrival_ms(self) -> float:
+        if self.inter_arrival_count <= 0:
+            return 0.0
+        return self.inter_arrival_total_ms / self.inter_arrival_count
+
+    def summary_message(self) -> str:
+        duration_s = self.duration_s()
+        mean_inter_arrival_ms = self.mean_inter_arrival_ms()
+        first_sequence = self.first_sequence if self.first_sequence is not None else 0
+        last_sequence = self.last_sequence if self.last_sequence is not None else 0
+        return (
+            "Telemetry session summary: "
+            f"samples={self.sample_count}, "
+            f"duration={duration_s:0.1f}s, "
+            f"seq={first_sequence}->{last_sequence}, "
+            f"gap_total={self.sequence_gap_total}, "
+            f"max_gap={self.max_sequence_gap}, "
+            f"mean_inter_arrival_ms={mean_inter_arrival_ms:0.3f}, "
+            f"max_inter_arrival_ms={self.max_inter_arrival_ms:0.3f}"
+        )
+
+
 class RecordingController:
     def __init__(self) -> None:
         self._recording_file: TextIO | None = None

@@ -1,0 +1,301 @@
+{
+  "version": 1,
+  "notes": "Shared golden fixtures for GUI parser, firmware encoder, and CSV recording regression smoke.",
+  "valid_cases": [
+    {
+      "id": "ble_telemetry_nominal",
+      "kind": "ble_telemetry",
+      "raw_hex": "0100010034120000030000000000203f0000f1420000a03f5000070000000000",
+      "firmware_case": true,
+      "expected": {
+        "protocol_version": "1.0",
+        "telemetry_schema_version": 1,
+        "header_flags": 0,
+        "sequence": 4660,
+        "status_flags": 3,
+        "zirconia_output_voltage_v": 0.625,
+        "heater_rtd_resistance_ohm": 120.5,
+        "flow_sensor_voltage_v": 1.25,
+        "nominal_sample_period_ms": 80,
+        "telemetry_field_bits": 7,
+        "diagnostic_bits": 0,
+        "pump_on": true
+      }
+    },
+    {
+      "id": "ble_status_fault",
+      "kind": "ble_status",
+      "raw_hex": "01000100351200001600000050000700e17a143e0080c5423d0ad73e",
+      "firmware_case": true,
+      "expected": {
+        "protocol_version": "1.0",
+        "status_snapshot_schema_version": 1,
+        "response_code": 0,
+        "sequence": 4661,
+        "status_flags": 22,
+        "status_flags_hex": "0x00000016",
+        "zirconia_output_voltage_v": 0.145,
+        "heater_rtd_resistance_ohm": 98.75,
+        "flow_sensor_voltage_v": 0.42,
+        "nominal_sample_period_ms": 80,
+        "telemetry_field_bits": 7,
+        "pump_on": false
+      }
+    },
+    {
+      "id": "ble_capabilities_ble",
+      "kind": "ble_capabilities",
+      "raw_hex": "01000101010001000f00070050000100200000000f000000",
+      "firmware_case": true,
+      "expected": {
+        "protocol_version": "1.0",
+        "capability_schema_version": 1,
+        "device_type_code": 1,
+        "device_type": "zirconia_sensor",
+        "transport_type_code": 1,
+        "transport_type": "ble",
+        "firmware_version": "0.1.0",
+        "supported_command_bits": 15,
+        "supported_commands": [
+          "get_capabilities",
+          "get_status",
+          "set_pump_state",
+          "ping"
+        ],
+        "telemetry_field_bits": 7,
+        "telemetry_fields": [
+          "zirconia_output_voltage_v",
+          "heater_rtd_resistance_ohm",
+          "flow_sensor_voltage_v"
+        ],
+        "nominal_sample_period_ms": 80,
+        "status_flag_schema_version": 1,
+        "max_payload_bytes": 32,
+        "feature_bits": 15
+      }
+    },
+    {
+      "id": "ble_event_command_error",
+      "kind": "ble_event",
+      "raw_hex": "010004023612000099000000",
+      "firmware_case": true,
+      "expected": {
+        "protocol_version": "1.0",
+        "event_code": 4,
+        "event_name": "command_error",
+        "severity": "error",
+        "sequence": 4662,
+        "detail_u32": 153
+      }
+    },
+    {
+      "id": "wired_telemetry_serial_nominal",
+      "kind": "wired_telemetry",
+      "raw_hex": "a55a0100010014002222000000000000030000000a0007006666363f0080ee420000c03f9caa",
+      "firmware_case": true,
+      "expected_frame": {
+        "version_major": 1,
+        "version_minor": 0,
+        "message_type": 1,
+        "sequence": 8738,
+        "request_id": 0
+      },
+      "expected": {
+        "protocol_version": "1.0",
+        "sequence": 8738,
+        "status_flags": 3,
+        "zirconia_output_voltage_v": 0.7125,
+        "heater_rtd_resistance_ohm": 119.25,
+        "flow_sensor_voltage_v": 1.5,
+        "nominal_sample_period_ms": 10,
+        "telemetry_field_bits": 7,
+        "pump_on": true
+      }
+    },
+    {
+      "id": "wired_status_serial_fault",
+      "kind": "wired_status",
+      "raw_hex": "a55a0100020014002322000007000000560000000a00070048e13a3e0080c242c3f5a83e658b",
+      "firmware_case": true,
+      "expected_frame": {
+        "version_major": 1,
+        "version_minor": 0,
+        "message_type": 2,
+        "sequence": 8739,
+        "request_id": 7
+      },
+      "expected": {
+        "protocol_version": "1.0",
+        "status_flags": 86,
+        "zirconia_output_voltage_v": 0.1825,
+        "heater_rtd_resistance_ohm": 97.25,
+        "flow_sensor_voltage_v": 0.33,
+        "nominal_sample_period_ms": 10,
+        "telemetry_field_bits": 7,
+        "pump_on": false
+      }
+    },
+    {
+      "id": "wired_capabilities_serial",
+      "kind": "wired_capabilities",
+      "raw_hex": "a55a01000300140000000000080000000101020001000f0007000a00010040000f000000e38e",
+      "firmware_case": true,
+      "expected_frame": {
+        "version_major": 1,
+        "version_minor": 0,
+        "message_type": 3,
+        "sequence": 0,
+        "request_id": 8
+      },
+      "expected": {
+        "protocol_version": "1.0",
+        "capability_schema_version": 1,
+        "device_type_code": 1,
+        "device_type": "zirconia_sensor",
+        "transport_type_code": 2,
+        "transport_type": "serial",
+        "firmware_version": "0.1.0",
+        "supported_command_bits": 15,
+        "supported_commands": [
+          "get_capabilities",
+          "get_status",
+          "set_pump_state",
+          "ping"
+        ],
+        "telemetry_field_bits": 7,
+        "telemetry_fields": [
+          "zirconia_output_voltage_v",
+          "heater_rtd_resistance_ohm",
+          "flow_sensor_voltage_v"
+        ],
+        "nominal_sample_period_ms": 10,
+        "status_flag_schema_version": 1,
+        "max_payload_bytes": 64,
+        "feature_bits": 15
+      }
+    },
+    {
+      "id": "wired_event_command_error",
+      "kind": "wired_event",
+      "raw_hex": "a55a010012000800242200000900000004020000990000008657",
+      "firmware_case": true,
+      "expected_frame": {
+        "version_major": 1,
+        "version_minor": 0,
+        "message_type": 18,
+        "sequence": 8740,
+        "request_id": 9
+      },
+      "expected": {
+        "event_code": 4,
+        "event_name": "command_error",
+        "severity_code": 2,
+        "severity": "error",
+        "detail_u32": 153,
+        "sequence": 8740
+      }
+    },
+    {
+      "id": "wired_ack_set_pump_ok",
+      "kind": "wired_command_ack",
+      "raw_hex": "a55a010011000800000000000a000000030000000100000060fe",
+      "firmware_case": true,
+      "expected_frame": {
+        "version_major": 1,
+        "version_minor": 0,
+        "message_type": 17,
+        "sequence": 0,
+        "request_id": 10
+      },
+      "expected": {
+        "command_id": 3,
+        "result_code": 0,
+        "result_text": "ok",
+        "detail_u32": 1
+      }
+    }
+  ],
+  "invalid_cases": [
+    {
+      "id": "ble_telemetry_invalid_length",
+      "kind": "ble_invalid_length",
+      "decoder": "ble_telemetry",
+      "raw_hex": "0100010034120000030000000000203f0000f1420000a03f50000700000000",
+      "expected_error_substring": "Expected 32-byte BLE telemetry packet"
+    },
+    {
+      "id": "ble_status_invalid_length",
+      "kind": "ble_invalid_length",
+      "decoder": "ble_status",
+      "raw_hex": "01000100351200001600000050000700e17a143e0080c5423d0ad7",
+      "expected_error_substring": "Expected 28-byte BLE status packet"
+    },
+    {
+      "id": "wired_bad_crc",
+      "kind": "wired_bad_crc",
+      "raw_hex": "a55a010011000800000000000a000000030000000100000060ff",
+      "expected_frame_count": 0
+    },
+    {
+      "id": "wired_oversize_resync_stream",
+      "kind": "wired_resync_stream",
+      "raw_hex": "a55a010011004100000000000b000000a55a010011000800000000000a000000030000000100000060fe",
+      "decoder": "wired_command_ack",
+      "expected_frame_count": 1,
+      "expected_frame": {
+        "version_major": 1,
+        "version_minor": 0,
+        "message_type": 17,
+        "sequence": 0,
+        "request_id": 10
+      },
+      "expected": {
+        "command_id": 3,
+        "result_code": 0,
+        "result_text": "ok",
+        "detail_u32": 1
+      }
+    }
+  ],
+  "csv_cases": [
+    {
+      "id": "csv_row_wired_followup_gap",
+      "mode": "Wired",
+      "transport_type": "serial",
+      "seed_point": {
+        "sequence": 8735,
+        "host_received_at_iso": "2026-04-15T10:00:00.000000+09:00",
+        "nominal_sample_period_ms": 10,
+        "status_flags": 2,
+        "zirconia_output_voltage_v": 0.7005,
+        "heater_rtd_resistance_ohm": 118.9,
+        "flow_sensor_voltage_v": 1.45
+      },
+      "target_point": {
+        "sequence": 8738,
+        "host_received_at_iso": "2026-04-15T10:00:00.011250+09:00",
+        "nominal_sample_period_ms": 10,
+        "status_flags": 3,
+        "zirconia_output_voltage_v": 0.7125,
+        "heater_rtd_resistance_ohm": 119.25,
+        "flow_sensor_voltage_v": 1.5
+      },
+      "expected_row": [
+        "2026-04-15T10:00:00.011+09:00",
+        "1776214800011",
+        "Wired",
+        "serial",
+        "8738",
+        "2",
+        "11.250",
+        "10",
+        "0x00000003",
+        "1",
+        "0.712500",
+        "119.250000",
+        "1.500000",
+        "12.247449"
+      ]
+    }
+  ]
+}

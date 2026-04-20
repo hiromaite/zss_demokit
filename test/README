@@ -9,3 +9,18 @@ in the development cycle.
 
 More information about PlatformIO Unit Testing:
 - https://docs.platformio.org/en/latest/advanced/unit-testing/index.html
+
+Shared protocol golden fixtures live under `test/fixtures/`.
+
+The current regression entry point is:
+
+```bash
+source .venv_gui_prototype/bin/activate
+python tools/protocol_fixture_smoke.py
+```
+
+This smoke verifies three layers against the same checked-in fixture set:
+
+- GUI-side BLE / wired parser decode
+- firmware-side payload / frame encode through `tools/firmware_fixture_verify.cpp`
+- CSV row formatting through `RecordingController`

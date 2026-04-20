@@ -131,6 +131,8 @@ class MockBackend(QObject):
         self._ble_status_notify_available = False
         self._ble_event_notify_available = False
         self._ble_capabilities_read_available = False
+        self._ble_last_status_received_monotonic = 0.0
+        self._ble_status_request_nonce = 0
 
         self._set_timer_interval()
 
@@ -252,6 +254,7 @@ class MockBackend(QObject):
                 future.add_done_callback(self._handle_async_future_result)
                 return
             if self._send_ble_opcode(BLE_OPCODE_GET_STATUS):
+                self._schedule_ble_status_direct_read_fallback(time.monotonic())
                 self.log_generated.emit("info", "BLE status request sent.")
             return
 
@@ -319,12 +322,29 @@ class MockBackend(QObject):
         self._ble_status_notify_available = False
         self._ble_event_notify_available = False
         self._ble_capabilities_read_available = False
+        self._ble_last_status_received_monotonic = 0.0
+        self._ble_status_request_nonce = 0
 
     def _set_timer_interval(self) -> None:
         self._sample_timer.setInterval(nominal_sample_period_ms_for_mode(self._mode))
 
     def _schedule_ble_status_refresh(self, delay_ms: int = 250) -> None:
         QTimer.singleShot(delay_ms, self._request_ble_status_if_connected)
+
+    def _schedule_ble_status_direct_read_fallback(self, requested_at_monotonic: float, delay_ms: int = 400) -> None:
+        self._ble_status_request_nonce += 1
+        request_nonce = self._ble_status_request_nonce
+        if self._ble_loop is None:
+            return
+        future = asyncio.run_coroutine_threadsafe(
+            self._ble_status_direct_read_fallback_after(
+                requested_at_monotonic=requested_at_monotonic,
+                request_nonce=request_nonce,
+                delay_s=max(0.0, delay_ms / 1000.0),
+            ),
+            self._ble_loop,
+        )
+        future.add_done_callback(self._handle_async_future_result)
 
     def _request_ble_status_if_connected(self) -> None:
         if self._mode == BLE_MODE and self._connected and self._ble_session_kind == "live":
@@ -410,9 +430,6 @@ class MockBackend(QObject):
 
     def _disconnect_live_ble_device(self) -> None:
         self._ble_disconnect_requested = True
-        if self._ble_loop is not None and self._ble_client is not None:
-            future = asyncio.run_coroutine_threadsafe(self._ble_disconnect_async(), self._ble_loop)
-            future.add_done_callback(self._handle_async_future_result)
 
     def _run_ble_session_thread(self, identifier: str, target_identifier: str) -> None:
         loop = asyncio.new_event_loop()
@@ -463,7 +480,11 @@ class MockBackend(QObject):
             self._ble_capabilities_read_available = False
             self._emit_ble_degraded_capabilities(str(exc))
 
-        await self._ble_write_opcode(BLE_OPCODE_GET_STATUS)
+        if self._ble_status_notify_available:
+            await self._ble_write_opcode(BLE_OPCODE_GET_STATUS)
+            self._schedule_ble_status_direct_read_fallback(time.monotonic())
+        else:
+            await self._ble_read_status_snapshot()
 
         while not self._ble_disconnect_requested and client.is_connected:
             await asyncio.sleep(0.1)
@@ -521,6 +542,27 @@ class MockBackend(QObject):
         self._on_ble_status_notification(None, bytearray(status_raw))
         self.log_generated.emit("info", "BLE status snapshot read directly.")
 
+    async def _ble_status_direct_read_fallback_after(
+        self,
+        *,
+        requested_at_monotonic: float,
+        request_nonce: int,
+        delay_s: float,
+    ) -> None:
+        await asyncio.sleep(delay_s)
+        if (
+            self._mode != BLE_MODE
+            or not self._connected
+            or self._ble_session_kind != "live"
+            or self._ble_client is None
+        ):
+            return
+        if request_nonce != self._ble_status_request_nonce:
+            return
+        if self._ble_last_status_received_monotonic >= requested_at_monotonic:
+            return
+        await self._ble_read_status_snapshot()
+
     async def _ble_write_opcode(self, opcode: int) -> None:
         if self._ble_client is None:
             return
@@ -551,6 +593,8 @@ class MockBackend(QObject):
         self._ble_status_notify_available = False
         self._ble_event_notify_available = False
         self._ble_capabilities_read_available = False
+        self._ble_last_status_received_monotonic = 0.0
+        self._ble_status_request_nonce = 0
         self.connection_changed.emit(False, identifier)
         self.log_generated.emit("warn", f"Disconnected from {identifier}.")
 
@@ -585,6 +629,7 @@ class MockBackend(QObject):
         self._pump_on = bool(payload["pump_on"])
         self._warning_latched = bool(int(payload["status_flags"]) & STATUS_FLAG_TELEMETRY_RATE_WARNING)
         self._last_protocol_version = str(payload["protocol_version"])
+        self._ble_last_status_received_monotonic = time.monotonic()
         status = {
             "pump_state": "ON" if payload["pump_on"] else "OFF",
             "transport_state": "Connected" if self._connected else "Disconnected",

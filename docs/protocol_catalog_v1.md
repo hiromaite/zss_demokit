@@ -66,7 +66,7 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `zirconia_output_voltage_v` | `float32` | `V` | Yes | Zirconia output voltage |
 | `heater_rtd_resistance_ohm` | `float32` | `Ohm` | Yes | Heater RTD resistance |
-| `flow_sensor_voltage_v` | `float32` | `V` | Yes | Raw voltage used to derive flow rate |
+| `flow_sensor_voltage_v` | `float32` | `V` | Yes | Raw voltage from the differential-pressure sensing frontend |
 
 ### 4.2 GUI-Derived Display Fields
 
@@ -78,17 +78,19 @@
 
 - `flow_rate_lpm` は GUI 側で計算する
 - device は raw/canonical measurement として `flow_sensor_voltage_v` を送る
-- v1 実装では placeholder として `dummy_linear_v1` を使う
+- v1 実装では placeholder として `dummy_orifice_dp_v1` を使う
 
 v1 placeholder formula:
 
 ```text
-flow_rate_lpm = max(0.0, 1.0 * flow_sensor_voltage_v + 0.0)
+differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
+flow_rate_lpm = max(0.0, 1.0 * sqrt(max(0.0, differential_pressure_pa)) + 0.0)
 ```
 
 補足:
 
-- 係数 `gain=1.0`, `offset=0.0`
+- raw voltage から差圧への dummy coefficient は `100.0 Pa/V`, `0.0 Pa`
+- オリフィス流量換算の dummy coefficient は `1.0 L/min/sqrt(Pa)`, `0.0 L/min`
 - 実流量構成に基づく正式換算式は将来バージョンで置き換える
 
 ## 5. Telemetry Sample Shape

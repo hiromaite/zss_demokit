@@ -15,6 +15,13 @@ void AppState::updateMeasurements(uint32_t sequence, const measurement::SensorMe
     latest_measurements_ = measurements;
 }
 
+void AppState::setNominalSamplePeriodMs(uint16_t nominal_sample_period_ms) {
+    if (nominal_sample_period_ms == 0u) {
+        return;
+    }
+    nominal_sample_period_ms_ = nominal_sample_period_ms;
+}
+
 void AppState::setTransportSessionActive(bool active) {
     assignStatusFlag(status_flags_, protocol::kStatusFlagTransportSessionActiveMask, active);
 }

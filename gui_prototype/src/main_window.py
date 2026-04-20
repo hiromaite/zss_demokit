@@ -27,7 +27,14 @@ from PySide6.QtWidgets import (
 
 from app_metadata import APP_NAME, APP_VERSION
 from app_state import AppSettings, AppUiState
-from controllers import ConnectionController, PlotController, RecordingController, TelemetryHealthMonitor, WarningController
+from controllers import (
+    ConnectionController,
+    PlotController,
+    RecordingController,
+    TelemetryHealthMonitor,
+    TelemetrySessionStats,
+    WarningController,
+)
 from dialogs import ModeSwitchDialog, SettingsDialog
 from mock_backend import MockBackend, TelemetryPoint
 from protocol_constants import (
@@ -172,6 +179,7 @@ class MainWindow(QMainWindow):
         self.plot_controller = PlotController()
         self.recording_controller = RecordingController()
         self.telemetry_health_monitor = TelemetryHealthMonitor(mode)
+        self.telemetry_session_stats = TelemetrySessionStats(mode)
         self.plot_controller.x_follow_enabled = self.app_settings.plot.x_follow_enabled
         self.plot_controller.manual_y_ranges = dict(self.app_settings.plot.manual_y_ranges)
         self._session_started = datetime.now()
@@ -574,6 +582,8 @@ class MainWindow(QMainWindow):
         self.wired_connect_button.setText(connect_text)
         for severity, message in self.telemetry_health_monitor.on_connection_changed(connected, identifier):
             self._append_log(severity, message)
+        for severity, message in self.telemetry_session_stats.on_connection_changed(connected, identifier):
+            self._append_log(severity, message)
         if not connected:
             self._stop_recording()
         self._sync_recording_controls()
@@ -589,6 +599,7 @@ class MainWindow(QMainWindow):
         self.ui_state.session_metadata.protocol_version = str(payload["protocol_version"])
         self.ui_state.session_metadata.nominal_sample_period_ms = str(payload["nominal_sample_period_ms"])
         self.telemetry_health_monitor.update_nominal_sample_period(payload["nominal_sample_period_ms"])
+        self.telemetry_session_stats.update_nominal_sample_period(payload["nominal_sample_period_ms"])
 
     def _on_capabilities_changed(self, payload: dict) -> None:
         nominal = payload["nominal_sample_period_ms"]
@@ -600,6 +611,7 @@ class MainWindow(QMainWindow):
         self.ui_state.session_metadata.nominal_sample_period_ms = str(nominal)
         self.ui_state.session_metadata.transport_type = str(payload.get("transport_type", transport_type_for_mode(self.mode)))
         self.telemetry_health_monitor.update_nominal_sample_period(nominal)
+        self.telemetry_session_stats.update_nominal_sample_period(nominal)
 
     def _on_ble_devices_discovered(self, devices: list[str]) -> None:
         self.ble_device_list.clear()
@@ -614,6 +626,7 @@ class MainWindow(QMainWindow):
 
     def _on_telemetry(self, point: TelemetryPoint) -> None:
         plot_update = self.plot_controller.append_sample(point)
+        self.telemetry_session_stats.on_telemetry(point)
         self.gap_value.setText(str(plot_update["sequence_gap_total"]))
         for severity, message in self.telemetry_health_monitor.on_telemetry(point):
             self._append_log(severity, message)

@@ -232,7 +232,7 @@ void BleTransport::publishTelemetry(const protocol::TelemetryPayloadV1& payload)
     writeFloat32Le(encoded_payload + 12, payload.zirconia_output_voltage_v);
     writeFloat32Le(encoded_payload + 16, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(encoded_payload + 20, payload.flow_sensor_voltage_v);
-    writeU16Le(encoded_payload + 24, board::kBleNominalSamplePeriodMs);
+    writeU16Le(encoded_payload + 24, payload.nominal_sample_period_ms);
     writeU16Le(encoded_payload + 26, payload.telemetry_field_bits);
     writeU32Le(encoded_payload + 28, payload.diagnostic_bits);
 
@@ -253,7 +253,7 @@ void BleTransport::publishStatusSnapshot(const protocol::StatusSnapshotPayloadV1
     encoded_payload[3] = payload.response_code;
     writeU32Le(encoded_payload + 4, payload.sequence);
     writeU32Le(encoded_payload + 8, payload.status_flags);
-    writeU16Le(encoded_payload + 12, board::kBleNominalSamplePeriodMs);
+    writeU16Le(encoded_payload + 12, payload.nominal_sample_period_ms);
     writeU16Le(encoded_payload + 14, payload.telemetry_field_bits);
     writeFloat32Le(encoded_payload + 16, payload.zirconia_output_voltage_v);
     writeFloat32Le(encoded_payload + 20, payload.heater_rtd_resistance_ohm);
@@ -281,7 +281,7 @@ void BleTransport::publishCapabilities(const protocol::CapabilitiesPayloadV1& pa
     encoded_payload[7] = payload.firmware_version_patch;
     writeU16Le(encoded_payload + 8, payload.supported_command_bits);
     writeU16Le(encoded_payload + 10, payload.telemetry_field_bits);
-    writeU16Le(encoded_payload + 12, board::kBleNominalSamplePeriodMs);
+    writeU16Le(encoded_payload + 12, payload.nominal_sample_period_ms);
     writeU16Le(encoded_payload + 14, payload.status_flag_schema_version);
     writeU16Le(encoded_payload + 16, payload.max_payload_bytes);
     writeU16Le(encoded_payload + 18, 0u);

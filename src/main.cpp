@@ -114,6 +114,31 @@ void logCapabilitiesPreview() {
         serial_payload.max_payload_bytes);
 }
 
+uint16_t selectNominalSamplePeriodMs() {
+    if (g_serial_transport.isConnected()) {
+        return zss::board::kWiredNominalSamplePeriodMs;
+    }
+    if (g_ble_transport.isConnected()) {
+        return zss::board::kBleNominalSamplePeriodMs;
+    }
+    return zss::board::kDefaultNominalSamplePeriodMs;
+}
+
+void updateSamplingCadenceForActiveTransport(uint32_t now_ms) {
+    const uint16_t target_period_ms = selectNominalSamplePeriodMs();
+    if (target_period_ms == g_app_state.nominalSamplePeriodMs()) {
+        return;
+    }
+
+    g_app_state.setNominalSamplePeriodMs(target_period_ms);
+    g_next_sample_deadline_ms = now_ms + target_period_ms;
+    zss::services::Logger::log(
+        zss::services::LogLevel::Info,
+        "Timing",
+        "Sampling cadence switched to %u ms",
+        static_cast<unsigned>(target_period_ms));
+}
+
 void runSamplingStep(uint32_t now_ms) {
     if (g_next_sample_deadline_ms == 0) {
         g_next_sample_deadline_ms = now_ms + g_app_state.nominalSamplePeriodMs();
@@ -303,6 +328,7 @@ void loop() {
     handleCommandForTransport(g_serial_transport, zss::transport::TransportKind::Serial);
 
     const uint32_t now_ms = millis();
+    updateSamplingCadenceForActiveTransport(now_ms);
     runSamplingStep(now_ms);
     emitSummaryLog(now_ms);
 }

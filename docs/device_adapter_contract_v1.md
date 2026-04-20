@@ -241,17 +241,18 @@ adapter は `flow_rate_lpm` を計算しない。
 GUI 側 service が以下を使って計算する。
 
 ```text
-flow_rate_lpm = max(0.0, 1.0 * flow_sensor_voltage_v + 0.0)
+differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
+flow_rate_lpm = max(0.0, 1.0 * sqrt(max(0.0, differential_pressure_pa)) + 0.0)
 ```
 
 policy id:
 
-- `dummy_linear_v1`
+- `dummy_orifice_dp_v1`
 
 理由:
 
 - transport payload を canonical raw measurement 中心に保つため
-- 将来、正式換算式へ差し替えやすくするため
+- 将来、正式な差圧変換係数とオリフィス係数へ差し替えやすくするため
 
 ## 12. Error and Warning Policy
 

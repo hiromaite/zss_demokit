@@ -51,11 +51,23 @@
 - GUI が BLE 接続、telemetry 受信、status / capabilities 取得を行える
 - legacy compatibility mode の最低限接続が確認できる
 
+現在地:
+
+- `COMPLETE` 相当
+- local Mac 実機 probe により `180 s` session、recording finalize、manual reconnect、`sequence_gap_total=0`、reconnect recovery `3.43 s` を確認済み
+- status path は追加 hardening を入れ、short probe で `Status events=7` まで確認済み
+
 ### M4. Beta Candidate
 
 - 両モードで共通 CSV 記録が通る
 - warning 表示と session log が揃う
 - ローカル検証結果をもとに Windows packaging 準備へ移れる
+
+現在地:
+
+- `COMPLETE` 相当
+- Windows 11 Pro 上で packaging と packaged app 実行を確認し、`Wired` / `BLE` の両モードで blocking issue なしを確認済み
+- next focus は release hardening、final metadata polish、必要なら `main` への統合判断
 
 ## 4. 推奨実行順
 
@@ -71,6 +83,14 @@
 10. Hardening, packaging preparation, beta gate
 
 ## 5. Cross-Cutting Backlog
+
+### 5.1 Current Cross-Cutting Progress
+
+| Item | Status | Notes |
+| :--- | :--- | :--- |
+| `CORE-001` | `COMPLETE` | protocol constants は GUI / firmware の両側でコード定義済み |
+| `CORE-002` | `COMPLETE` | `test/fixtures/protocol_golden_v1.json`、`tools/protocol_fixture_smoke.py`、`tools/firmware_fixture_verify.cpp` により shared golden fixture を導入済み |
+| `CORE-003` | `COMPLETE` | `validation_checklist_v1.md` を継続更新し、GUI / firmware / integration の gate を管理中 |
 
 ### CORE-001. Protocol Constants Package
 
@@ -123,6 +143,13 @@
 
 - 少なくとも正常系 3 ケース、異常系 3 ケースの fixture がある
 - GUI parser テストと firmware encode テストで同じ fixture を参照できる
+
+現状メモ:
+
+- shared fixture は `test/fixtures/protocol_golden_v1.json` に集約済み
+- `tools/protocol_fixture_smoke.py` は GUI 側 BLE / wired decoder、CSV row formatting、invalid-case parser 動作を同じ fixture で検証する
+- `tools/firmware_fixture_verify.cpp` は host-side C++ binary として firmware payload / frame encoder を同じ fixture に照合する
+- current fixture set では正常系 9 ケース、異常系 4 ケース、CSV row 1 ケースをカバーする
 
 ### CORE-003. Validation Checklist Draft
 
@@ -350,6 +377,8 @@
 - `tools/ble_smoke.py` は reconnect cycles、`observe-duration`、telemetry continuity summary を扱える形に更新済み
 - `tools/ble_backend_smoke.py` により fake client ベースの reconnect、event log、post-command status refresh 回帰を確認可能
 - live disconnect / reconnect と telemetry continuity の追加実地確認が残る
+- exec 環境では CoreBluetooth scan が CLI から安定しないため、live continuity の実地確認は `INT-004` の local GUI / hand-run path で扱う
+- beta 扱いに向けた proposal は、`180 s` 以上の live session、session 中の `Pump ON/OFF` と `Get Status`、recording finalize、manual reconnect 1 回成功を最低線とする
 
 ### GUI-008. Warning and Session Log Hardening
 
@@ -374,6 +403,12 @@
 - 異常系を modal に頼らず追跡できる
 - log pane で session 中の主要イベントを確認できる
 
+現状メモ:
+
+- warning log, telemetry health monitor, BLE backend reconnect smoke は実装済み
+- GUI は disconnect 時に telemetry session summary を log 出力できるため、BLE manual continuity validation の観測補助として使える
+- 残タスクは live BLE session の実地確認を通して、beta gate の許容値を確定すること
+
 ### GUI-009. Packaging Preparation
 
 目的:
@@ -395,6 +430,18 @@
 
 - macOS local run と Windows packaging path の両方を意識した構成になっている
 - PyInstaller 化に大きな阻害要因がない
+
+現状メモ:
+
+- `gui_prototype/zss_demokit_gui.spec` を追加し、`bleak.backends` と `pyqtgraph` を含む conservative な `onedir` packaging path を定義済み
+- `gui_prototype/packaging_README.md` に local build smoke と Windows follow-up を整理済み
+- macOS 上で `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` が成功し、`dist/zss_demokit_gui/` を生成できることを確認済み
+- packaging metadata は `gui_prototype/src/app_metadata.py` に集約し、PyInstaller spec から Windows version resource を自動生成できる状態にした
+- icon は `gui_prototype/assets/app_icon.*` に置かれた場合のみ自動で埋め込む optional path とした
+- 初回 beta 方針は `onedir`, version `0.1.0-beta.1`, 配布名 `zss_demokit_gui_win64_beta1` とした
+- geometric first-pass icon を `tools/generate_app_icon.py` で生成し、`app_icon.png` / `app_icon.ico` を asset 化済み
+- Windows 11 Pro 上で packaging と packaged app 実行を確認し、`Wired` / `BLE` 両モードの smoke が通過
+- 残タスクは final art direction の要否判断と release 向け metadata / installer policy の最終化
 
 ### GUI-010. User Feedback Integration and UX Parity
 
@@ -771,7 +818,37 @@
 - canonical fields が同一列で出る
 - derived metric policy が記録される
 
-### INT-004. Beta Gate
+### INT-004. BLE Live Continuity Manual Validation
+
+目的:
+
+- CoreBluetooth を使う live BLE continuity / reconnect を、local Mac の GUI 実行ベースで継続観測する
+
+依存:
+
+- `GUI-007`
+- `GUI-008`
+- `FW-007`
+
+完了条件:
+
+- `Scan -> Connect` 後に少なくとも数分の telemetry continuity を確認できる
+- session 中に `Pump ON/OFF`、`Get Status`、recording を実行しても GUI warning log が不自然に荒れない
+- manual disconnect / reconnect を 1 回以上実施し、capabilities / status / telemetry が再取得できる
+
+現状メモ:
+
+- basic `Scan -> Connect`、capabilities load、`Pump ON/OFF` request、manual `Get Status`、`Ping` は local Mac で確認済み
+- current exec 環境では `BleakScanner.discover()` が無言終了するため、CLI automation ではなく GUI hand-run を正として継続確認する
+- `tools/gui_ble_session_probe.py` を追加し、GUI と同じ `MainWindow + ConnectionController + RecordingController` 経路で `scan -> connect -> recording -> planned reconnect -> summary` を半自動で回せるようにした
+- beta gate proposal:
+  - `180 s` 以上の BLE live telemetry continuity を 1 session で確認する
+  - session 中に `Pump ON/OFF`、`Get Status`、recording start/stop を各 1 回以上実施して成功する
+  - manual disconnect / reconnect を同一 app run 内で 1 回以上実施し、capabilities / status / telemetry が `10 s` 以内に復帰する
+  - planned reconnect を含む probe では `observed telemetry duration >= session duration - reconnect timeout budget` を目安とする
+  - session summary 上で no unexpected disconnect、connected telemetry segment 内の `sequence_gap_total <= 5`、transient stall warning は多くても 1 回までを目安とする
+
+### INT-005. Beta Gate
 
 目的:
 
