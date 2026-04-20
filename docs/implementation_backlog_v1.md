@@ -65,8 +65,9 @@
 
 現在地:
 
-- `IN PROGRESS`
-- next focus は `GUI-009 Packaging Preparation` と Windows smoke-ready な配布手順の整備
+- `COMPLETE` 相当
+- Windows 11 Pro 上で packaging と packaged app 実行を確認し、`Wired` / `BLE` の両モードで blocking issue なしを確認済み
+- next focus は release hardening、final metadata polish、必要なら `main` への統合判断
 
 ## 4. 推奨実行順
 
@@ -439,7 +440,8 @@
 - icon は `gui_prototype/assets/app_icon.*` に置かれた場合のみ自動で埋め込む optional path とした
 - 初回 beta 方針は `onedir`, version `0.1.0-beta.1`, 配布名 `zss_demokit_gui_win64_beta1` とした
 - geometric first-pass icon を `tools/generate_app_icon.py` で生成し、`app_icon.png` / `app_icon.ico` を asset 化済み
-- 残タスクは final art direction の要否判断と Windows 実機 smoke の 2 点
+- Windows 11 Pro 上で packaging と packaged app 実行を確認し、`Wired` / `BLE` 両モードの smoke が通過
+- 残タスクは final art direction の要否判断と release 向け metadata / installer policy の最終化
 
 ### GUI-010. User Feedback Integration and UX Parity
 

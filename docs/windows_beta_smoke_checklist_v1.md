@@ -89,6 +89,12 @@ Expected result:
 - recording finalizes in both modes
 - no blocking packaging issue is discovered
 
+## Current Result
+
+- Windows 11 Pro 上で user 実施により packaging 成功
+- packaged app の起動成功
+- `Wired` / `BLE` の両モードで blocking issue なし
+
 ## Follow-up Notes
 
 - if the icon looks soft or mis-scaled in Windows, replace `gui_prototype/assets/app_icon.ico`

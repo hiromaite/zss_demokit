@@ -52,6 +52,7 @@
 | `GUI-VAL-018` | Visual theme parity | GUI theme が `example_gui` の dark direction に整合する | `PASS` | stylesheet を dark blue/slate direction へ更新し、theme 変更後も GUI session probe が継続動作することを確認 |
 | `GUI-VAL-019` | Wired GUI session probe | offscreen GUI 経由で wired connect / recording / pump toggle / CSV finalize が継続する | `PASS` | `tools/gui_wired_session_probe.py --duration-s 18 --toggle-interval-s 3` で `1909` telemetry、CSV `1740` rows、non-unit gap `0` を確認 |
 | `GUI-VAL-020` | PyInstaller packaging smoke | PyInstaller spec から GUI bundle を生成できる | `PASS` | `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` で GUI bundle を生成し、offscreen short launch が成立することを確認。version metadata scaffold、beta naming、icon asset 追加後も再通過 |
+| `GUI-VAL-021` | Windows packaged GUI smoke | Windows packaged app が起動し、基本操作が成立する | `PASS` | user による Windows 11 Pro 実機確認で packaging 成功、packaged app 起動成功、blocking issue なしを確認 |
 
 ## 5. Firmware Checklist
 
@@ -86,6 +87,7 @@
 | `INT-VAL-009` | Golden fixture regression smoke | shared fixture で GUI parser / firmware encoder / CSV row を回帰確認できる | `PASS` | `tools/protocol_fixture_smoke.py` と `tools/firmware_fixture_verify.cpp` により正常系 9 ケース、異常系 4 ケース、CSV row 1 ケースを確認 |
 | `INT-VAL-010` | BLE GUI continuity manual validation | local Mac GUI 実行で BLE continuity / reconnect を継続確認できる | `PASS` | `tools/gui_ble_session_probe.py --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60` で `Connect count=2`, `Connected telemetry segments=2`, `sequence_gap_total=0`, `Reconnect recovered=True`, `recovery=3.42 s`, `Recording sessions completed=1`, `gui_ble_session_probe_ok` を確認 |
 | `INT-VAL-011` | BLE GUI session probe logic smoke | GUI-level BLE probe の段取りと gate 判定が fake live backend で回る | `PASS` | `tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6` で `scan -> connect -> recording -> reconnect -> summary` を確認 |
+| `INT-VAL-012` | Windows packaged end-to-end smoke | Windows packaged app で `Wired` / `BLE` の両モードが blocking issue なく動く | `PASS` | user による Windows 11 Pro 実機確認で serial / BLE の両方に問題なしを確認 |
 
 ## 7. 実施ログ
 
@@ -181,6 +183,7 @@
 - packaged binary `dist/zss_demokit_gui/zss_demokit_gui` を `QT_QPA_PLATFORM=offscreen` で短時間起動し、bundle が即時クラッシュせず立ち上がることを確認
 - packaging metadata scaffold を追加した後も `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` を再実施し、build と packaged offscreen short launch が継続して成立することを確認
 - beta naming `zss_demokit_gui_win64_beta1`, version `0.1.0-beta.1`, publisher metadata, generated icon asset を反映した後も packaging smoke が継続して成立することを確認
+- user により Windows 11 Pro 上で packaging を実施し、packaged app の起動と `Wired` / `BLE` の両モード実行に問題がないことを確認
 
 ## 8. 更新ルール
 

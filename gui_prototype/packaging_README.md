@@ -49,5 +49,5 @@ Before the first Windows packaging pass, confirm:
 ## Known Gaps
 
 - generated icon is a first-pass geometric asset and may still be art-directed later
-- no Windows smoke result recorded yet
+- Windows 11 Pro での packaging / launch / serial / BLE smoke は通過済み
 - no installer recipe yet
