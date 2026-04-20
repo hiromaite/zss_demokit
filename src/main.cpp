@@ -29,6 +29,9 @@ zss::transport::SerialTransport g_serial_transport;
 
 uint32_t g_next_sample_deadline_ms = 0;
 uint32_t g_last_summary_log_ms = 0;
+bool g_measurement_core_ready = false;
+bool g_ble_transport_ready = false;
+bool g_serial_transport_ready = false;
 
 constexpr uint8_t kEventSeverityInfo = 0;
 constexpr uint8_t kEventSeverityWarn = 1;
@@ -41,6 +44,27 @@ uint32_t warningMaskFromStatusFlags(uint32_t status_flags) {
             zss::protocol::kStatusFlagSensorFaultMask |
             zss::protocol::kStatusFlagTelemetryRateWarningMask |
             zss::protocol::kStatusFlagCommandErrorLatchedMask);
+}
+
+void updateDiagnosticBits() {
+    g_app_state.setDiagnosticBit(
+        zss::protocol::kDiagnosticBitMeasurementCoreReadyMask,
+        g_measurement_core_ready);
+    g_app_state.setDiagnosticBit(
+        zss::protocol::kDiagnosticBitExternalAdcReadyMask,
+        g_measurement_core.externalAdcAvailable());
+    g_app_state.setDiagnosticBit(
+        zss::protocol::kDiagnosticBitBleTransportReadyMask,
+        g_ble_transport_ready);
+    g_app_state.setDiagnosticBit(
+        zss::protocol::kDiagnosticBitSerialTransportReadyMask,
+        g_serial_transport_ready);
+    g_app_state.setDiagnosticBit(
+        zss::protocol::kDiagnosticBitBleSessionObservedMask,
+        g_ble_transport.isConnected());
+    g_app_state.setDiagnosticBit(
+        zss::protocol::kDiagnosticBitSerialSessionObservedMask,
+        g_serial_transport.isConnected());
 }
 
 void publishEventToTransports(const zss::protocol::EventPayloadV1& payload) {
@@ -166,6 +190,7 @@ void runSamplingStep(uint32_t now_ms) {
     g_next_sample_deadline_ms += (missed_intervals + 1u) * nominal_period_ms;
 
     const auto measurements = g_measurement_core.acquire();
+    updateDiagnosticBits();
     g_app_state.setStatusFlag(zss::protocol::kStatusFlagAdcFaultMask, !g_measurement_core.isHealthy());
     const bool sensor_fault =
         !g_measurement_core.lastReadSucceeded() ||
@@ -178,6 +203,7 @@ void runSamplingStep(uint32_t now_ms) {
 
     emitStatusTransitionEvents(previous_status_flags, g_app_state.statusFlags());
 
+    g_app_state.setDiagnosticBit(zss::protocol::kDiagnosticBitTelemetryPublishedMask, true);
     const auto telemetry_payload = zss::protocol::buildTelemetryPayload(g_app_state);
     g_ble_transport.publishTelemetry(telemetry_payload);
     g_serial_transport.publishTelemetry(telemetry_payload);
@@ -194,12 +220,13 @@ void emitSummaryLog(uint32_t now_ms) {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Sample",
-        "seq=%lu Vout=%.3fV RTD=%.1fOhm FlowRaw=%.3fV flags=0x%08lX overruns=%lu",
+        "seq=%lu Vout=%.3fV RTD=%.1fOhm FlowRaw=%.3fV flags=0x%08lX diag=0x%08lX overruns=%lu",
         static_cast<unsigned long>(g_app_state.latestSequence()),
         measurements.zirconia_output_voltage_v,
         measurements.heater_rtd_resistance_ohm,
         measurements.flow_sensor_voltage_v,
         static_cast<unsigned long>(g_app_state.statusFlags()),
+        static_cast<unsigned long>(g_app_state.diagnosticBits()),
         static_cast<unsigned long>(g_app_state.sampleOverrunCount()));
 }
 
@@ -218,7 +245,8 @@ void setup() {
     g_pump_controller.begin();
     g_status_led.begin();
 
-    if (!g_measurement_core.begin()) {
+    g_measurement_core_ready = g_measurement_core.begin();
+    if (!g_measurement_core_ready) {
         g_app_state.setStatusFlag(zss::protocol::kStatusFlagAdcFaultMask, true);
         zss::services::Logger::log(zss::services::LogLevel::Error, "Boot", "Measurement core initialization failed.");
     } else if (!g_measurement_core.isHealthy()) {
@@ -230,9 +258,10 @@ void setup() {
             g_measurement_core.lastError());
     }
 
-    g_ble_transport.begin();
-    g_serial_transport.begin();
+    g_ble_transport_ready = g_ble_transport.begin();
+    g_serial_transport_ready = g_serial_transport.begin();
     g_app_state.setTransportSessionActive(false);
+    updateDiagnosticBits();
 
     const auto ble_capabilities = zss::app::CapabilityBuilder::build(
         zss::transport::TransportKind::Ble,
@@ -263,13 +292,15 @@ void setup() {
         zss::board::kI2cSdaPin,
         zss::board::kI2cSclPin,
         zss::board::kSensorPowerEnablePin);
-    emitEvent(zss::protocol::EventCode::BootComplete, kEventSeverityInfo, 0u);
+    g_app_state.setDiagnosticBit(zss::protocol::kDiagnosticBitBootCompleteMask, true);
+    emitEvent(zss::protocol::EventCode::BootComplete, kEventSeverityInfo, g_app_state.diagnosticBits());
 }
 
 void loop() {
     g_ble_transport.update();
     g_serial_transport.update();
     g_app_state.setTransportSessionActive(g_serial_transport.isConnected() || g_ble_transport.isConnected());
+    updateDiagnosticBits();
 
     auto handleCommandForTransport =
         [](auto& transport, zss::transport::TransportKind transport_kind) {

@@ -12,6 +12,7 @@ class MeasurementCore {
     SensorMeasurements acquire();
     bool isHealthy() const;
     bool lastReadSucceeded() const;
+    bool externalAdcAvailable() const;
     const char* lastError() const;
 
   private:

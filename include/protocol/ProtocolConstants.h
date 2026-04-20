@@ -88,6 +88,15 @@ inline constexpr uint32_t kStatusFlagSensorFaultMask = 1u << 4;
 inline constexpr uint32_t kStatusFlagTelemetryRateWarningMask = 1u << 5;
 inline constexpr uint32_t kStatusFlagCommandErrorLatchedMask = 1u << 6;
 
+inline constexpr uint32_t kDiagnosticBitBootCompleteMask = 1u << 0;
+inline constexpr uint32_t kDiagnosticBitMeasurementCoreReadyMask = 1u << 1;
+inline constexpr uint32_t kDiagnosticBitExternalAdcReadyMask = 1u << 2;
+inline constexpr uint32_t kDiagnosticBitBleTransportReadyMask = 1u << 3;
+inline constexpr uint32_t kDiagnosticBitSerialTransportReadyMask = 1u << 4;
+inline constexpr uint32_t kDiagnosticBitBleSessionObservedMask = 1u << 5;
+inline constexpr uint32_t kDiagnosticBitSerialSessionObservedMask = 1u << 6;
+inline constexpr uint32_t kDiagnosticBitTelemetryPublishedMask = 1u << 7;
+
 inline constexpr uint16_t kSupportedCommandBits =
     (1u << 0) |
     (1u << 1) |

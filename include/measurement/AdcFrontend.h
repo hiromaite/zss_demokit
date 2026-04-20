@@ -12,6 +12,7 @@ class AdcFrontend {
     SensorMeasurements readMeasurements();
     bool isHealthy() const;
     bool lastReadSucceeded() const;
+    bool externalAdcAvailable() const;
     const char* lastError() const;
 
   private:

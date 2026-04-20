@@ -71,6 +71,7 @@
 | `FW-VAL-011` | ADS1115 live measurement sanity | ADS1115 配線後に zirconia / RTD が finite 値で読める | `PASS` | `wired_serial_smoke` で zirconia / RTD が `NaN` ではなく finite 値を返し、status flags も fault なしを確認 |
 | `FW-VAL-012` | Wired timing probe | wired `10 ms` path を sequence gap と host inter-arrival で観測できる | `PASS` | `tools/wired_timing_probe.py --samples 1200 --warmup 20` で `1200` samples、gap `0`、host inter-arrival `mean=9.131 ms / p95=20.095 ms / max=20.320 ms` を確認 |
 | `FW-VAL-013` | Wired soak probe | `30 s` continuous run と periodic `Pump ON/OFF` repetition が破綻せず継続する | `PASS` | `tools/wired_soak_probe.py --duration-s 30 --toggle-interval-s 2.5` で `3001` telemetry samples、gap `0`、toggle `12` 回、status flags `[2, 3]` を確認 |
+| `FW-VAL-014` | Diagnostic payload wiring build smoke | diagnostic bits 追加後も firmware build と shared regression が壊れない | `PASS` | `pio run` と `tools/protocol_fixture_smoke.py` により AppState / payload builder の diagnostic wiring 後も build/regression が継続することを確認 |
 
 ## 6. Integration Checklist
 
@@ -184,6 +185,15 @@
 - packaging metadata scaffold を追加した後も `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` を再実施し、build と packaged offscreen short launch が継続して成立することを確認
 - beta naming `zss_demokit_gui_win64_beta1`, version `0.1.0-beta.1`, publisher metadata, generated icon asset を反映した後も packaging smoke が継続して成立することを確認
 - user により Windows 11 Pro 上で packaging を実施し、packaged app の起動と `Wired` / `BLE` の両モード実行に問題がないことを確認
+
+### 2026-04-20
+
+- post-beta hardening として、GUI compact layout の最終調整を実施し、left column の縦スクロール化、BLE selector の dropdown 化、不要な plot toolbar 第二行の削除、Start/Stop トグル表記への整理を行った
+- `python3.12 -m compileall gui_prototype/main.py gui_prototype/src tools/gui_ble_session_probe.py tools/gui_wired_session_probe.py` を実施し、GUI の current source state が compile 可能であることを確認した
+- helper smoke により `Settings` 経由の mode switch、`Relative / Clock` 軸表示、compact layout 後の fake live BLE session probe が継続動作することを確認した
+- left column の横スクロール問題を再現し、content width を viewport width に同期する修正を加えた後に `viewport_width == content_width` と `ScrollBarAlwaysOff` を確認した
+- firmware 側の diagnostics hardening として `diagnostic_bits` を AppState / telemetry payload に配線し、`boot_complete` event の `detail_u32` に diagnostic bits を載せるよう更新した
+- `python3.12 -m compileall gui_prototype/src tools/protocol_fixture_smoke.py`、`./.venv_gui_prototype/bin/python3.12 tools/protocol_fixture_smoke.py`、`./.venv_pio/bin/pio run` を実施し、diagnostic wiring 後も GUI compile、shared protocol regression、firmware build が継続して成立することを確認した
 
 ## 8. 更新ルール
 

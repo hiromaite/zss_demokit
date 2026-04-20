@@ -11,6 +11,7 @@ TelemetryPayloadV1 buildTelemetryPayload(const app::AppState& app_state) {
     payload.heater_rtd_resistance_ohm = measurements.heater_rtd_resistance_ohm;
     payload.flow_sensor_voltage_v = measurements.flow_sensor_voltage_v;
     payload.nominal_sample_period_ms = app_state.nominalSamplePeriodMs();
+    payload.diagnostic_bits = app_state.diagnosticBits();
     return payload;
 }
 

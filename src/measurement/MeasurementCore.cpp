@@ -25,6 +25,10 @@ bool MeasurementCore::lastReadSucceeded() const {
     return adc_frontend_.lastReadSucceeded();
 }
 
+bool MeasurementCore::externalAdcAvailable() const {
+    return adc_frontend_.externalAdcAvailable();
+}
+
 const char* MeasurementCore::lastError() const {
     return adc_frontend_.lastError();
 }

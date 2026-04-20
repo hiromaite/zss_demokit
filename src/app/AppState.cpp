@@ -34,6 +34,10 @@ void AppState::setStatusFlag(uint32_t mask, bool enabled) {
     assignStatusFlag(status_flags_, mask, enabled);
 }
 
+void AppState::setDiagnosticBit(uint32_t mask, bool enabled) {
+    assignStatusFlag(diagnostic_bits_, mask, enabled);
+}
+
 void AppState::incrementSampleOverrunCount(uint32_t amount) {
     sample_overrun_count_ += amount;
     assignStatusFlag(status_flags_, protocol::kStatusFlagSamplingOverrunMask, true);
@@ -50,6 +54,10 @@ uint32_t AppState::latestSequence() const {
 
 uint32_t AppState::statusFlags() const {
     return status_flags_;
+}
+
+uint32_t AppState::diagnosticBits() const {
+    return diagnostic_bits_;
 }
 
 uint16_t AppState::nominalSamplePeriodMs() const {

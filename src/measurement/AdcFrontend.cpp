@@ -96,6 +96,10 @@ bool AdcFrontend::lastReadSucceeded() const {
     return last_read_succeeded_;
 }
 
+bool AdcFrontend::externalAdcAvailable() const {
+    return external_adc_available_;
+}
+
 const char* AdcFrontend::lastError() const {
     return last_error_;
 }

@@ -67,7 +67,7 @@
 
 - `COMPLETE` 相当
 - Windows 11 Pro 上で packaging と packaged app 実行を確認し、`Wired` / `BLE` の両モードで blocking issue なしを確認済み
-- next focus は release hardening、final metadata polish、必要なら `main` への統合判断
+- current focus は post-beta hardening と firmware diagnostics の拡充、およびユーザーフィードバックを受けた GUI compact layout の仕上げである
 
 ## 4. 推奨実行順
 
@@ -187,10 +187,10 @@
 | `GUI-004` | `COMPLETE` | axis/viewbox interaction hook と time-based history retention により manual plot parity と plot history retention を回収済み |
 | `GUI-005` | `COMPLETE` | 共通 CSV recording、partial file handling、configured recording directory を実装済み |
 | `GUI-006` | `COMPLETE` | wired mode は real serial transport に加え、offscreen GUI session probe で connect / recording / `Pump ON/OFF` / CSV finalize まで確認済み |
-| `GUI-007` | `PARTIAL` | `bleak` ベースの live BLE path は実装済みで、local Mac で scan / connect / capabilities / command request を確認済み。live reconnect continuity の追加確認が残る |
-| `GUI-008` | `PARTIAL` | warning log と telemetry health monitor は実装済み。backend reconnect smoke で BLE event / status refresh 回帰をカバーしつつ、live continuity の追加確認が残る |
-| `GUI-009` | `PENDING` | Windows packaging 準備は release 前に対応 |
-| `GUI-010` | `COMPLETE` | user feedback integration と GUI parity hardening を回収済み。dark theme direction、settings mode switch flow、device auto-filter / preselect、manual plot parity、plot history retention を実装・確認 |
+| `GUI-007` | `COMPLETE` | `bleak` ベースの live BLE path は local Mac 実機 probe で continuity / reconnect / recording まで確認済み |
+| `GUI-008` | `COMPLETE` | warning log、telemetry health monitor、BLE status fallback、session summary log を含む hardening を完了 |
+| `GUI-009` | `COMPLETE` | Windows packaging 準備と Windows 11 Pro packaged app smoke を完了 |
+| `GUI-010` | `COMPLETE` | user feedback integration と GUI parity hardening を回収済み。dark theme direction、settings mode switch flow、device auto-filter / preselect、manual plot parity、plot history retention、compact layout refinement を実装・確認 |
 
 補足:
 
@@ -687,7 +687,9 @@
 - serial / BLE transport の両方で `event` publish path は実装済み
 - firmware は `command_error`、`warning_raised / cleared`、`adc_fault_raised / cleared` を emit できる
 - wired 実機 smoke では GUI warning log まで `command_error` と `warning_raised` が到達することを確認済み
-- boot complete と richer diagnostic bits は今後の hardening 項目として残る
+- `boot_complete` event は emit 済みで、`detail_u32` には diagnostic bits を載せる方針へ更新した
+- telemetry payload の `diagnostic_bits` には boot / measurement core / external ADC / transport ready / session observed / telemetry published の bit を載せる実装を追加した
+- 次の hardening は diagnostic bits を host-side visibility や実機 monitor 観測へつなぐこと
 
 ### FW-009. Board Bring-Up and Sanity Checks
 
