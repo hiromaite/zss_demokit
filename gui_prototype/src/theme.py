@@ -15,6 +15,12 @@ COLORS = {
     "metric_border": "#1F7A5A",
     "warning": "#2A1E12",
     "warning_border": "#C68D26",
+    "recording": "#24151B",
+    "recording_border": "#7F1D1D",
+    "recording_active": "#7F1D1D",
+    "recording_active_border": "#EF4444",
+    "recording_badge": "#3B1D24",
+    "recording_badge_active": "#7F1D1D",
     "danger": "#F87171",
 }
 
@@ -54,6 +60,16 @@ def app_stylesheet() -> str:
     QFrame#WarningCard {{
         background: {c["warning"]};
         border: 1px solid {c["warning_border"]};
+        border-radius: 18px;
+    }}
+    QFrame#RecordingPanel {{
+        background: {c["recording"]};
+        border: 1px solid {c["recording_border"]};
+        border-radius: 18px;
+    }}
+    QFrame#RecordingPanel[recordingActive="true"] {{
+        background: {c["recording_active"]};
+        border: 2px solid {c["recording_active_border"]};
         border-radius: 18px;
     }}
     QLabel#AppTitle {{
@@ -127,6 +143,18 @@ def app_stylesheet() -> str:
         padding: 6px 12px;
         font-weight: 600;
     }}
+    QLabel#RecordingStateBadge {{
+        background: {c["recording_badge"]};
+        border: 1px solid {c["recording_border"]};
+        border-radius: 12px;
+        padding: 4px 10px;
+        font-weight: 700;
+    }}
+    QLabel#RecordingStateBadge[recordingActive="true"] {{
+        background: {c["recording_badge_active"]};
+        border: 1px solid {c["recording_active_border"]};
+        color: white;
+    }}
     QPushButton {{
         min-height: 34px;
         padding: 6px 14px;
@@ -162,6 +190,21 @@ def app_stylesheet() -> str:
     QPushButton#ToggleButton:checked {{
         background: {c["accent_strong"]};
         border-color: {c["accent_strong"]};
+        color: white;
+    }}
+    QPushButton#RecordToggleButton {{
+        min-height: 34px;
+        min-width: 132px;
+        background: {c["recording"]};
+        border-color: {c["recording_border"]};
+        font-weight: 700;
+    }}
+    QPushButton#RecordToggleButton:hover {{
+        border-color: {c["recording_active_border"]};
+    }}
+    QPushButton#RecordToggleButton:checked {{
+        background: {c["recording_active"]};
+        border-color: {c["recording_active_border"]};
         color: white;
     }}
     QToolButton#SectionToggle {{

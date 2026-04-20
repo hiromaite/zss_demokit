@@ -452,10 +452,25 @@ class MainWindow(QMainWindow):
 
     def _build_recording_panel(self) -> QWidget:
         frame, layout = _panel("Recording", "Session files are written as .partial.csv and finalized to .csv on stop.")
+        frame.setObjectName("RecordingPanel")
+        frame.setProperty("recordingActive", False)
+        self.recording_panel_frame = frame
+
+        state_row = QHBoxLayout()
+        state_row.setSpacing(8)
+        self.recording_state_badge = QLabel("Idle")
+        self.recording_state_badge.setObjectName("RecordingStateBadge")
+        self.recording_state_badge.setProperty("recordingActive", False)
+        self.recording_state_detail = QLabel("No active session.")
+        self.recording_state_detail.setObjectName("SectionHint")
+        state_row.addWidget(self.recording_state_badge, 0)
+        state_row.addWidget(self.recording_state_detail, 1)
+        layout.addLayout(state_row)
+
         row = QHBoxLayout()
         row.setSpacing(8)
         self.record_toggle_button = QPushButton("Start Recording")
-        self.record_toggle_button.setObjectName("ToggleButton")
+        self.record_toggle_button.setObjectName("RecordToggleButton")
         self.record_toggle_button.setCheckable(True)
         self.record_toggle_button.clicked.connect(self._toggle_recording_from_button)
         row.addWidget(self.record_toggle_button)
@@ -882,6 +897,22 @@ class MainWindow(QMainWindow):
         self.record_toggle_button.setChecked(checked)
         self.record_toggle_button.setText("Stop Recording" if checked else "Start Recording")
         self.record_toggle_button.blockSignals(False)
+        self._sync_recording_emphasis(checked)
+
+    def _sync_recording_emphasis(self, active: bool) -> None:
+        self.recording_panel_frame.setProperty("recordingActive", active)
+        self.recording_state_badge.setProperty("recordingActive", active)
+        self.recording_state_badge.setText("REC ACTIVE" if active else "Idle")
+        self.recording_state_detail.setText(
+            "Session is being written to a partial CSV file."
+            if active
+            else "No active session."
+        )
+        for widget in (self.recording_panel_frame, self.recording_state_badge):
+            style = widget.style()
+            style.unpolish(widget)
+            style.polish(widget)
+            widget.update()
 
     def _recording_source_endpoint(self) -> str:
         if self.mode == BLE_MODE:

@@ -202,6 +202,11 @@
 - デバイス再接続後に `./.venv_pio/bin/pio run -t upload --upload-port /dev/cu.usbmodem3101` と `source .venv_gui_prototype/bin/activate && python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` を再実施し、PWM 化後も upload / capabilities / status / telemetry / `Pump ON/OFF` / command error handling が継続動作することを確認した
 - BLE control write を `response=True` に変更し、firmware 側 control characteristic を `WRITE | WRITE_NR` に更新した
 - `source .venv_gui_prototype/bin/activate && python3.12 tools/ble_backend_smoke.py`、`source .venv_gui_prototype/bin/activate && python3.12 tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6` を実施し、`Pump ON status seen=True`, `Pump OFF status seen=True` を含めて BLE command path の fake live 回帰が通ることを確認した
+- settings dialog の `Accepted` 判定例外を修正し、offscreen smoke で「設定更新」と「BLE/Wired mode switch」の両経路が通ることを確認した
+- BLE / wired の接続 UI を `Disconnect` 表示と mode switch 前 disconnect に統一し、offscreen smoke で接続中 controls の enable/disable と mode switch sequencing を確認した
+- user feedback により Bundle A 完了を確認したため、次フェーズは `EXT-002` GUI recording emphasis に移行する
+- `Recording` panel に active accent / badge / detail text を追加し、`python3.12 -m compileall gui_prototype/src/main_window.py gui_prototype/src/theme.py` を実施した
+- `./.venv_gui_prototype/bin/python` による offscreen smoke で `recording_emphasis_smoke_ok` を確認し、`Idle -> REC ACTIVE -> Idle` の visual state 遷移が成立することを確認した
 
 ## 8. 更新ルール
 

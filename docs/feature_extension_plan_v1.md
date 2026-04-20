@@ -34,6 +34,7 @@
 1. まず `protocol 変更なしで回収できる機能` を先に実装する
 2. 次に `GUI 側だけで成立する派生値` を実装する
 3. 最後に `measurement model / protocol に影響する機能` を PoC 付きで導入する
+4. 各 bundle close-out では `small GUI interaction smoke + 実機 sanity` を残す
 
 この順にする理由:
 
@@ -45,9 +46,9 @@
 
 推奨順序は以下とする。
 
-1. `Bundle A`: Firmware UX parity
-2. `Bundle B`: GUI recording emphasis
-3. `Bundle C`: O2 1-cell display and calibration
+1. `Bundle A`: Firmware UX parity `COMPLETE`
+2. `Bundle B`: GUI recording emphasis `COMPLETE`
+3. `Bundle C`: O2 1-cell display and calibration `NEXT`
 4. `Bundle D`: Dual-SDP differential pressure PoC
 5. `Bundle E`: Flow algorithm integration and telemetry expansion
 6. `Bundle F`: End-to-end hardening and operator validation
@@ -156,6 +157,20 @@ PoC は 2 段階に分ける。
 - LED は advertising / connected / fault / target-state を operator に区別可能な形で示す
 - sampling cadence や BLE / wired transport 安定性を壊さない
 
+### 完了メモ
+
+- Bundle A は 2026-04-20 に close した
+- 追加した内容:
+  - local physical pump button
+  - KNF `NMP03 KPDC-B3` 向け PWM pump drive (`20 kHz`, `10-bit`, `OFF=0 %`, `ON=50 %`)
+  - ADS1115 ch0 `zirconia_ip_voltage_v` readback
+  - WS2812 voltage-target / BLE advertising-connected LED behavior
+  - BLE control write hardening と mode-switch / connection UX hardening
+- close-out で確認できたもの:
+  - wired 実機 command path
+  - BLE 実機 pump control / mode switch
+  - GUI 側 settings / connection interaction regressions の解消
+
 ## 5. Bundle B: GUI Recording Emphasis
 
 ### 対象
@@ -186,6 +201,18 @@ PoC は 2 段階に分ける。
 
 - operator が 1 秒以内に recording active / inactive を判別できる
 - narrow window でも layout を崩さない
+
+### 完了メモ
+
+- Bundle B は 2026-04-20 に close した
+- 追加した内容:
+  - `Recording` panel の active / inactive accent state
+  - `REC ACTIVE` badge と session detail text
+  - recording toggle 専用 visual treatment
+- close-out で確認できたもの:
+  - `python3.12 -m compileall gui_prototype/src/main_window.py gui_prototype/src/theme.py`
+  - `./.venv_gui_prototype/bin/python` による offscreen `recording_emphasis_smoke_ok`
+  - dark theme 上で active / inactive の視認差が成立すること
 
 ## 6. Bundle C: O2 1-Cell Display and Calibration
 
