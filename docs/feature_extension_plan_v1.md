@@ -382,8 +382,9 @@ Sensirion の SDP8xx digital datasheet によると:
   - `Sdp8xxSensor` driver
   - `DifferentialPressureFrontend`
   - `SDP810-125Pa` / `SDP811-500Pa` product prefix と hysteresis threshold の board constants
-- current slice では `MeasurementCore` や telemetry schema へはまだ接続していない
-- まずは build を通し、次に実機配線上で bus coexistence / readout sanity を確認する
+- `MeasurementCore` に differential pressure frontend を観測専用で接続し、boot / summary log に `DpSel`, `Dp125`, `Dp500` を出すところまで進めた
+- current slice では telemetry schema へはまだ接続していない
+- 次は実機配線上で bus coexistence / readout sanity を確認する
 
 ## 8. Bundle E: Flow Algorithm Integration and Telemetry Expansion
 

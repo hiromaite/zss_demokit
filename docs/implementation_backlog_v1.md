@@ -1038,8 +1038,11 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - `Sdp8xxSensor` driver を追加し、continuous differential-pressure mode、CRC validation、product identifier read、temperature / scale factor decode を持たせた
 - `DifferentialPressureFrontend` を追加し、`SDP810-125Pa` / `SDP811-500Pa` の dual-sensor readout と hysteresis-based selector の土台を実装した
 - board constants に I2C address、product prefix、selector threshold を追加した
-- current slice ではまだ `MeasurementCore` や transport payload へは統合していない
-- まずは `pio run` で compile-safe を確認し、その後に実機配線で bus coexistence / readout sanity を進める
+- `MeasurementCore` に differential pressure frontend を観測専用で接続し、firmware summary log に `DpSel`, `Dp125`, `Dp500` を出すところまで進めた
+- current slice では transport payload へはまだ統合していない
+- `pio run` と `/dev/cu.usbmodem3101` への upload は通過済みで、boot / summary log 上で dual-SDP frontend の観測が成立している
+- `tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 8` により no-flow baseline を取得し、`DpSel mean=-0.0514 Pa`, `Dp125 mean=-0.0514 Pa`, `Dp500 mean=-0.0586 Pa`, selector は low-range `7/7` を確認した
+- 次は実機上で low-flow / medium-flow を与え、selector handoff と hysteresis を観測する
 
 ### EXT-005. Flow Telemetry Integration
 

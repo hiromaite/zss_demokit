@@ -8,6 +8,7 @@
 #include "app/CommandProcessor.h"
 #include "board/BoardConfig.h"
 #include "measurement/AdcFrontend.h"
+#include "measurement/DifferentialPressureFrontend.h"
 #include "measurement/MeasurementCore.h"
 #include "protocol/PayloadBuilders.h"
 #include "services/Logger.h"
@@ -20,7 +21,10 @@
 namespace {
 
 zss::measurement::AdcFrontend g_adc_frontend;
-zss::measurement::MeasurementCore g_measurement_core(g_adc_frontend);
+zss::measurement::DifferentialPressureFrontend g_differential_pressure_frontend;
+zss::measurement::MeasurementCore g_measurement_core(
+    g_adc_frontend,
+    g_differential_pressure_frontend);
 zss::services::PumpController g_pump_controller(zss::board::kPumpOutputPin);
 zss::services::InputButtonController g_pump_toggle_button(zss::board::kPumpToggleButtonPin);
 zss::services::StatusLedController g_status_led(zss::board::kStatusLedDataPin);
@@ -140,6 +144,22 @@ void logCapabilitiesPreview() {
         serial_payload.max_payload_bytes);
 }
 
+void logDifferentialPressureFrontendStatus() {
+    if (g_measurement_core.differentialPressureAvailable()) {
+        zss::services::Logger::log(
+            zss::services::LogLevel::Info,
+            "Boot",
+            "Dual-SDP frontend initialized.");
+        return;
+    }
+
+    zss::services::Logger::log(
+        zss::services::LogLevel::Warn,
+        "Boot",
+        "Dual-SDP frontend unavailable: %s",
+        g_measurement_core.differentialPressureLastError());
+}
+
 uint16_t selectNominalSamplePeriodMs() {
     if (g_serial_transport.isConnected()) {
         return zss::board::kWiredNominalSamplePeriodMs;
@@ -219,15 +239,21 @@ void emitSummaryLog(uint32_t now_ms) {
     g_last_summary_log_ms = now_ms;
 
     const auto& measurements = g_app_state.latestMeasurements();
+    const auto& differential_pressure =
+        g_measurement_core.latestDifferentialPressureMeasurements();
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Sample",
-        "seq=%lu Vip=%.3fV Vout=%.3fV RTD=%.1fOhm FlowRaw=%.3fV flags=0x%08lX diag=0x%08lX overruns=%lu",
+        "seq=%lu Vip=%.3fV Vout=%.3fV RTD=%.1fOhm FlowRaw=%.3fV DpSel=%.2fPa Dp125=%.2fPa Dp500=%.2fPa DpLow=%u flags=0x%08lX diag=0x%08lX overruns=%lu",
         static_cast<unsigned long>(g_app_state.latestSequence()),
         measurements.zirconia_ip_voltage_v,
         measurements.zirconia_output_voltage_v,
         measurements.heater_rtd_resistance_ohm,
         measurements.flow_sensor_voltage_v,
+        differential_pressure.selected_differential_pressure_pa,
+        differential_pressure.low_range_differential_pressure_pa,
+        differential_pressure.high_range_differential_pressure_pa,
+        static_cast<unsigned>(differential_pressure.selected_from_low_range),
         static_cast<unsigned long>(g_app_state.statusFlags()),
         static_cast<unsigned long>(g_app_state.diagnosticBits()),
         static_cast<unsigned long>(g_app_state.sampleOverrunCount()));
@@ -298,6 +324,7 @@ void setup() {
         static_cast<unsigned>(startup_result.result_code));
 
     logCapabilitiesPreview();
+    logDifferentialPressureFrontendStatus();
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Boot",

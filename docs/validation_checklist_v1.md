@@ -211,6 +211,9 @@
 - `python3.12 -m compileall gui_prototype/src/app_state.py gui_prototype/src/settings_store.py gui_prototype/src/protocol_constants.py gui_prototype/src/dialogs.py gui_prototype/src/main_window.py` を実施し、GUI 変更後も compile 可能であることを確認した
 - `./.venv_gui_prototype/bin/python` による offscreen smoke で `o2_bundle_c_smoke_ok` を確認し、calibration staging、settings persistence、`21.0 %` 表示、uncalibrated 時の `Calibrate` 表示が成立することを確認した
 - user により Bundle C の essential function validation が完了し、ambient-air calibration workflow を現行 bundle close 条件として受け入れた
+- Bundle D の current slice として `Sdp8xxSensor` / `DifferentialPressureFrontend` を追加し、`MeasurementCore` と summary log への観測専用統合後も `./.venv_pio/bin/pio run` が成功することを確認した
+- `/dev/cu.usbmodem3101` へ upload 後の serial summary log で `DpSel`, `Dp125`, `Dp500` が finite 値で継続出力されることを確認した
+- `source .venv_gui_prototype/bin/activate && python3.12 tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 8` を実施し、no-flow baseline として `DpSel mean=-0.0514 Pa`, `Dp125 mean=-0.0514 Pa`, `Dp500 mean=-0.0586 Pa`, selector low `7/7` を確認した
 - right column scroll 対応後の plot height / vertical splitter 挙動は数回調整したが、この時点では local macOS の見た目を accept とし、Windows / 別解像度環境での follow-up visual validation 項目として扱う
 
 ## 8. 更新ルール
