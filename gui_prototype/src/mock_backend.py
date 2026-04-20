@@ -579,7 +579,7 @@ class MockBackend(QObject):
         await self._ble_client.write_gatt_char(
             BLE_CONTROL_CHARACTERISTIC_UUID,
             bytes([opcode]),
-            response=False,
+            response=True,
         )
 
     def _send_ble_opcode(self, opcode: int) -> bool:

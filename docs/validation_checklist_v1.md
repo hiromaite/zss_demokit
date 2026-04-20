@@ -200,6 +200,8 @@
 - KNF `NMP03 KPDC-B3` への切替に合わせて `PumpController` を PWM 駆動へ更新し、`20 kHz`, `10-bit`, `OFF=0 %`, `ON=50 %` を firmware へ反映した
 - PWM 化後は `./.venv_pio/bin/pio run` と `source .venv_gui_prototype/bin/activate && python3.12 tools/protocol_fixture_smoke.py` を再実施し、build と shared protocol regression の継続成立を確認した
 - デバイス再接続後に `./.venv_pio/bin/pio run -t upload --upload-port /dev/cu.usbmodem3101` と `source .venv_gui_prototype/bin/activate && python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` を再実施し、PWM 化後も upload / capabilities / status / telemetry / `Pump ON/OFF` / command error handling が継続動作することを確認した
+- BLE control write を `response=True` に変更し、firmware 側 control characteristic を `WRITE | WRITE_NR` に更新した
+- `source .venv_gui_prototype/bin/activate && python3.12 tools/ble_backend_smoke.py`、`source .venv_gui_prototype/bin/activate && python3.12 tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6` を実施し、`Pump ON status seen=True`, `Pump OFF status seen=True` を含めて BLE command path の fake live 回帰が通ることを確認した
 
 ## 8. 更新ルール
 

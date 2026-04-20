@@ -55,6 +55,8 @@ class ProbeSummary:
     error_count: int
     stall_warning_count: int
     pump_command_requests: int
+    pump_on_status_seen: bool
+    pump_off_status_seen: bool
     status_requests: int
     ping_requests: int
     reconnect_performed: bool
@@ -162,6 +164,8 @@ class GuiBleSessionProbe(QObject):
         self.error_count = 0
         self.stall_warning_count = 0
         self.pump_command_requests = 0
+        self.pump_on_status_seen = False
+        self.pump_off_status_seen = False
         self.status_requests = 0
         self.ping_requests = 0
         self.reconnect_performed = False
@@ -220,6 +224,8 @@ class GuiBleSessionProbe(QObject):
                 error_count=self.error_count,
                 stall_warning_count=self.stall_warning_count,
                 pump_command_requests=self.pump_command_requests,
+                pump_on_status_seen=self.pump_on_status_seen,
+                pump_off_status_seen=self.pump_off_status_seen,
                 status_requests=self.status_requests,
                 ping_requests=self.ping_requests,
                 reconnect_performed=self.reconnect_performed,
@@ -305,8 +311,13 @@ class GuiBleSessionProbe(QObject):
     def _on_capabilities_changed(self, _payload: dict[str, object]) -> None:
         self.capabilities_events += 1
 
-    def _on_status_changed(self, _payload: dict[str, object]) -> None:
+    def _on_status_changed(self, payload: dict[str, object]) -> None:
         self.status_events += 1
+        pump_state = str(payload.get("pump_state", "") or "")
+        if pump_state == "ON":
+            self.pump_on_status_seen = True
+        elif pump_state == "OFF":
+            self.pump_off_status_seen = True
 
     def _on_telemetry(self, point: object) -> None:
         if self._finished:
@@ -441,6 +452,8 @@ class GuiBleSessionProbe(QObject):
             error_count=self.error_count,
             stall_warning_count=self.stall_warning_count,
             pump_command_requests=self.pump_command_requests,
+            pump_on_status_seen=self.pump_on_status_seen,
+            pump_off_status_seen=self.pump_off_status_seen,
             status_requests=self.status_requests,
             ping_requests=self.ping_requests,
             reconnect_performed=self.reconnect_performed,
@@ -462,6 +475,10 @@ class GuiBleSessionProbe(QObject):
             failures.append("recording was not finalized successfully")
         if summary.pump_command_requests < 2:
             failures.append("pump ON/OFF commands were not both exercised")
+        if not summary.pump_on_status_seen:
+            failures.append("pump ON status was not observed")
+        if not summary.pump_off_status_seen:
+            failures.append("pump OFF status was not observed")
         if summary.status_requests < 1:
             failures.append("status request was not exercised")
         if summary.ping_requests < 1:
@@ -701,6 +718,8 @@ def main() -> int:
         print(f"Error logs observed: {summary.error_count}")
         print(f"Stall warnings observed: {summary.stall_warning_count}")
         print(f"Pump command requests: {summary.pump_command_requests}")
+        print(f"Pump ON status seen: {summary.pump_on_status_seen}")
+        print(f"Pump OFF status seen: {summary.pump_off_status_seen}")
         print(f"Status requests: {summary.status_requests}")
         print(f"Ping requests: {summary.ping_requests}")
         print(f"Reconnect performed: {summary.reconnect_performed}")

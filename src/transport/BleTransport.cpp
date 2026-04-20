@@ -108,7 +108,7 @@ bool BleTransport::begin() {
 
     g_control_characteristic = g_control_service->createCharacteristic(
         protocol::kBlePumpControlCharacteristicUuid,
-        BLECharacteristic::PROPERTY_WRITE);
+        BLECharacteristic::PROPERTY_WRITE | BLECharacteristic::PROPERTY_WRITE_NR);
     g_telemetry_characteristic = g_monitoring_service->createCharacteristic(
         protocol::kBleSensorDataCharacteristicUuid,
         BLECharacteristic::PROPERTY_NOTIFY);

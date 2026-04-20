@@ -376,6 +376,8 @@
 - disconnect 時の BLE notify / capabilities availability flags cleanup は実装済み
 - `tools/ble_smoke.py` は reconnect cycles、`observe-duration`、telemetry continuity summary を扱える形に更新済み
 - `tools/ble_backend_smoke.py` により fake client ベースの reconnect、event log、post-command status refresh 回帰を確認可能
+- GUI 側 BLE control write は `write with response` を使う方針へ更新し、firmware 側 control characteristic も `WRITE | WRITE_NR` を受けるよう harden した
+- `tools/gui_ble_session_probe.py` は `Pump ON/OFF request 数` に加えて、実際の `pump_state ON/OFF` status 観測も pass 条件に含めるよう更新した
 - live disconnect / reconnect と telemetry continuity の追加実地確認が残る
 - exec 環境では CoreBluetooth scan が CLI から安定しないため、live continuity の実地確認は `INT-004` の local GUI / hand-run path で扱う
 - beta 扱いに向けた proposal は、`180 s` 以上の live session、session 中の `Pump ON/OFF` と `Get Status`、recording finalize、manual reconnect 1 回成功を最低線とする
