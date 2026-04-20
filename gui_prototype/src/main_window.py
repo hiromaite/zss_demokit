@@ -313,13 +313,12 @@ class MainWindow(QMainWindow):
         self.left_column.setMinimumWidth(272)
         self.left_column.setMaximumWidth(420)
         self.right_column.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.content_splitter = QSplitter(Qt.Horizontal)
-        self.content_splitter.setChildrenCollapsible(False)
-        self.content_splitter.addWidget(self.left_column)
-        self.content_splitter.addWidget(self.right_column)
-        self.content_splitter.setStretchFactor(0, 0)
-        self.content_splitter.setStretchFactor(1, 1)
-        layout.addWidget(self.content_splitter, 1)
+        columns = QHBoxLayout()
+        columns.setContentsMargins(0, 0, 0, 0)
+        columns.setSpacing(14)
+        columns.addWidget(self.left_column, 0)
+        columns.addWidget(self.right_column, 1)
+        layout.addLayout(columns, 1)
         QTimer.singleShot(0, self._apply_column_widths)
 
     def _build_left_column(self) -> QWidget:
@@ -1037,12 +1036,11 @@ class MainWindow(QMainWindow):
         self._apply_column_widths()
 
     def _apply_column_widths(self) -> None:
-        if not hasattr(self, "content_splitter"):
+        if not hasattr(self, "left_column"):
             return
         available_width = max(640, self.width() - 36)
         left_width = max(272, min(360, int(available_width * 0.26)))
-        right_width = max(420, available_width - left_width)
-        self.content_splitter.setSizes([left_width, right_width])
+        self.left_column.setFixedWidth(left_width)
 
     def _apply_plot_splitter_sizes(self) -> None:
         if hasattr(self, "plot_splitter"):
