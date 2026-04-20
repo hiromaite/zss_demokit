@@ -11,7 +11,13 @@ from typing import TextIO
 from PySide6.QtCore import QObject, Signal
 
 from mock_backend import TelemetryPoint
-from protocol_constants import BLE_MODE, DERIVED_METRIC_POLICY_ID, STATUS_FLAG_PUMP_ON, derive_flow_rate_lpm, format_status_flags
+from protocol_constants import (
+    BLE_MODE,
+    DERIVED_METRIC_POLICY_ID,
+    STATUS_FLAG_PUMP_ON,
+    derive_flow_rate_lpm_from_inputs,
+    format_status_flags,
+)
 from recording_io import create_recording_paths, write_csv_header
 
 
@@ -122,7 +128,10 @@ class PlotController:
             self.plot_sequence_origin = point.sequence
 
         elapsed = ((point.sequence - self.plot_sequence_origin) * point.nominal_sample_period_ms) / 1000.0
-        flow_rate = derive_flow_rate_lpm(point.flow_sensor_voltage_v)
+        flow_rate = derive_flow_rate_lpm_from_inputs(
+            point.flow_sensor_voltage_v,
+            point.differential_pressure_selected_pa,
+        )
 
         self.time_values.append(elapsed)
         self.zirconia_values.append(point.zirconia_output_voltage_v)
@@ -534,9 +543,15 @@ class RecordingController:
         transport_type: str,
     ) -> float:
         if self._csv_writer is None:
-            return derive_flow_rate_lpm(point.flow_sensor_voltage_v)
+            return derive_flow_rate_lpm_from_inputs(
+                point.flow_sensor_voltage_v,
+                point.differential_pressure_selected_pa,
+            )
 
-        flow_rate_lpm = derive_flow_rate_lpm(point.flow_sensor_voltage_v)
+        flow_rate_lpm = derive_flow_rate_lpm_from_inputs(
+            point.flow_sensor_voltage_v,
+            point.differential_pressure_selected_pa,
+        )
         host_received_at = point.host_received_at.astimezone()
         host_received_unix_ms = int(point.host_received_at.timestamp() * 1000)
         if self._last_sequence is None:

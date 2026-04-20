@@ -49,8 +49,8 @@
 1. `Bundle A`: Firmware UX parity `COMPLETE`
 2. `Bundle B`: GUI recording emphasis `COMPLETE`
 3. `Bundle C`: O2 1-cell display and calibration `COMPLETE`
-4. `Bundle D`: Dual-SDP differential pressure PoC `IN_PROGRESS`
-5. `Bundle E`: Flow algorithm integration and telemetry expansion
+4. `Bundle D`: Dual-SDP differential pressure PoC `COMPLETE`
+5. `Bundle E`: Flow algorithm integration and telemetry expansion `IN_PROGRESS`
 6. `Bundle F`: End-to-end hardening and operator validation
 
 ## 4. Bundle A: Firmware UX Parity
@@ -384,7 +384,14 @@ Sensirion の SDP8xx digital datasheet によると:
   - `SDP810-125Pa` / `SDP811-500Pa` product prefix と hysteresis threshold の board constants
 - `MeasurementCore` に differential pressure frontend を観測専用で接続し、boot / summary log に `DpSel`, `Dp125`, `Dp500` を出すところまで進めた
 - current slice では telemetry schema へはまだ接続していない
-- 次は実機配線上で bus coexistence / readout sanity を確認する
+- `/dev/cu.usbmodem3101` 実機上で no-flow / low-flow / medium-flow / high-flow / return-to-no-flow を観測した
+- current observations:
+  - no-flow: `DpSel mean=-0.0460 Pa`, selector low `10/10`
+  - low-flow: `DpSel mean=-0.5025 Pa`, selector low `8/8`
+  - medium-flow: `selector low=7 high=1`
+  - high-flow: `selector low=6 high=2`
+  - return-to-no-flow: selector low `7/7`
+- これにより same-bus coexistence, finite readout, selector activity, return-side hysteresis を確認できたため、Bundle D は close する
 
 ## 8. Bundle E: Flow Algorithm Integration and Telemetry Expansion
 
@@ -551,6 +558,11 @@ else:
 
 - dual-SDP hardware / firmware feasibility
 - selector threshold の bench data
+
+現状:
+
+- close 済み
+- next focus は `Bundle E` の transport / GUI integration
 
 ### Step 4
 

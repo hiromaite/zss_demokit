@@ -61,6 +61,8 @@ def main() -> int:
     selected_high_count = 0
 
     with serial.Serial(args.port, args.baudrate, timeout=0.25) as ser:
+        ser.dtr = False
+        ser.rts = False
         time.sleep(args.settle_s)
         ser.reset_input_buffer()
         ser.reset_output_buffer()

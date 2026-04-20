@@ -214,6 +214,9 @@
 - Bundle D の current slice として `Sdp8xxSensor` / `DifferentialPressureFrontend` を追加し、`MeasurementCore` と summary log への観測専用統合後も `./.venv_pio/bin/pio run` が成功することを確認した
 - `/dev/cu.usbmodem3101` へ upload 後の serial summary log で `DpSel`, `Dp125`, `Dp500` が finite 値で継続出力されることを確認した
 - `source .venv_gui_prototype/bin/activate && python3.12 tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 8` を実施し、no-flow baseline として `DpSel mean=-0.0514 Pa`, `Dp125 mean=-0.0514 Pa`, `Dp500 mean=-0.0586 Pa`, selector low `7/7` を確認した
+- 同 probe により low-flow, medium-flow, high-flow, return-to-no-flow を観測し、selector high-side activity と low-side return を確認した
+- Bundle E の事前整備として、GUI は optional `differential_pressure_selected_pa` を受け取れるよう更新し、field がある場合はそれを優先して flow rate を算出する fallback-safe path を導入した
+- `python3.12 -m compileall gui_prototype/src/protocol_constants.py gui_prototype/src/mock_backend.py gui_prototype/src/controllers.py` と `source .venv_gui_prototype/bin/activate && python3.12 tools/protocol_fixture_smoke.py` を実施し、GUI regression がないことを確認した
 - right column scroll 対応後の plot height / vertical splitter 挙動は数回調整したが、この時点では local macOS の見た目を accept とし、Windows / 別解像度環境での follow-up visual validation 項目として扱う
 
 ## 8. 更新ルール

@@ -87,6 +87,7 @@ class TelemetryPoint:
     zirconia_output_voltage_v: float
     heater_rtd_resistance_ohm: float
     flow_sensor_voltage_v: float
+    differential_pressure_selected_pa: float | None = None
 
 
 class MockBackend(QObject):
@@ -623,6 +624,11 @@ class MockBackend(QObject):
             zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
             heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
             flow_sensor_voltage_v=float(payload["flow_sensor_voltage_v"]),
+            differential_pressure_selected_pa=(
+                float(payload["differential_pressure_selected_pa"])
+                if payload.get("differential_pressure_selected_pa") is not None
+                else None
+            ),
         )
         self.telemetry_generated.emit(point)
 
@@ -750,6 +756,11 @@ class MockBackend(QObject):
                 zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
                 heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
                 flow_sensor_voltage_v=float(payload["flow_sensor_voltage_v"]),
+                differential_pressure_selected_pa=(
+                    float(payload["differential_pressure_selected_pa"])
+                    if payload.get("differential_pressure_selected_pa") is not None
+                    else None
+                ),
             )
             self.telemetry_generated.emit(point)
             return
@@ -890,6 +901,7 @@ class MockBackend(QObject):
             zirconia_output_voltage_v=zirconia,
             heater_rtd_resistance_ohm=heater,
             flow_sensor_voltage_v=flow_voltage,
+            differential_pressure_selected_pa=None,
         )
 
         self.telemetry_generated.emit(point)

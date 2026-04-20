@@ -152,6 +152,15 @@ def derive_differential_pressure_pa(flow_sensor_voltage_v: float) -> float:
     )
 
 
+def resolve_differential_pressure_pa(
+    flow_sensor_voltage_v: float,
+    differential_pressure_selected_pa: float | None = None,
+) -> float:
+    if differential_pressure_selected_pa is not None and math.isfinite(differential_pressure_selected_pa):
+        return differential_pressure_selected_pa
+    return derive_differential_pressure_pa(flow_sensor_voltage_v)
+
+
 def derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa: float) -> float:
     return max(
         0.0,
@@ -162,6 +171,17 @@ def derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa:
 
 def derive_flow_rate_lpm(flow_sensor_voltage_v: float) -> float:
     differential_pressure_pa = derive_differential_pressure_pa(flow_sensor_voltage_v)
+    return derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa)
+
+
+def derive_flow_rate_lpm_from_inputs(
+    flow_sensor_voltage_v: float,
+    differential_pressure_selected_pa: float | None = None,
+) -> float:
+    differential_pressure_pa = resolve_differential_pressure_pa(
+        flow_sensor_voltage_v,
+        differential_pressure_selected_pa,
+    )
     return derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa)
 
 
