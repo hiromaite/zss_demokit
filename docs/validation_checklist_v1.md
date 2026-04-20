@@ -207,6 +207,9 @@
 - user feedback により Bundle A 完了を確認したため、次フェーズは `EXT-002` GUI recording emphasis に移行する
 - `Recording` panel に active accent / badge / detail text を追加し、`python3.12 -m compileall gui_prototype/src/main_window.py gui_prototype/src/theme.py` を実施した
 - `./.venv_gui_prototype/bin/python` による offscreen smoke で `recording_emphasis_smoke_ok` を確認し、`Idle -> REC ACTIVE -> Idle` の visual state 遷移が成立することを確認した
+- Bundle C first pass として `O2 Concentration (1-cell)` card、ambient-air calibration / reset action、`QSettings` persistence を追加した
+- `python3.12 -m compileall gui_prototype/src/app_state.py gui_prototype/src/settings_store.py gui_prototype/src/protocol_constants.py gui_prototype/src/dialogs.py gui_prototype/src/main_window.py` を実施し、GUI 変更後も compile 可能であることを確認した
+- `./.venv_gui_prototype/bin/python` による offscreen smoke で `o2_bundle_c_smoke_ok` を確認し、calibration staging、settings persistence、`21.0 %` 表示、uncalibrated 時の `Calibrate` 表示が成立することを確認した
 
 ## 8. 更新ルール
 

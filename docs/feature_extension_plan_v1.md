@@ -48,7 +48,7 @@
 
 1. `Bundle A`: Firmware UX parity `COMPLETE`
 2. `Bundle B`: GUI recording emphasis `COMPLETE`
-3. `Bundle C`: O2 1-cell display and calibration `NEXT`
+3. `Bundle C`: O2 1-cell display and calibration `IN_PROGRESS`
 4. `Bundle D`: Dual-SDP differential pressure PoC
 5. `Bundle E`: Flow algorithm integration and telemetry expansion
 6. `Bundle F`: End-to-end hardening and operator validation
@@ -289,6 +289,17 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - 未 calibration 時に misleading な値を出さない
 - calibration 後に ambient air で `21 %` 近傍を示す
 - formula, anchor, calibration timestamp が operator から追跡できる
+
+### 実装メモ
+
+- 2026-04-20 時点で first pass を追加済み
+- 追加した内容:
+  - `O2 Concentration (1-cell)` metric card
+  - `Settings > Device` 内の ambient-air calibration / reset actions
+  - `QSettings` への calibration anchor / timestamp persistence
+- まだ残るもの:
+  - 実機上で ambient-air calibration 後に `21 %` 近傍となることの operator validation
+  - 必要なら polarity reverse 対応の有効化判断
 
 ## 7. Bundle D: Dual-SDP Differential Pressure PoC
 

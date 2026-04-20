@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import math
 from typing import Callable
 
 import pyqtgraph as pg
@@ -41,6 +42,7 @@ from mock_backend import MockBackend, TelemetryPoint
 from protocol_constants import (
     BLE_MODE,
     WIRED_MODE,
+    derive_o2_concentration_percent,
     transport_type_for_mode,
 )
 from settings_store import SettingsStore
@@ -497,16 +499,20 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         cards = QWidget()
-        cards_layout = QHBoxLayout(cards)
+        cards_layout = QGridLayout(cards)
         cards_layout.setContentsMargins(0, 0, 0, 0)
         cards_layout.setSpacing(10)
 
         self.metric_zirconia = MetricCard("Zirconia Output Voltage", "V")
+        self.metric_o2 = MetricCard("O2 Concentration (1-cell)", "%")
         self.metric_heater = MetricCard("Heater RTD Resistance", "Ohm")
         self.metric_flow = MetricCard("Flow Rate", "L/min")
-        cards_layout.addWidget(self.metric_zirconia)
-        cards_layout.addWidget(self.metric_heater)
-        cards_layout.addWidget(self.metric_flow)
+        cards_layout.addWidget(self.metric_zirconia, 0, 0)
+        cards_layout.addWidget(self.metric_o2, 0, 1)
+        cards_layout.addWidget(self.metric_heater, 1, 0)
+        cards_layout.addWidget(self.metric_flow, 1, 1)
+        cards_layout.setColumnStretch(0, 1)
+        cards_layout.setColumnStretch(1, 1)
         layout.addWidget(cards)
 
         toolbar, toolbar_layout = _panel("Plot Toolbar", "Time range, time-axis display, and view reset controls.")
@@ -637,6 +643,7 @@ class MainWindow(QMainWindow):
 
     def _apply_persisted_preferences(self) -> None:
         self._update_axis_labels()
+        self._refresh_metric_cards()
         self._sync_pump_toggle()
         self._sync_recording_controls()
         self._refresh_plots()
@@ -663,6 +670,8 @@ class MainWindow(QMainWindow):
         self.app_settings.plot.selected_plot = dialog.selected_plot
         self.app_settings.logging.recording_directory = dialog.recording_directory
         self.app_settings.logging.partial_recovery_notice_enabled = dialog.partial_recovery_notice_enabled
+        self.app_settings.o2.air_calibration_voltage_v = dialog.selected_o2_air_calibration_voltage_v
+        self.app_settings.o2.calibrated_at_iso = dialog.selected_o2_calibrated_at_iso
 
     def _apply_settings_to_widgets(self) -> None:
         self.time_span_combo.setCurrentText(self.app_settings.plot.time_span)
@@ -789,9 +798,7 @@ class MainWindow(QMainWindow):
             self._schedule_csv_flush()
 
         metrics = self.plot_controller.metric_snapshot()
-        self.metric_zirconia.set_value(f"{metrics.get('zirconia_output_voltage_v', point.zirconia_output_voltage_v):0.3f} V")
-        self.metric_heater.set_value(f"{metrics.get('heater_rtd_resistance_ohm', point.heater_rtd_resistance_ohm):0.1f} Ohm")
-        self.metric_flow.set_value(f"{metrics.get('flow_rate_lpm', 0.0):0.3f} L/min")
+        self._refresh_metric_cards(metrics, point)
 
         if self.recording_controller.is_recording and self.recording_controller.started_at is not None:
             elapsed_record = max(0, int((datetime.now() - self.recording_controller.started_at).total_seconds()))
@@ -1015,10 +1022,16 @@ class MainWindow(QMainWindow):
             self._append_log(severity, message)
 
     def _open_settings(self) -> None:
+        current_metrics = self.plot_controller.metric_snapshot()
+        current_zirconia_voltage_v = current_metrics.get("zirconia_output_voltage_v")
+        if current_zirconia_voltage_v is not None and not math.isfinite(current_zirconia_voltage_v):
+            current_zirconia_voltage_v = None
+
         dialog = SettingsDialog(
             self.app_settings,
             current_mode=self.mode,
             connection_identifier=self.ui_state.connection.identifier,
+            current_zirconia_voltage_v=current_zirconia_voltage_v,
             parent=self,
         )
         dialog.device_action_requested.connect(self._handle_settings_device_action)
@@ -1026,11 +1039,18 @@ class MainWindow(QMainWindow):
             return
         previous_mode = self.mode
         requested_mode = dialog.requested_mode
+        previous_o2_air_calibration_voltage_v = self.app_settings.o2.air_calibration_voltage_v
+        previous_o2_calibrated_at_iso = self.app_settings.o2.calibrated_at_iso
         self._apply_dialog_settings(dialog)
         if requested_mode == previous_mode:
             self.app_settings.last_mode = previous_mode
             self._apply_settings_to_widgets()
+            self._refresh_metric_cards()
             self._persist_current_settings()
+            self._log_o2_calibration_changes(
+                previous_o2_air_calibration_voltage_v,
+                previous_o2_calibrated_at_iso,
+            )
             self._append_log("info", "Settings updated.")
             return
 
@@ -1040,6 +1060,10 @@ class MainWindow(QMainWindow):
             self._apply_settings_to_widgets()
             self._persist_current_settings()
             return
+        self._log_o2_calibration_changes(
+            previous_o2_air_calibration_voltage_v,
+            previous_o2_calibrated_at_iso,
+        )
         self._switch_mode(requested_mode)
 
     def _switch_mode(self, new_mode: str) -> None:
@@ -1064,6 +1088,7 @@ class MainWindow(QMainWindow):
         self._apply_settings_to_widgets()
         self._prime_mode_specific_lists()
         self.metric_zirconia.set_value("--")
+        self.metric_o2.set_value("Calibrate")
         self.metric_heater.set_value("--")
         self.metric_flow.set_value("--")
         self._sync_pump_toggle()
@@ -1086,6 +1111,60 @@ class MainWindow(QMainWindow):
         for curve in self.plot_curves.values():
             curve.setData([], [])
         self.sensor_secondary_curve.setData([], [])
+
+    def _refresh_metric_cards(self, metrics: dict[str, float] | None = None, point: TelemetryPoint | None = None) -> None:
+        metrics = metrics or self.plot_controller.metric_snapshot()
+        zirconia_value = metrics.get("zirconia_output_voltage_v")
+        heater_value = metrics.get("heater_rtd_resistance_ohm")
+        flow_value = metrics.get("flow_rate_lpm")
+
+        if point is not None:
+            zirconia_value = zirconia_value if zirconia_value is not None else point.zirconia_output_voltage_v
+            heater_value = heater_value if heater_value is not None else point.heater_rtd_resistance_ohm
+            flow_value = flow_value if flow_value is not None else 0.0
+
+        self.metric_zirconia.set_value("--" if zirconia_value is None else f"{zirconia_value:0.3f} V")
+        self.metric_heater.set_value("--" if heater_value is None else f"{heater_value:0.1f} Ohm")
+        self.metric_flow.set_value("--" if flow_value is None else f"{flow_value:0.3f} L/min")
+        self.metric_o2.set_value(self._format_o2_metric_value(zirconia_value))
+
+    def _format_o2_metric_value(self, zirconia_value: float | None) -> str:
+        if zirconia_value is None or not math.isfinite(zirconia_value):
+            return "--"
+
+        o2_percent = derive_o2_concentration_percent(
+            zirconia_value,
+            air_calibration_voltage_v=self.app_settings.o2.air_calibration_voltage_v,
+            zero_reference_voltage_v=self.app_settings.o2.zero_reference_voltage_v,
+            ambient_reference_percent=self.app_settings.o2.ambient_reference_percent,
+            invert_polarity=self.app_settings.o2.invert_polarity,
+        )
+        if o2_percent is None:
+            return "Calibrate"
+        return f"{o2_percent:0.1f} %"
+
+    def _log_o2_calibration_changes(
+        self,
+        previous_air_calibration_voltage_v: float | None,
+        previous_calibrated_at_iso: str,
+    ) -> None:
+        current_air_calibration_voltage_v = self.app_settings.o2.air_calibration_voltage_v
+        current_calibrated_at_iso = self.app_settings.o2.calibrated_at_iso
+        if (
+            previous_air_calibration_voltage_v == current_air_calibration_voltage_v
+            and previous_calibrated_at_iso == current_calibrated_at_iso
+        ):
+            return
+
+        if current_air_calibration_voltage_v is None:
+            self._append_log("info", "O2 ambient-air calibration reset.")
+            return
+
+        timestamp_text = current_calibrated_at_iso or "timestamp unavailable"
+        self._append_log(
+            "info",
+            f"O2 ambient-air calibration updated at {current_air_calibration_voltage_v:0.3f} V ({timestamp_text}).",
+        )
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._stop_recording()

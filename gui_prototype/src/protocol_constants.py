@@ -101,6 +101,8 @@ DIFFERENTIAL_PRESSURE_DUMMY_GAIN_PA_PER_V = 100.0
 DIFFERENTIAL_PRESSURE_DUMMY_OFFSET_PA = 0.0
 ORIFICE_FLOW_DUMMY_GAIN_LPM_PER_SQRT_PA = 1.0
 ORIFICE_FLOW_DUMMY_OFFSET_LPM = 0.0
+O2_ZERO_REFERENCE_V = 2.5
+O2_AMBIENT_REFERENCE_PERCENT = 21.0
 
 
 def nominal_sample_period_ms_for_mode(mode: str) -> int:
@@ -161,6 +163,29 @@ def derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa:
 def derive_flow_rate_lpm(flow_sensor_voltage_v: float) -> float:
     differential_pressure_pa = derive_differential_pressure_pa(flow_sensor_voltage_v)
     return derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa)
+
+
+def derive_o2_concentration_percent(
+    zirconia_output_voltage_v: float,
+    *,
+    air_calibration_voltage_v: float | None,
+    zero_reference_voltage_v: float = O2_ZERO_REFERENCE_V,
+    ambient_reference_percent: float = O2_AMBIENT_REFERENCE_PERCENT,
+    invert_polarity: bool = False,
+) -> float | None:
+    if air_calibration_voltage_v is None:
+        return None
+    if not math.isfinite(zirconia_output_voltage_v) or not math.isfinite(air_calibration_voltage_v):
+        return None
+
+    denominator = zero_reference_voltage_v - air_calibration_voltage_v
+    if abs(denominator) < 1e-9:
+        return None
+
+    normalized = (zero_reference_voltage_v - zirconia_output_voltage_v) / denominator
+    if invert_polarity:
+        normalized *= -1.0
+    return max(0.0, min(100.0, normalized * ambient_reference_percent))
 
 
 def result_code_to_text(result_code: int) -> str:

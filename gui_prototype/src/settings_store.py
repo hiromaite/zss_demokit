@@ -5,7 +5,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QSettings
 
-from app_state import AppSettings, LoggingPreferences, PlotPreferences, WindowPreferences
+from app_state import AppSettings, LoggingPreferences, O2CalibrationPreferences, PlotPreferences, WindowPreferences
 from protocol_constants import BLE_MODE
 from recording_io import recording_directory
 
@@ -40,6 +40,22 @@ class SettingsStore:
             ),
         )
 
+        settings.o2 = O2CalibrationPreferences(
+            zero_reference_voltage_v=self._to_float(
+                self._settings.value("o2/zero_reference_voltage_v", 2.5),
+                2.5,
+            ),
+            ambient_reference_percent=self._to_float(
+                self._settings.value("o2/ambient_reference_percent", 21.0),
+                21.0,
+            ),
+            air_calibration_voltage_v=self._to_optional_float(
+                self._settings.value("o2/air_calibration_voltage_v", "")
+            ),
+            calibrated_at_iso=str(self._settings.value("o2/calibrated_at_iso", "")),
+            invert_polarity=self._to_bool(self._settings.value("o2/invert_polarity", False)),
+        )
+
         settings.windows = WindowPreferences(
             main_window_width=int(self._settings.value("windows/main_window_width", settings.windows.main_window_width)),
             main_window_height=int(self._settings.value("windows/main_window_height", settings.windows.main_window_height)),
@@ -65,6 +81,14 @@ class SettingsStore:
             "logging/partial_recovery_notice_enabled",
             settings.logging.partial_recovery_notice_enabled,
         )
+        self._settings.setValue("o2/zero_reference_voltage_v", settings.o2.zero_reference_voltage_v)
+        self._settings.setValue("o2/ambient_reference_percent", settings.o2.ambient_reference_percent)
+        self._settings.setValue(
+            "o2/air_calibration_voltage_v",
+            "" if settings.o2.air_calibration_voltage_v is None else settings.o2.air_calibration_voltage_v,
+        )
+        self._settings.setValue("o2/calibrated_at_iso", settings.o2.calibrated_at_iso)
+        self._settings.setValue("o2/invert_polarity", settings.o2.invert_polarity)
         self._settings.setValue("windows/main_window_width", settings.windows.main_window_width)
         self._settings.setValue("windows/main_window_height", settings.windows.main_window_height)
         self._settings.setValue("windows/launcher_window_width", settings.windows.launcher_window_width)
@@ -82,6 +106,22 @@ class SettingsStore:
         if isinstance(value, str):
             return value.lower() in {"1", "true", "yes", "on"}
         return bool(value)
+
+    @staticmethod
+    def _to_float(value: object, default: float) -> float:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _to_optional_float(value: object) -> float | None:
+        if value in {"", None}:
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
 
     def _load_manual_ranges(self) -> dict[str, tuple[float, float]]:
         raw = self._settings.value("plot/manual_y_ranges", "")

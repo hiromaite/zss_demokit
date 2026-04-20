@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Signal
@@ -141,12 +142,16 @@ class SettingsDialog(QDialog):
         settings: AppSettings,
         current_mode: str,
         connection_identifier: str,
+        current_zirconia_voltage_v: float | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._settings = settings
         self._current_mode = current_mode
         self._connection_identifier = connection_identifier
+        self._current_zirconia_voltage_v = current_zirconia_voltage_v
+        self._pending_o2_air_calibration_voltage_v = settings.o2.air_calibration_voltage_v
+        self._pending_o2_calibrated_at_iso = settings.o2.calibrated_at_iso
         self.setWindowTitle("Settings")
         self.resize(880, 580)
 
@@ -224,6 +229,14 @@ class SettingsDialog(QDialog):
     @property
     def partial_recovery_notice_enabled(self) -> bool:
         return self.partial_recovery_notice_check.isChecked()
+
+    @property
+    def selected_o2_air_calibration_voltage_v(self) -> float | None:
+        return self._pending_o2_air_calibration_voltage_v
+
+    @property
+    def selected_o2_calibrated_at_iso(self) -> str:
+        return self._pending_o2_calibrated_at_iso
 
     def _page_wrapper(self) -> tuple[QWidget, QVBoxLayout]:
         page = QWidget()
@@ -358,6 +371,45 @@ class SettingsDialog(QDialog):
         action_row.addStretch(1)
         action_layout.addLayout(action_row)
         layout.addWidget(action_card)
+
+        calibration_card = QFrame()
+        calibration_card.setObjectName("SurfaceCard")
+        calibration_layout = QVBoxLayout(calibration_card)
+        calibration_title = QLabel("O2 Calibration (1-cell)")
+        calibration_title.setObjectName("SectionTitle")
+        calibration_hint = QLabel(
+            "Use the current zirconia output voltage while the sensor is resting in ambient air. "
+            "The GUI will keep 2.5 V as the 0 % anchor and store the ambient point as the 21 % anchor."
+        )
+        calibration_hint.setObjectName("SectionHint")
+        calibration_hint.setWordWrap(True)
+        calibration_layout.addWidget(calibration_title)
+        calibration_layout.addWidget(calibration_hint)
+
+        self.o2_calibration_status_label = QLabel("")
+        self.o2_calibration_status_label.setObjectName("SectionHint")
+        self.o2_calibration_status_label.setWordWrap(True)
+        calibration_layout.addWidget(self.o2_calibration_status_label)
+
+        self.o2_calibration_live_label = QLabel("")
+        self.o2_calibration_live_label.setObjectName("SectionHint")
+        self.o2_calibration_live_label.setWordWrap(True)
+        calibration_layout.addWidget(self.o2_calibration_live_label)
+
+        calibration_row = QHBoxLayout()
+        self.o2_calibrate_button = QPushButton("Calibrate to Ambient Air (21%)")
+        self.o2_calibrate_button.setObjectName("PrimaryButton")
+        self.o2_calibrate_button.clicked.connect(self._calibrate_o2_to_ambient_air)
+        self.o2_reset_button = QPushButton("Reset O2 Calibration")
+        self.o2_reset_button.setObjectName("SecondaryButton")
+        self.o2_reset_button.clicked.connect(self._reset_o2_calibration)
+        calibration_row.addWidget(self.o2_calibrate_button)
+        calibration_row.addWidget(self.o2_reset_button)
+        calibration_row.addStretch(1)
+        calibration_layout.addLayout(calibration_row)
+        layout.addWidget(calibration_card)
+
+        self._refresh_o2_calibration_state()
         layout.addStretch(1)
         return page
 
@@ -406,3 +458,45 @@ class SettingsDialog(QDialog):
         ok_button = self.button_box.button(QDialogButtonBox.Ok)
         if ok_button is not None:
             ok_button.setText("Save and Switch")
+
+    def _calibrate_o2_to_ambient_air(self) -> None:
+        if self._current_zirconia_voltage_v is None:
+            self._refresh_o2_calibration_state(message="Live zirconia voltage is unavailable.")
+            return
+
+        self._pending_o2_air_calibration_voltage_v = float(self._current_zirconia_voltage_v)
+        self._pending_o2_calibrated_at_iso = datetime.now().isoformat(timespec="seconds")
+        self._refresh_o2_calibration_state(message="Ambient-air O2 calibration staged. Save settings to apply it.")
+
+    def _reset_o2_calibration(self) -> None:
+        self._pending_o2_air_calibration_voltage_v = None
+        self._pending_o2_calibrated_at_iso = ""
+        self._refresh_o2_calibration_state(message="O2 calibration reset is staged. Save settings to apply it.")
+
+    def _refresh_o2_calibration_state(self, message: str | None = None) -> None:
+        live_voltage = self._current_zirconia_voltage_v
+        if live_voltage is None:
+            self.o2_calibration_live_label.setText("Live zirconia voltage: unavailable")
+            self.o2_calibrate_button.setEnabled(False)
+        else:
+            self.o2_calibration_live_label.setText(f"Live zirconia voltage: {live_voltage:0.3f} V")
+            self.o2_calibrate_button.setEnabled(True)
+
+        if self._pending_o2_air_calibration_voltage_v is None:
+            status_text = "Current calibration state: not calibrated"
+            if message:
+                status_text = f"{status_text}. {message}"
+            self.o2_calibration_status_label.setText(status_text)
+            self.o2_reset_button.setEnabled(bool(self._settings.o2.air_calibration_voltage_v))
+            return
+
+        timestamp_text = self._pending_o2_calibrated_at_iso or "timestamp unavailable"
+        status_text = (
+            "Current calibration state: "
+            f"ambient anchor {self._pending_o2_air_calibration_voltage_v:0.3f} V "
+            f"({timestamp_text})"
+        )
+        if message:
+            status_text = f"{status_text}. {message}"
+        self.o2_calibration_status_label.setText(status_text)
+        self.o2_reset_button.setEnabled(True)

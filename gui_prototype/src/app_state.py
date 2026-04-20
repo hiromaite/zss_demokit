@@ -23,6 +23,15 @@ class LoggingPreferences:
 
 
 @dataclass
+class O2CalibrationPreferences:
+    zero_reference_voltage_v: float = 2.5
+    ambient_reference_percent: float = 21.0
+    air_calibration_voltage_v: float | None = None
+    calibrated_at_iso: str = ""
+    invert_polarity: bool = False
+
+
+@dataclass
 class WindowPreferences:
     main_window_width: int = 1480
     main_window_height: int = 940
@@ -35,6 +44,7 @@ class AppSettings:
     last_mode: str = BLE_MODE
     plot: PlotPreferences = field(default_factory=PlotPreferences)
     logging: LoggingPreferences = field(default_factory=LoggingPreferences)
+    o2: O2CalibrationPreferences = field(default_factory=O2CalibrationPreferences)
     windows: WindowPreferences = field(default_factory=WindowPreferences)
 
 

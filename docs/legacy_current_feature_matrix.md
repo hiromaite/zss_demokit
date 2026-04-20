@@ -102,10 +102,10 @@
 | Real-time value: Heater RTD Resistance | Yes | Yes | 表示あり |
 | Real-time value: Zirconia Output Voltage | Yes | Yes | 表示あり |
 | Real-time value: Flow Rate | Yes | Yes | 現行は placeholder flow formula |
-| Real-time value: O2 Concentration (1-cell) | Yes | No | 現行未搭載 |
+| Real-time value: O2 Concentration (1-cell) | Yes | Partial | 現行 GUI に first pass を追加済み。ambient-air 実機 validation は残る |
 | Real-time value: O2 Concentration (2-cell) | Yes | No | 現行未搭載 |
 | ZSS 2-cell calibration table | Yes | No | 現行未搭載 |
-| Editable calibration persistence | Yes | No | 旧は `localStorage` |
+| Editable calibration persistence | Yes | Partial | 現行は O2 1-cell ambient-air anchor を `QSettings` に保存 |
 | Zero-point calibration command | Yes | No | 旧 serial path の独自 command。現行 protocol 未定義 |
 | Flow inversion toggle | Yes | No | 旧 serial path の独自 command。現行 protocol 未定義 |
 | Pause graph | Yes | No | 現行は未搭載 |
