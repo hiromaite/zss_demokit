@@ -892,3 +892,139 @@
 - BLE extension service UUID の最終値
 - flow sensor の正式換算式
 - M5StampS3A 上での sampling / transport 競合の実測
+
+## 11. Post-Beta Extension Backlog
+
+beta 到達後の次フェーズでは、以下の順で bundle 単位に進めることを推奨する。
+
+### 11.1 Priority Order
+
+1. `EXT-001` Firmware UX parity
+2. `EXT-002` GUI recording emphasis
+3. `EXT-003` O2 1-cell display and calibration
+4. `EXT-004` Dual-SDP differential pressure PoC
+5. `EXT-005` Flow telemetry integration
+6. `EXT-006` End-to-end validation and operator hardening
+
+### EXT-001. Firmware UX Parity
+
+目的:
+
+- 旧 firmware にあった operator-facing parity を、現行 architecture を壊さずに回収する
+
+対象:
+
+- local physical button pump toggle
+- BLE advertising / connected LED pattern
+- voltage-target aware LED behavior
+- ADS1115 channel 0 based `zirconia_ip_voltage_v` local readback
+
+推奨依存:
+
+- 現行 `CommandProcessor`
+- 現行 `StatusLedController`
+- 現行 `AdcFrontend`
+
+完了条件:
+
+- local button, BLE, wired のどの command source でも pump state が一貫する
+- LED が advertising / connected / fault / voltage-target state を区別して示す
+- `zirconia_ip_voltage_v` に基づく target band 判定が動く
+
+### EXT-002. GUI Recording Emphasis
+
+目的:
+
+- recording active を GUI 上で glanceable にする
+
+対象:
+
+- recording group glow / accent
+- active / inactive state の視認性改善
+
+完了条件:
+
+- narrow layout を壊さず recording active が一目で分かる
+
+### EXT-003. O2 1-Cell Display and Calibration
+
+目的:
+
+- `zirconia_output_voltage_v` を元に `O2 Concentration (1-cell)` を GUI 派生値として追加する
+
+対象:
+
+- O2 numeric display
+- ambient-air calibration button
+- calibration reset
+- calibration persistence
+
+推奨式:
+
+```text
+normalized = (2.5 - v_measured) / (2.5 - v_air_cal)
+o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
+```
+
+補足:
+
+- 極性が逆なら calibration config で反転可能にする
+
+完了条件:
+
+- calibration 後に ambient air で `21 %` 近傍を示す
+- uncalibrated 状態が UI で明示される
+
+### EXT-004. Dual-SDP Differential Pressure PoC
+
+目的:
+
+- `SDP811-500Pa-D` と `SDP810-125Pa` の dual-range differential pressure sensing を実機で成立させる
+
+対象:
+
+- I2C coexistence
+- continuous read
+- CRC validation
+- selector / hysteresis
+
+完了条件:
+
+- low/high sensor が同一 bus で安定読取りできる
+- no-flow / low-flow / higher-flow で両系列ログが取れる
+- selector の threshold 候補を決められる
+
+### EXT-005. Flow Telemetry Integration
+
+目的:
+
+- dual-SDP PoC の結果を flow feature として GUI / firmware に統合する
+
+対象:
+
+- `differential_pressure_selected_pa` 導入
+- flow placeholder 式を differential pressure ベースへ更新
+- 必要なら telemetry v2 を追加
+
+完了条件:
+
+- GUI flow rate が selected differential pressure を元に計算される
+- handoff 時に plot が破綻しない
+
+### EXT-006. End-to-End Validation and Operator Hardening
+
+目的:
+
+- parity restore と新規値表示を operator-ready な水準まで固める
+
+対象:
+
+- local button + GUI + BLE / wired coexistence
+- LED state priority
+- O2 calibration workflow
+- dual-SDP flow display
+
+完了条件:
+
+- 実機で一連の operator workflow が破綻しない
+- warning / event / UI state が互いに矛盾しない

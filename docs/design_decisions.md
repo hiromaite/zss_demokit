@@ -180,3 +180,57 @@ flow_rate_lpm = max(0.0, 1.0 * sqrt(max(0.0, differential_pressure_pa)) + 0.0)
 - planned reconnect を含む probe では、`observed telemetry duration >= session duration - reconnect timeout budget` を目安とする
 - `sequence_gap_total` は connected telemetry segment 内での欠落を数え、planned reconnect downtime は含めない
 - 目安として `sequence_gap_total <= 5`、transient stall warning は最大 1 回までを許容候補とする
+
+## 19. Post-Beta Extension Direction
+
+- old parity の quick win は、まず `protocol non-breaking` な機能から回収する
+- 具体的には以下を先行対象にする
+  - local physical button pump toggle
+  - BLE advertising / connected LED patterns
+  - voltage-target aware WS2812 LED behavior
+  - recording-active visual emphasis
+
+理由:
+
+- operator value が高い
+- 既存 transport / GUI contract を壊さずに進めやすい
+
+## 20. O2 1-Cell Calculation Direction
+
+- `O2 Concentration (1-cell)` は GUI derived metric として実装する
+- raw / canonical measurement は引き続き `zirconia_output_voltage_v` とする
+- calibration は GUI ローカルに保存し、device 側 persistent state にはしない
+
+初期 calibration model:
+
+```text
+v_zero_ref = 2.5 V
+v_air_cal = zirconia_output_voltage_v captured in ambient air
+o2_percent = clamp(((v_zero_ref - v_measured) / (v_zero_ref - v_air_cal)) * 21.0, 0.0, 100.0)
+```
+
+補足:
+
+- この式は `v_measured` が低いほど O2% が高い前提である
+- 実機極性が逆なら GUI config で反転可能にする
+
+## 21. Dual-SDP Flow Measurement Direction
+
+- flow の新実装は `Sensirion SDP811-500Pa-D` と `SDP810-125Pa` の dual-range differential pressure sensing を前提にする
+- dual-SDP は先に PoC を行い、その後に production integration へ進む
+- first production target は `selector + hysteresis` であり、blend は PoC 後の改善項目とする
+- flow の最終オリフィス係数は gas line 実測フェーズで確定する
+
+推奨 placeholder:
+
+```text
+flow_rate_lpm =
+    sign(differential_pressure_selected_pa) *
+    k_flow_gain *
+    sqrt(max(0.0, abs(differential_pressure_selected_pa) - dp_offset_pa))
+```
+
+補足:
+
+- `k_flow_gain` と `dp_offset_pa` は初期実装では placeholder のままでよい
+- dual-SDP 導入後は、現行の `flow_sensor_voltage_v` placeholder policy から差圧ベースへ段階移行する
