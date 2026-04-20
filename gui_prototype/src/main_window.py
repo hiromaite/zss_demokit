@@ -292,10 +292,12 @@ class MainWindow(QMainWindow):
         self._ignore_manual_range_signal = False
         self._viewbox_to_plot_key: dict[object, str] = {}
         self._active_plot_key = self._plot_key_from_label(self.app_settings.plot.selected_plot)
+        self._pending_mode_switch_target: str | None = None
 
         self._build_ui()
         self._bind_controllers()
         self._prime_mode_specific_lists()
+        self._sync_connection_controls()
         QTimer.singleShot(0, self._sync_recording_controls)
         QTimer.singleShot(0, self._apply_persisted_preferences)
         self._plot_refresh_timer.start()
@@ -674,6 +676,16 @@ class MainWindow(QMainWindow):
     def _sync_connection_stack(self) -> None:
         self.connection_stack.setCurrentIndex(0 if self.mode == BLE_MODE else 1)
 
+    def _sync_connection_controls(self) -> None:
+        connected = self.connection_controller.is_connected()
+        connect_text = "Disconnect" if connected else "Connect"
+        self.ble_connect_button.setText(connect_text)
+        self.wired_connect_button.setText(connect_text)
+        self.ble_device_selector.setEnabled(not connected)
+        self.ble_scan_button.setEnabled(not connected)
+        self.port_selector.setEnabled(not connected)
+        self.refresh_ports_button.setEnabled(not connected)
+
     def _toggle_connection(self) -> None:
         if self.connection_controller.is_connected():
             self.ui_state.connection.phase = "disconnecting"
@@ -690,9 +702,7 @@ class MainWindow(QMainWindow):
         self.ui_state.connection.phase = "connected" if connected else "disconnected"
         self.ui_state.connection.identifier = identifier if connected else "Disconnected"
         self.transport_state_value.setText("Connected" if connected else "Disconnected")
-        connect_text = "Disconnect" if connected else "Connect"
-        self.ble_connect_button.setText(connect_text)
-        self.wired_connect_button.setText(connect_text)
+        self._sync_connection_controls()
         self._sync_pump_toggle()
         for severity, message in self.telemetry_health_monitor.on_connection_changed(connected, identifier):
             self._append_log(severity, message)
@@ -700,6 +710,10 @@ class MainWindow(QMainWindow):
             self._append_log(severity, message)
         if not connected:
             self._stop_recording()
+            if self._pending_mode_switch_target is not None:
+                pending_target = self._pending_mode_switch_target
+                self._pending_mode_switch_target = None
+                self._complete_mode_switch(pending_target)
         self._sync_recording_controls()
 
     def _on_status_changed(self, payload: dict) -> None:
@@ -999,7 +1013,14 @@ class MainWindow(QMainWindow):
 
     def _switch_mode(self, new_mode: str) -> None:
         if self.connection_controller.is_connected():
+            self._pending_mode_switch_target = new_mode
+            self.ui_state.connection.phase = "disconnecting"
+            self._append_log("info", f"Disconnecting current session before switching to {new_mode}.")
             self.connection_controller.disconnect_device()
+            return
+        self._complete_mode_switch(new_mode)
+
+    def _complete_mode_switch(self, new_mode: str) -> None:
         self._stop_recording()
         self.mode = new_mode
         self.ui_state.mode = new_mode
@@ -1008,6 +1029,7 @@ class MainWindow(QMainWindow):
         self.connection_controller.set_mode(new_mode)
         self._clear_plot_buffers()
         self._sync_connection_stack()
+        self._sync_connection_controls()
         self._apply_settings_to_widgets()
         self._prime_mode_specific_lists()
         self.metric_zirconia.set_value("--")
