@@ -556,10 +556,11 @@ class MainWindow(QMainWindow):
         self.plot_splitter.setChildrenCollapsible(False)
         self.plot_splitter.setHandleWidth(10)
         self.plot_splitter.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        self.plot_splitter.setFixedHeight(560)
+        self.plot_splitter.setFixedHeight(600)
         layout.addWidget(self.plot_splitter, 0)
 
         sensor_frame, sensor_layout = _panel("Flow / O2 Concentration", "Blue: flow rate, orange: O2 concentration when calibrated.")
+        sensor_frame.setFixedHeight(350)
         sensor_view_box = PlotInteractionViewBox("sensor", self._handle_plot_user_interaction)
         sensor_axis_items = {
             "bottom": TimeAxisItem(
@@ -603,6 +604,7 @@ class MainWindow(QMainWindow):
         self.plot_curves["sensor"] = sensor_curve
 
         heater_frame, heater_layout = _panel("Zirconia Output Voltage / Heater RTD Resistance")
+        heater_frame.setFixedHeight(240)
         heater_view_box = PlotInteractionViewBox("heater", self._handle_plot_user_interaction)
         heater_axis_items = {
             "bottom": TimeAxisItem(
@@ -1246,7 +1248,7 @@ class MainWindow(QMainWindow):
 
     def _apply_plot_splitter_sizes(self) -> None:
         if hasattr(self, "plot_splitter"):
-            self.plot_splitter.setSizes([340, 210])
+            self.plot_splitter.setSizes([350, 240])
 
     def _sync_left_column_content_width(self) -> None:
         if not hasattr(self, "left_column") or not hasattr(self, "left_column_content"):
