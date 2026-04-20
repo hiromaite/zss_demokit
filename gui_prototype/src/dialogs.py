@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QFileDialog
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -133,9 +134,19 @@ class ModeSwitchDialog(QDialog):
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, settings: AppSettings, parent: QWidget | None = None) -> None:
+    device_action_requested = Signal(str)
+
+    def __init__(
+        self,
+        settings: AppSettings,
+        current_mode: str,
+        connection_identifier: str,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(parent)
         self._settings = settings
+        self._current_mode = current_mode
+        self._connection_identifier = connection_identifier
         self.setWindowTitle("Settings")
         self.resize(880, 580)
 
@@ -163,16 +174,16 @@ class SettingsDialog(QDialog):
 
         self.nav = QListWidget()
         self.nav.setObjectName("SettingsNav")
-        for label in ["Mode", "Plot", "Logging", "Advanced", "About"]:
+        for label in ["General", "Plot", "Recording", "Device", "About"]:
             QListWidgetItem(label, self.nav)
         self.nav.setCurrentRow(0)
         shell.addWidget(self.nav, 0)
 
         self.stack = QStackedWidget()
-        self.stack.addWidget(self._create_mode_page())
+        self.stack.addWidget(self._create_general_page())
         self.stack.addWidget(self._create_plot_page())
-        self.stack.addWidget(self._create_logging_page())
-        self.stack.addWidget(self._create_advanced_page())
+        self.stack.addWidget(self._create_recording_page())
+        self.stack.addWidget(self._create_device_page())
         self.stack.addWidget(self._create_about_page())
         shell.addWidget(self.stack, 1)
 
@@ -221,15 +232,15 @@ class SettingsDialog(QDialog):
         layout.setSpacing(12)
         return page, layout
 
-    def _create_mode_page(self) -> QWidget:
+    def _create_general_page(self) -> QWidget:
         page, layout = self._page_wrapper()
 
         card = QFrame()
         card.setObjectName("AccentCard")
         card_layout = QVBoxLayout(card)
-        title = QLabel("Mode")
+        title = QLabel("General")
         title.setObjectName("SectionTitle")
-        hint = QLabel("Choose the session context shown by the main window.")
+        hint = QLabel("Choose the active transport mode and review the current connection context.")
         hint.setObjectName("SectionHint")
         hint.setWordWrap(True)
         card_layout.addWidget(title)
@@ -244,12 +255,17 @@ class SettingsDialog(QDialog):
         self.ble_mode_radio.toggled.connect(self._update_mode_page_state)
         self.wired_mode_radio.toggled.connect(self._update_mode_page_state)
 
+        summary = QLabel(f"Current session target: {self._connection_identifier}")
+        summary.setObjectName("SectionHint")
+        summary.setWordWrap(True)
+
         self.mode_status_label = QLabel("")
         self.mode_status_label.setObjectName("ModeStatusLabel")
         self.mode_status_label.setWordWrap(True)
 
         card_layout.addWidget(self.ble_mode_radio)
         card_layout.addWidget(self.wired_mode_radio)
+        card_layout.addWidget(summary)
         card_layout.addWidget(self.mode_status_label)
         layout.addWidget(card)
         layout.addStretch(1)
@@ -269,10 +285,10 @@ class SettingsDialog(QDialog):
         self.auto_scale_check = QCheckBox("Enable auto scale by default")
         self.auto_scale_check.setChecked(self._settings.plot.auto_scale)
         self.default_plot_combo = QComboBox()
-        self.default_plot_combo.addItems(["Zirconia", "Heater", "Flow"])
+        self.default_plot_combo.addItems(["Sensor / Flow", "Heater"])
         self.default_plot_combo.setCurrentText(self._settings.plot.selected_plot)
         form.addRow("Default time span", self.default_time_span_combo)
-        form.addRow("Axis mode", self.axis_mode_combo)
+        form.addRow("Time axis display", self.axis_mode_combo)
         form.addRow("Selected plot", self.default_plot_combo)
         form.addRow("Auto scale", self.auto_scale_check)
         form.addRow("Refresh policy", QLabel("Timer-driven, 150 ms target"))
@@ -280,7 +296,7 @@ class SettingsDialog(QDialog):
         layout.addStretch(1)
         return page
 
-    def _create_logging_page(self) -> QWidget:
+    def _create_recording_page(self) -> QWidget:
         page, layout = self._page_wrapper()
         card = QFrame()
         card.setObjectName("SurfaceCard")
@@ -303,15 +319,45 @@ class SettingsDialog(QDialog):
         layout.addStretch(1)
         return page
 
-    def _create_advanced_page(self) -> QWidget:
+    def _create_device_page(self) -> QWidget:
         page, layout = self._page_wrapper()
-        card = QFrame()
-        card.setObjectName("SurfaceCard")
-        form = QFormLayout(card)
-        form.addRow("Protocol family", QLabel(f"v{PROTOCOL_VERSION_TEXT} prototype"))
-        form.addRow("Serial defaults", QLabel(f"{WIRED_DEFAULT_BAUDRATE} baud / {WIRED_DEFAULT_LINE_SETTINGS}"))
-        form.addRow("BLE identity policy", QLabel("Keep existing device name and UUIDs"))
-        layout.addWidget(card)
+        summary_card = QFrame()
+        summary_card.setObjectName("SurfaceCard")
+        summary_form = QFormLayout(summary_card)
+        summary_form.addRow("Current mode", QLabel(self._current_mode))
+        summary_form.addRow("Target device", QLabel(self._connection_identifier))
+        summary_form.addRow("Protocol family", QLabel(f"v{PROTOCOL_VERSION_TEXT} prototype"))
+        summary_form.addRow("Serial defaults", QLabel(f"{WIRED_DEFAULT_BAUDRATE} baud / {WIRED_DEFAULT_LINE_SETTINGS}"))
+        summary_form.addRow("BLE identity policy", QLabel("Keep existing device name and UUIDs"))
+        layout.addWidget(summary_card)
+
+        action_card = QFrame()
+        action_card.setObjectName("AccentCard")
+        action_layout = QVBoxLayout(action_card)
+        action_title = QLabel("Device Actions")
+        action_title.setObjectName("SectionTitle")
+        action_hint = QLabel("Run on-demand commands from here so the main screen can stay compact.")
+        action_hint.setObjectName("SectionHint")
+        action_hint.setWordWrap(True)
+        action_layout.addWidget(action_title)
+        action_layout.addWidget(action_hint)
+
+        action_row = QHBoxLayout()
+        status_button = QPushButton("Get Status")
+        status_button.setObjectName("SecondaryButton")
+        status_button.clicked.connect(lambda: self.device_action_requested.emit("get_status"))
+        capabilities_button = QPushButton("Get Capabilities")
+        capabilities_button.setObjectName("SecondaryButton")
+        capabilities_button.clicked.connect(lambda: self.device_action_requested.emit("get_capabilities"))
+        ping_button = QPushButton("Ping")
+        ping_button.setObjectName("SecondaryButton")
+        ping_button.clicked.connect(lambda: self.device_action_requested.emit("ping"))
+        action_row.addWidget(status_button)
+        action_row.addWidget(capabilities_button)
+        action_row.addWidget(ping_button)
+        action_row.addStretch(1)
+        action_layout.addLayout(action_row)
+        layout.addWidget(action_card)
         layout.addStretch(1)
         return page
 
@@ -345,9 +391,9 @@ class SettingsDialog(QDialog):
 
     def _update_mode_page_state(self) -> None:
         requested = self.requested_mode
-        if requested == self._settings.last_mode:
+        if requested == self._current_mode:
             self.mode_status_label.setText(
-                f"Current mode is {self._settings.last_mode}. Save will keep the current session type."
+                f"Current mode is {self._current_mode}. Save will keep the current session type."
             )
             ok_button = self.button_box.button(QDialogButtonBox.Ok)
             if ok_button is not None:
@@ -355,7 +401,7 @@ class SettingsDialog(QDialog):
             return
 
         self.mode_status_label.setText(
-            f"Current mode is {self._settings.last_mode}. Save will request a switch to {requested} mode and reopen the main window in a disconnected state."
+            f"Current mode is {self._current_mode}. Save will request a switch to {requested} mode and reopen the main window in a disconnected state."
         )
         ok_button = self.button_box.button(QDialogButtonBox.Ok)
         if ok_button is not None:

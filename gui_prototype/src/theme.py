@@ -78,12 +78,12 @@ def app_stylesheet() -> str:
         background: transparent;
     }}
     QLabel#MetricName {{
-        font-size: 12px;
+        font-size: 11px;
         color: {c["muted"]};
         background: transparent;
     }}
     QLabel#MetricValue {{
-        font-size: 26px;
+        font-size: 20px;
         font-weight: 700;
         background: transparent;
     }}
@@ -151,6 +151,26 @@ def app_stylesheet() -> str:
         background: {c["accent"]};
         border-color: {c["accent_strong"]};
         font-weight: 600;
+    }}
+    QPushButton#ToggleButton {{
+        min-height: 34px;
+        min-width: 132px;
+        background: {c["surface_alt"]};
+        border-color: {c["border"]};
+        font-weight: 700;
+    }}
+    QPushButton#ToggleButton:checked {{
+        background: {c["accent_strong"]};
+        border-color: {c["accent_strong"]};
+        color: white;
+    }}
+    QToolButton#SectionToggle {{
+        border: none;
+        background: transparent;
+        color: {c["text"]};
+        font-size: 14px;
+        font-weight: 700;
+        padding: 0px;
     }}
     QPushButton#ModeCardButton {{
         min-height: 40px;

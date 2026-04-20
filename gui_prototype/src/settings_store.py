@@ -17,12 +17,15 @@ class SettingsStore:
     def load(self) -> AppSettings:
         settings = AppSettings()
         settings.last_mode = str(self._settings.value("mode/last_mode", BLE_MODE))
+        selected_plot = self._normalize_selected_plot(
+            str(self._settings.value("plot/selected_plot", settings.plot.selected_plot))
+        )
 
         settings.plot = PlotPreferences(
             time_span=str(self._settings.value("plot/time_span", settings.plot.time_span)),
             axis_mode=str(self._settings.value("plot/axis_mode", settings.plot.axis_mode)),
             auto_scale=self._to_bool(self._settings.value("plot/auto_scale", settings.plot.auto_scale)),
-            selected_plot=str(self._settings.value("plot/selected_plot", settings.plot.selected_plot)),
+            selected_plot=selected_plot,
             x_follow_enabled=self._to_bool(self._settings.value("plot/x_follow_enabled", settings.plot.x_follow_enabled)),
             manual_y_ranges=self._load_manual_ranges(),
         )
@@ -94,7 +97,8 @@ class SettingsStore:
             for key, value in parsed.items():
                 if isinstance(value, list) and len(value) == 2:
                     try:
-                        manual_ranges[str(key)] = (float(value[0]), float(value[1]))
+                        normalized_key = self._normalize_plot_key(str(key))
+                        manual_ranges[normalized_key] = (float(value[0]), float(value[1]))
                     except (TypeError, ValueError):
                         continue
         return manual_ranges
@@ -105,3 +109,19 @@ class SettingsStore:
         for key, value in ranges.items():
             normalized[key] = [float(value[0]), float(value[1])]
         return normalized
+
+    @staticmethod
+    def _normalize_plot_key(plot_key: str) -> str:
+        if plot_key in {"zirconia", "flow", "sensor"}:
+            return "sensor"
+        if plot_key == "heater":
+            return "heater"
+        return plot_key
+
+    @staticmethod
+    def _normalize_selected_plot(plot_label: str) -> str:
+        if plot_label in {"Zirconia", "Flow", "Sensor / Flow"}:
+            return "Sensor / Flow"
+        if plot_label == "Heater":
+            return "Heater"
+        return "Sensor / Flow"

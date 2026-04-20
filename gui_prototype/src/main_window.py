@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Callable
 
 import pyqtgraph as pg
@@ -19,8 +19,10 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
+    QSplitter,
     QStackedWidget,
     QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -69,19 +71,16 @@ class MetricCard(QFrame):
         super().__init__(parent)
         self.setObjectName("MetricCard")
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(18, 18, 18, 18)
-        layout.setSpacing(6)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(4)
 
         self.name_label = QLabel(name)
         self.name_label.setObjectName("MetricName")
-        self.value_label = QLabel(f"-- {unit}")
+        self.value_label = QLabel("--")
         self.value_label.setObjectName("MetricValue")
-        self.unit_label = QLabel(unit)
-        self.unit_label.setObjectName("SectionHint")
 
         layout.addWidget(self.name_label)
         layout.addWidget(self.value_label)
-        layout.addWidget(self.unit_label)
 
     def set_value(self, value_text: str) -> None:
         self.value_label.setText(value_text)
@@ -158,6 +157,96 @@ class PlotInteractionAxisItem(pg.AxisItem):
         )
 
 
+class TimeAxisItem(PlotInteractionAxisItem):
+    def __init__(
+        self,
+        orientation: str,
+        plot_key: str,
+        axis_kind: str,
+        interaction_callback: Callable[[str, bool, bool], None],
+        axis_mode_provider: Callable[[], str],
+        session_start_provider: Callable[[], datetime],
+        *args,
+        **kwargs,
+    ) -> None:
+        super().__init__(orientation, plot_key, axis_kind, interaction_callback, *args, **kwargs)
+        self._axis_mode_provider = axis_mode_provider
+        self._session_start_provider = session_start_provider
+
+    def tickStrings(self, values, scale, spacing):  # type: ignore[override]
+        if self._axis_mode_provider() == "Clock":
+            session_start = self._session_start_provider()
+            labels = []
+            for value in values:
+                timestamp = session_start + timedelta(seconds=float(value))
+                if spacing >= 3600:
+                    labels.append(timestamp.strftime("%H:%M"))
+                else:
+                    labels.append(timestamp.strftime("%H:%M:%S"))
+            return labels
+
+        labels = []
+        for value in values:
+            total_seconds = max(0.0, float(value))
+            if spacing >= 60:
+                minutes = int(total_seconds // 60)
+                seconds = int(total_seconds % 60)
+                hours = minutes // 60
+                minutes = minutes % 60
+                if hours > 0:
+                    labels.append(f"{hours:d}:{minutes:02d}:{seconds:02d}")
+                else:
+                    labels.append(f"{minutes:02d}:{seconds:02d}")
+            elif spacing >= 1:
+                labels.append(f"{total_seconds:.0f}s")
+            else:
+                labels.append(f"{total_seconds:.1f}s")
+        return labels
+
+
+class CollapsiblePanel(QFrame):
+    def __init__(self, title: str, hint: str | None = None, *, expanded: bool = False, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("PanelCard")
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(14, 12, 14, 12)
+        layout.setSpacing(8)
+
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
+        header_row.setSpacing(8)
+
+        self.toggle_button = QToolButton()
+        self.toggle_button.setCheckable(True)
+        self.toggle_button.setChecked(expanded)
+        self.toggle_button.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        self.toggle_button.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        self.toggle_button.setText(title)
+        self.toggle_button.setObjectName("SectionToggle")
+        self.toggle_button.toggled.connect(self._set_expanded)
+        header_row.addWidget(self.toggle_button, 0)
+        header_row.addStretch(1)
+        layout.addLayout(header_row)
+
+        self.hint_label = QLabel(hint or "")
+        self.hint_label.setObjectName("SectionHint")
+        self.hint_label.setWordWrap(True)
+        self.hint_label.setVisible(expanded and bool(hint))
+        layout.addWidget(self.hint_label)
+
+        self.content = QWidget()
+        self.content_layout = QVBoxLayout(self.content)
+        self.content_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_layout.setSpacing(8)
+        self.content.setVisible(expanded)
+        layout.addWidget(self.content)
+
+    def _set_expanded(self, expanded: bool) -> None:
+        self.toggle_button.setArrowType(Qt.DownArrow if expanded else Qt.RightArrow)
+        self.content.setVisible(expanded)
+        self.hint_label.setVisible(expanded and bool(self.hint_label.text()))
+
+
 class MainWindow(QMainWindow):
     def __init__(self, mode: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -215,22 +304,25 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(18, 18, 18, 18)
         layout.setSpacing(14)
 
-        content_row = QHBoxLayout()
-        content_row.setSpacing(14)
         self.left_column = self._build_left_column()
         self.right_column = self._build_right_column()
-        self.left_column.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.left_column.setMinimumWidth(272)
+        self.left_column.setMaximumWidth(420)
         self.right_column.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        content_row.addWidget(self.left_column, 0)
-        content_row.addWidget(self.right_column, 1)
-        layout.addLayout(content_row, 1)
+        self.content_splitter = QSplitter(Qt.Horizontal)
+        self.content_splitter.setChildrenCollapsible(False)
+        self.content_splitter.addWidget(self.left_column)
+        self.content_splitter.addWidget(self.right_column)
+        self.content_splitter.setStretchFactor(0, 0)
+        self.content_splitter.setStretchFactor(1, 1)
+        layout.addWidget(self.content_splitter, 1)
         QTimer.singleShot(0, self._apply_column_widths)
 
     def _build_left_column(self) -> QWidget:
         shell = QWidget()
         layout = QVBoxLayout(shell)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
 
         self.connection_stack = QStackedWidget()
         self.connection_stack.addWidget(self._build_ble_connection_panel())
@@ -248,52 +340,50 @@ class MainWindow(QMainWindow):
         return shell
 
     def _build_ble_connection_panel(self) -> QWidget:
-        frame, layout = _panel("BLE Connection", "Scan for devices and connect to a wireless sensor.")
-        utility_row = QHBoxLayout()
-        utility_row.addStretch(1)
-        self.ble_settings_button = QPushButton("Settings")
-        self.ble_settings_button.setObjectName("SecondaryButton")
-        self.ble_settings_button.clicked.connect(self._open_settings)
-        utility_row.addWidget(self.ble_settings_button)
-        layout.addLayout(utility_row)
+        frame, layout = _panel("BLE Connection", "Scan and connect to a wireless sensor.")
 
         row = QHBoxLayout()
+        row.setSpacing(8)
         self.ble_scan_button = QPushButton("Scan")
         self.ble_scan_button.setObjectName("SecondaryButton")
         self.ble_scan_button.clicked.connect(self.connection_controller.scan_ble_devices)
         self.ble_connect_button = QPushButton("Connect")
         self.ble_connect_button.setObjectName("PrimaryButton")
         self.ble_connect_button.clicked.connect(self._toggle_connection)
+        self.ble_settings_button = QPushButton("Settings")
+        self.ble_settings_button.setObjectName("SecondaryButton")
+        self.ble_settings_button.clicked.connect(self._open_settings)
         row.addWidget(self.ble_scan_button)
         row.addWidget(self.ble_connect_button)
+        row.addWidget(self.ble_settings_button)
+        row.addStretch(1)
         layout.addLayout(row)
 
         self.ble_device_list = QListWidget()
         self.ble_device_list.addItem("M5STAMP-MONITOR")
+        self.ble_device_list.setMinimumHeight(120)
         layout.addWidget(self.ble_device_list)
         return frame
 
     def _build_wired_connection_panel(self) -> QWidget:
         frame, layout = _panel("Wired Connection", "Connect through a COM-style serial link.")
-        utility_row = QHBoxLayout()
-        utility_row.addStretch(1)
-        self.wired_settings_button = QPushButton("Settings")
-        self.wired_settings_button.setObjectName("SecondaryButton")
-        self.wired_settings_button.clicked.connect(self._open_settings)
-        utility_row.addWidget(self.wired_settings_button)
-        layout.addLayout(utility_row)
-
         row = QHBoxLayout()
+        row.setSpacing(8)
         self.port_selector = QComboBox()
         self.refresh_ports_button = QPushButton("Refresh")
+        self.refresh_ports_button.setObjectName("SecondaryButton")
         self.refresh_ports_button.clicked.connect(self.connection_controller.refresh_ports)
         self.wired_connect_button = QPushButton("Connect")
         self.wired_connect_button.setObjectName("PrimaryButton")
         self.wired_connect_button.clicked.connect(self._toggle_connection)
+        self.wired_settings_button = QPushButton("Settings")
+        self.wired_settings_button.setObjectName("SecondaryButton")
+        self.wired_settings_button.clicked.connect(self._open_settings)
         row.addWidget(self.port_selector, 1)
         row.addWidget(self.refresh_ports_button)
+        row.addWidget(self.wired_connect_button)
+        row.addWidget(self.wired_settings_button)
         layout.addLayout(row)
-        layout.addWidget(self.wired_connect_button)
 
         serial_hint = QLabel("Fixed serial setting: 115200 baud / 8N1")
         serial_hint.setObjectName("SectionHint")
@@ -301,7 +391,12 @@ class MainWindow(QMainWindow):
         return frame
 
     def _build_status_panel(self) -> QWidget:
-        frame, layout = _panel("Device Status", "This section reflects the latest normalized status snapshot.")
+        frame = CollapsiblePanel(
+            "Device Status",
+            "This section reflects the latest normalized status snapshot.",
+            expanded=False,
+        )
+        layout = frame.content_layout
         grid = QGridLayout()
         grid.setHorizontalSpacing(8)
         grid.setVerticalSpacing(8)
@@ -332,43 +427,27 @@ class MainWindow(QMainWindow):
 
     def _build_controls_panel(self) -> QWidget:
         frame, layout = _panel("Controls", "Commands are routed through the shared controller layer.")
-        button_grid = QGridLayout()
-
-        self.pump_on_button = QPushButton("Pump ON")
-        self.pump_on_button.setObjectName("PrimaryButton")
-        self.pump_on_button.clicked.connect(lambda: self.connection_controller.set_pump_state(True))
-        self.pump_off_button = QPushButton("Pump OFF")
-        self.pump_off_button.clicked.connect(lambda: self.connection_controller.set_pump_state(False))
-        self.get_status_button = QPushButton("Get Status")
-        self.get_status_button.clicked.connect(self.connection_controller.request_status)
-        self.get_capabilities_button = QPushButton("Get Capabilities")
-        self.get_capabilities_button.clicked.connect(self.connection_controller.request_capabilities)
-        self.ping_button = QPushButton("Ping")
-        self.ping_button.clicked.connect(self.connection_controller.ping)
-
-        buttons = [
-            self.pump_on_button,
-            self.pump_off_button,
-            self.get_status_button,
-            self.get_capabilities_button,
-            self.ping_button,
-        ]
-        for idx, button in enumerate(buttons):
-            button_grid.addWidget(button, idx // 2, idx % 2)
-
-        layout.addLayout(button_grid)
+        toggle_row = QHBoxLayout()
+        toggle_row.setSpacing(8)
+        self.pump_toggle_button = QPushButton("Pump OFF")
+        self.pump_toggle_button.setObjectName("ToggleButton")
+        self.pump_toggle_button.setCheckable(True)
+        self.pump_toggle_button.clicked.connect(self._toggle_pump_from_button)
+        toggle_row.addWidget(self.pump_toggle_button)
+        toggle_row.addStretch(1)
+        layout.addLayout(toggle_row)
         return frame
 
     def _build_recording_panel(self) -> QWidget:
         frame, layout = _panel("Recording", "Session files are written as .partial.csv and finalized to .csv on stop.")
         row = QHBoxLayout()
-        self.record_start_button = QPushButton("Start Recording")
-        self.record_start_button.setObjectName("PrimaryButton")
-        self.record_start_button.clicked.connect(self._start_recording)
-        self.record_stop_button = QPushButton("Stop Recording")
-        self.record_stop_button.clicked.connect(self._stop_recording)
-        row.addWidget(self.record_start_button)
-        row.addWidget(self.record_stop_button)
+        row.setSpacing(8)
+        self.record_toggle_button = QPushButton("Recording OFF")
+        self.record_toggle_button.setObjectName("ToggleButton")
+        self.record_toggle_button.setCheckable(True)
+        self.record_toggle_button.clicked.connect(self._toggle_recording_from_button)
+        row.addWidget(self.record_toggle_button)
+        row.addStretch(1)
         layout.addLayout(row)
 
         self.session_id_value = QLabel("--")
@@ -388,12 +467,12 @@ class MainWindow(QMainWindow):
         shell = QWidget()
         layout = QVBoxLayout(shell)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        layout.setSpacing(10)
 
         cards = QWidget()
         cards_layout = QHBoxLayout(cards)
         cards_layout.setContentsMargins(0, 0, 0, 0)
-        cards_layout.setSpacing(12)
+        cards_layout.setSpacing(10)
 
         self.metric_zirconia = MetricCard("Zirconia Output Voltage", "V")
         self.metric_heater = MetricCard("Heater RTD Resistance", "Ohm")
@@ -403,8 +482,10 @@ class MainWindow(QMainWindow):
         cards_layout.addWidget(self.metric_flow)
         layout.addWidget(cards)
 
-        toolbar, toolbar_layout = _panel("Plot Toolbar", "Relative and manual-scale controls are active in the prototype.")
-        row = QHBoxLayout()
+        toolbar, toolbar_layout = _panel("Plot Toolbar", "Time range, axis display, and scale controls for the active plot.")
+        grid = QGridLayout()
+        grid.setHorizontalSpacing(8)
+        grid.setVerticalSpacing(8)
         self.time_span_combo = QComboBox()
         self.time_span_combo.addItems(["30 s", "2 min", "10 min", "All"])
         self.time_span_combo.setCurrentText(self.app_settings.plot.time_span)
@@ -417,7 +498,7 @@ class MainWindow(QMainWindow):
         self.auto_scale_check.setChecked(self.app_settings.plot.auto_scale)
         self.auto_scale_check.toggled.connect(self._on_auto_scale_toggled)
         self.plot_selector = QComboBox()
-        self.plot_selector.addItems(["Zirconia", "Heater", "Flow"])
+        self.plot_selector.addItems(["Sensor / Flow", "Heater"])
         self.plot_selector.setCurrentText(self.app_settings.plot.selected_plot)
         self.plot_selector.currentTextChanged.connect(self._on_plot_selector_changed)
         self.manual_min_input = QLineEdit()
@@ -425,64 +506,105 @@ class MainWindow(QMainWindow):
         self.manual_max_input = QLineEdit()
         self.manual_max_input.setPlaceholderText("Y max")
         apply_button = QPushButton("Apply Scale")
+        apply_button.setObjectName("SecondaryButton")
         apply_button.clicked.connect(self._apply_scaling_controls)
         self.reset_view_button = QPushButton("Reset View")
+        self.reset_view_button.setObjectName("SecondaryButton")
         self.reset_view_button.clicked.connect(self._reset_plot_view)
 
-        for widget in [
-            QLabel("Span"),
-            self.time_span_combo,
-            QLabel("Axis"),
-            self.axis_mode_combo,
-            self.auto_scale_check,
-            QLabel("Manual"),
-            self.plot_selector,
-            self.manual_min_input,
-            self.manual_max_input,
-            apply_button,
-            self.reset_view_button,
-        ]:
-            row.addWidget(widget)
-        row.addStretch(1)
-        toolbar_layout.addLayout(row)
+        grid.addWidget(QLabel("Span"), 0, 0)
+        grid.addWidget(self.time_span_combo, 0, 1)
+        grid.addWidget(QLabel("Axis"), 0, 2)
+        grid.addWidget(self.axis_mode_combo, 0, 3)
+        grid.addWidget(self.auto_scale_check, 0, 4)
+        grid.addWidget(self.reset_view_button, 0, 5)
+        grid.addWidget(QLabel("Plot"), 1, 0)
+        grid.addWidget(self.plot_selector, 1, 1)
+        grid.addWidget(QLabel("Manual"), 1, 2)
+        grid.addWidget(self.manual_min_input, 1, 3)
+        grid.addWidget(self.manual_max_input, 1, 4)
+        grid.addWidget(apply_button, 1, 5)
+        toolbar_layout.addLayout(grid)
         layout.addWidget(toolbar)
 
         pg.setConfigOptions(antialias=False)
         self.plot_widgets: dict[str, pg.PlotWidget] = {}
         self.plot_curves: dict[str, object] = {}
 
-        for title, key, color in [
-            ("Zirconia Output Voltage", "zirconia", "#315C8C"),
-            ("Heater RTD Resistance", "heater", "#5E7D4B"),
-            ("Flow Rate", "flow", "#B5781A"),
-        ]:
-            plot_frame, plot_layout = _panel(title)
-            view_box = PlotInteractionViewBox(key, self._handle_plot_user_interaction)
-            axis_items = {
-                "bottom": PlotInteractionAxisItem("bottom", key, "x", self._handle_plot_user_interaction),
-                "left": PlotInteractionAxisItem("left", key, "y", self._handle_plot_user_interaction),
-            }
-            plot = pg.PlotWidget(viewBox=view_box, axisItems=axis_items)
-            plot.setBackground(None)
-            plot.showGrid(x=True, y=True, alpha=0.22)
-            plot.setClipToView(True)
-            plot.setDownsampling(auto=True, mode="peak")
-            plot.getPlotItem().getAxis("left").setTextPen(QColor(COLORS["muted"]))
-            plot.getPlotItem().getAxis("bottom").setTextPen(QColor(COLORS["muted"]))
-            plot.getPlotItem().getAxis("left").setPen(QColor(COLORS["muted"]))
-            plot.getPlotItem().getAxis("bottom").setPen(QColor(COLORS["muted"]))
-            plot.setMinimumHeight(160)
-            view_box.sigRangeChangedManually.connect(self._on_plot_range_changed_manually)
-            self._viewbox_to_plot_key[view_box] = key
-            curve = plot.plot(pen=pg.mkPen(color=color, width=2.2))
-            curve.setSkipFiniteCheck(True)
-            plot_layout.addWidget(plot)
-            layout.addWidget(plot_frame, 1)
-            self.plot_widgets[key] = plot
-            self.plot_curves[key] = curve
+        self.plot_splitter = QSplitter(Qt.Vertical)
+        self.plot_splitter.setChildrenCollapsible(False)
+        self.plot_splitter.setHandleWidth(10)
+        layout.addWidget(self.plot_splitter, 1)
 
-        self.plot_widgets["heater"].setXLink(self.plot_widgets["zirconia"])
-        self.plot_widgets["flow"].setXLink(self.plot_widgets["zirconia"])
+        sensor_frame, sensor_layout = _panel("Sensor / Flow", "Blue: zirconia voltage, orange: flow rate.")
+        sensor_view_box = PlotInteractionViewBox("sensor", self._handle_plot_user_interaction)
+        sensor_axis_items = {
+            "bottom": TimeAxisItem(
+                "bottom",
+                "sensor",
+                "x",
+                self._handle_plot_user_interaction,
+                self._current_axis_mode,
+                self._session_start_time,
+            ),
+            "left": PlotInteractionAxisItem("left", "sensor", "y", self._handle_plot_user_interaction),
+        }
+        sensor_plot = pg.PlotWidget(viewBox=sensor_view_box, axisItems=sensor_axis_items)
+        self._configure_plot_widget(sensor_plot)
+        sensor_plot.setMinimumHeight(180)
+        sensor_plot.addLegend(offset=(10, 10))
+        sensor_plot.getPlotItem().showAxis("right")
+        sensor_plot.getPlotItem().getAxis("left").setLabel("Zirconia (V)")
+        sensor_plot.getPlotItem().getAxis("right").setLabel("Flow (L/min)")
+        sensor_plot.getPlotItem().getAxis("right").setTextPen(QColor("#B5781A"))
+        sensor_plot.getPlotItem().getAxis("right").setPen(QColor("#B5781A"))
+        sensor_view_box.sigRangeChangedManually.connect(self._on_plot_range_changed_manually)
+        self._viewbox_to_plot_key[sensor_view_box] = "sensor"
+        sensor_curve = sensor_plot.plot(pen=pg.mkPen(color="#315C8C", width=2.1), name="Zirconia")
+        sensor_curve.setSkipFiniteCheck(True)
+
+        self.sensor_secondary_view = pg.ViewBox()
+        self.sensor_secondary_view.setMouseEnabled(x=False, y=False)
+        sensor_plot.scene().addItem(self.sensor_secondary_view)
+        sensor_plot.getPlotItem().getAxis("right").linkToView(self.sensor_secondary_view)
+        self.sensor_secondary_view.setXLink(sensor_plot.getPlotItem().vb)
+        self.sensor_secondary_curve = pg.PlotCurveItem(pen=pg.mkPen(color="#B5781A", width=2.0))
+        self.sensor_secondary_curve.setSkipFiniteCheck(True)
+        self.sensor_secondary_view.addItem(self.sensor_secondary_curve)
+        sensor_plot.getPlotItem().vb.sigResized.connect(self._update_sensor_secondary_geometry)
+        sensor_layout.addWidget(sensor_plot)
+        self.plot_splitter.addWidget(sensor_frame)
+        self.plot_widgets["sensor"] = sensor_plot
+        self.plot_curves["sensor"] = sensor_curve
+
+        heater_frame, heater_layout = _panel("Heater RTD Resistance")
+        heater_view_box = PlotInteractionViewBox("heater", self._handle_plot_user_interaction)
+        heater_axis_items = {
+            "bottom": TimeAxisItem(
+                "bottom",
+                "heater",
+                "x",
+                self._handle_plot_user_interaction,
+                self._current_axis_mode,
+                self._session_start_time,
+            ),
+            "left": PlotInteractionAxisItem("left", "heater", "y", self._handle_plot_user_interaction),
+        }
+        heater_plot = pg.PlotWidget(viewBox=heater_view_box, axisItems=heater_axis_items)
+        self._configure_plot_widget(heater_plot)
+        heater_plot.setMinimumHeight(140)
+        heater_plot.getPlotItem().getAxis("left").setLabel("Heater (Ohm)")
+        heater_view_box.sigRangeChangedManually.connect(self._on_plot_range_changed_manually)
+        self._viewbox_to_plot_key[heater_view_box] = "heater"
+        heater_curve = heater_plot.plot(pen=pg.mkPen(color="#5E7D4B", width=2.1))
+        heater_curve.setSkipFiniteCheck(True)
+        heater_layout.addWidget(heater_plot)
+        self.plot_splitter.addWidget(heater_frame)
+        self.plot_widgets["heater"] = heater_plot
+        self.plot_curves["heater"] = heater_curve
+
+        self.plot_widgets["heater"].setXLink(self.plot_widgets["sensor"])
+        QTimer.singleShot(0, self._apply_plot_splitter_sizes)
 
         log_frame, log_layout = _panel("Warning / Event Log", object_name="WarningCard")
         self.log_pane = QPlainTextEdit()
@@ -506,6 +628,7 @@ class MainWindow(QMainWindow):
     def _apply_persisted_preferences(self) -> None:
         self._update_axis_labels()
         self._sync_manual_inputs_to_selected_plot()
+        self._sync_pump_toggle()
         self._sync_recording_controls()
         self._refresh_plots()
 
@@ -525,7 +648,6 @@ class MainWindow(QMainWindow):
         self.settings_store.save(self.app_settings)
 
     def _apply_dialog_settings(self, dialog: SettingsDialog) -> None:
-        self.app_settings.last_mode = dialog.requested_mode
         self.app_settings.plot.time_span = dialog.selected_time_span
         self.app_settings.plot.axis_mode = dialog.selected_axis_mode
         self.app_settings.plot.auto_scale = dialog.selected_auto_scale
@@ -580,6 +702,7 @@ class MainWindow(QMainWindow):
         connect_text = "Disconnect" if connected else "Connect"
         self.ble_connect_button.setText(connect_text)
         self.wired_connect_button.setText(connect_text)
+        self._sync_pump_toggle()
         for severity, message in self.telemetry_health_monitor.on_connection_changed(connected, identifier):
             self._append_log(severity, message)
         for severity, message in self.telemetry_session_stats.on_connection_changed(connected, identifier):
@@ -600,6 +723,7 @@ class MainWindow(QMainWindow):
         self.ui_state.session_metadata.nominal_sample_period_ms = str(payload["nominal_sample_period_ms"])
         self.telemetry_health_monitor.update_nominal_sample_period(payload["nominal_sample_period_ms"])
         self.telemetry_session_stats.update_nominal_sample_period(payload["nominal_sample_period_ms"])
+        self._sync_pump_toggle()
 
     def _on_capabilities_changed(self, payload: dict) -> None:
         nominal = payload["nominal_sample_period_ms"]
@@ -626,6 +750,8 @@ class MainWindow(QMainWindow):
 
     def _on_telemetry(self, point: TelemetryPoint) -> None:
         plot_update = self.plot_controller.append_sample(point)
+        if float(plot_update["elapsed_seconds"]) == 0.0:
+            self._session_started = point.host_received_at
         self.telemetry_session_stats.on_telemetry(point)
         self.gap_value.setText(str(plot_update["sequence_gap_total"]))
         for severity, message in self.telemetry_health_monitor.on_telemetry(point):
@@ -648,6 +774,7 @@ class MainWindow(QMainWindow):
             elapsed_record = max(0, int((datetime.now() - self.recording_controller.started_at).total_seconds()))
             mins, secs = divmod(elapsed_record, 60)
             self.elapsed_value.setText(f"{mins:02d}:{secs:02d}")
+        self._sync_pump_toggle()
 
     def _refresh_plots(self) -> None:
         render_data = self.plot_controller.render_data(self.time_span_combo.currentText())
@@ -655,20 +782,23 @@ class MainWindow(QMainWindow):
         if not x_values:
             return
 
-        for key, curve in self.plot_curves.items():
-            curve.setData(x_values, render_data["series"][key])
+        self.plot_curves["sensor"].setData(x_values, render_data["series"]["zirconia"])
+        self.sensor_secondary_curve.setData(x_values, render_data["series"]["flow"])
+        self.plot_curves["heater"].setData(x_values, render_data["series"]["heater"])
         if self.plot_controller.x_follow_enabled:
             self._set_plot_x_range(render_data["xmin"], render_data["xmax"])
         self._update_axis_labels()
 
     def _update_axis_labels(self) -> None:
-        axis_mode = self.axis_mode_combo.currentText()
-        label = "Time (s)" if axis_mode == "Relative" else "Clock-like time (prototype)"
+        label = "Elapsed time" if self._current_axis_mode() == "Relative" else "Clock time"
         for plot in self.plot_widgets.values():
             plot.setLabel("bottom", label)
+            plot.getPlotItem().getAxis("bottom").picture = None
+            plot.getPlotItem().getAxis("bottom").update()
 
     def _on_axis_mode_changed(self) -> None:
         self._update_axis_labels()
+        self._refresh_plots()
         self._persist_current_settings()
 
     def _on_plot_selector_changed(self) -> None:
@@ -686,6 +816,8 @@ class MainWindow(QMainWindow):
         plot = self.plot_widgets[selected_key]
         if checked:
             plot.enableAutoRange(axis="y", enable=True)
+            if selected_key == "sensor":
+                self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
             self.plot_controller.manual_y_ranges.pop(selected_key, None)
             self._sync_manual_inputs_to_selected_plot()
         self._persist_current_settings()
@@ -696,6 +828,8 @@ class MainWindow(QMainWindow):
 
         if self.auto_scale_check.isChecked():
             plot.enableAutoRange(axis="y", enable=True)
+            if selected_key == "sensor":
+                self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
             self._sync_manual_inputs_to_selected_plot()
             return
 
@@ -715,23 +849,27 @@ class MainWindow(QMainWindow):
 
     def _reset_plot_view(self) -> None:
         self.plot_controller.x_follow_enabled = True
+        self.plot_controller.manual_y_ranges.pop("sensor", None)
+        self.plot_controller.manual_y_ranges.pop("heater", None)
+        self.plot_widgets["sensor"].enableAutoRange(axis="y", enable=self.auto_scale_check.isChecked())
+        self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
+        self.plot_widgets["heater"].enableAutoRange(axis="y", enable=self.auto_scale_check.isChecked())
         self._sync_manual_inputs_to_selected_plot()
         self._refresh_plots()
         self._persist_current_settings()
 
     def _selected_plot_key(self) -> str:
         return {
-            "Zirconia": "zirconia",
+            "Sensor / Flow": "sensor",
             "Heater": "heater",
-            "Flow": "flow",
         }[self.plot_selector.currentText()]
 
     def _set_plot_x_range(self, xmin: float, xmax: float) -> None:
-        if "zirconia" not in self.plot_widgets:
+        if "sensor" not in self.plot_widgets:
             return
         self._ignore_manual_range_signal = True
         try:
-            self.plot_widgets["zirconia"].setXRange(xmin, xmax, padding=0.02)
+            self.plot_widgets["sensor"].setXRange(xmin, xmax, padding=0.02)
         finally:
             self._ignore_manual_range_signal = False
 
@@ -768,12 +906,10 @@ class MainWindow(QMainWindow):
         if x_changed:
             self.plot_controller.x_follow_enabled = False
 
-        if plot_key == "zirconia":
-            self.plot_selector.setCurrentText("Zirconia")
+        if plot_key == "sensor":
+            self.plot_selector.setCurrentText("Sensor / Flow")
         elif plot_key == "heater":
             self.plot_selector.setCurrentText("Heater")
-        elif plot_key == "flow":
-            self.plot_selector.setCurrentText("Flow")
 
         if y_changed and plot_key is not None and plot_key in self.plot_widgets:
             if self.auto_scale_check.isChecked():
@@ -787,9 +923,13 @@ class MainWindow(QMainWindow):
         self._persist_current_settings()
 
     def _sync_recording_controls(self) -> None:
-        can_start = self.connection_controller.is_connected() and not self.recording_controller.is_recording
-        self.record_start_button.setEnabled(can_start)
-        self.record_stop_button.setEnabled(self.recording_controller.is_recording)
+        can_toggle = self.connection_controller.is_connected() or self.recording_controller.is_recording
+        self.record_toggle_button.setEnabled(can_toggle)
+        checked = self.recording_controller.is_recording
+        self.record_toggle_button.blockSignals(True)
+        self.record_toggle_button.setChecked(checked)
+        self.record_toggle_button.setText("Recording ON" if checked else "Recording OFF")
+        self.record_toggle_button.blockSignals(False)
 
     def _recording_source_endpoint(self) -> str:
         if self.mode == BLE_MODE:
@@ -861,6 +1001,28 @@ class MainWindow(QMainWindow):
             self.recording_file_value.setText(str(final_path))
         self._append_log("info", "Recording stopped.")
 
+    def _toggle_pump_from_button(self, checked: bool) -> None:
+        if not self.connection_controller.is_connected():
+            self._append_log("warn", "Connect to a device before controlling the pump.")
+            self._sync_pump_toggle()
+            return
+        self.connection_controller.set_pump_state(checked)
+
+    def _toggle_recording_from_button(self, checked: bool) -> None:
+        if checked:
+            self._start_recording()
+        else:
+            self._stop_recording()
+        self._sync_recording_controls()
+
+    def _sync_pump_toggle(self) -> None:
+        is_on = self.pump_state_value.text() == "ON"
+        self.pump_toggle_button.setEnabled(self.connection_controller.is_connected())
+        self.pump_toggle_button.blockSignals(True)
+        self.pump_toggle_button.setChecked(is_on)
+        self.pump_toggle_button.setText("Pump ON" if is_on else "Pump OFF")
+        self.pump_toggle_button.blockSignals(False)
+
     def _append_log(self, severity: str, message: str) -> None:
         entry = self.warning_controller.append(severity, message)
         self.log_pane.appendPlainText(f"[{entry.timestamp.strftime('%H:%M:%S')}] {entry.severity.upper():<5} {entry.message}")
@@ -870,15 +1032,22 @@ class MainWindow(QMainWindow):
             self._append_log(severity, message)
 
     def _open_settings(self) -> None:
-        dialog = SettingsDialog(self.app_settings, self)
+        dialog = SettingsDialog(
+            self.app_settings,
+            current_mode=self.mode,
+            connection_identifier=self.ui_state.connection.identifier,
+            parent=self,
+        )
+        dialog.device_action_requested.connect(self._handle_settings_device_action)
         if dialog.exec() != dialog.Accepted:
             return
         previous_mode = self.mode
-        self._apply_dialog_settings(dialog)
-        self._apply_settings_to_widgets()
-        self._persist_current_settings()
         requested_mode = dialog.requested_mode
+        self._apply_dialog_settings(dialog)
         if requested_mode == previous_mode:
+            self.app_settings.last_mode = previous_mode
+            self._apply_settings_to_widgets()
+            self._persist_current_settings()
             self._append_log("info", "Settings updated.")
             return
 
@@ -901,12 +1070,23 @@ class MainWindow(QMainWindow):
         self.connection_controller.set_mode(new_mode)
         self._clear_plot_buffers()
         self._sync_connection_stack()
+        self._apply_settings_to_widgets()
         self._prime_mode_specific_lists()
-        self.metric_zirconia.set_value("-- V")
-        self.metric_heater.set_value("-- Ohm")
-        self.metric_flow.set_value("-- L/min")
+        self.metric_zirconia.set_value("--")
+        self.metric_heater.set_value("--")
+        self.metric_flow.set_value("--")
+        self._sync_pump_toggle()
+        self._sync_recording_controls()
         self._persist_current_settings()
         self._append_log("info", f"Mode switched to {new_mode}.")
+
+    def _handle_settings_device_action(self, action: str) -> None:
+        if action == "get_status":
+            self.connection_controller.request_status()
+        elif action == "get_capabilities":
+            self.connection_controller.request_capabilities()
+        elif action == "ping":
+            self.connection_controller.ping()
 
     def _clear_plot_buffers(self) -> None:
         self.plot_controller.clear()
@@ -914,6 +1094,7 @@ class MainWindow(QMainWindow):
         self._session_started = datetime.now()
         for curve in self.plot_curves.values():
             curve.setData([], [])
+        self.sensor_secondary_curve.setData([], [])
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._stop_recording()
@@ -926,9 +1107,36 @@ class MainWindow(QMainWindow):
         self._apply_column_widths()
 
     def _apply_column_widths(self) -> None:
-        if not hasattr(self, "left_column"):
+        if not hasattr(self, "content_splitter"):
             return
-        available_width = max(900, self.width() - 36)
-        left_width = int(available_width * self._left_column_ratio)
-        left_width = max(348, min(418, left_width))
-        self.left_column.setFixedWidth(left_width)
+        available_width = max(640, self.width() - 36)
+        left_width = max(272, min(360, int(available_width * 0.26)))
+        right_width = max(420, available_width - left_width)
+        self.content_splitter.setSizes([left_width, right_width])
+
+    def _apply_plot_splitter_sizes(self) -> None:
+        if hasattr(self, "plot_splitter"):
+            self.plot_splitter.setSizes([420, 220])
+
+    def _configure_plot_widget(self, plot: pg.PlotWidget) -> None:
+        plot.setBackground(None)
+        plot.showGrid(x=True, y=True, alpha=0.22)
+        plot.setClipToView(True)
+        plot.setDownsampling(auto=True, mode="peak")
+        plot.getPlotItem().getAxis("left").setTextPen(QColor(COLORS["muted"]))
+        plot.getPlotItem().getAxis("bottom").setTextPen(QColor(COLORS["muted"]))
+        plot.getPlotItem().getAxis("left").setPen(QColor(COLORS["muted"]))
+        plot.getPlotItem().getAxis("bottom").setPen(QColor(COLORS["muted"]))
+
+    def _update_sensor_secondary_geometry(self) -> None:
+        plot = self.plot_widgets.get("sensor")
+        if plot is None:
+            return
+        self.sensor_secondary_view.setGeometry(plot.getPlotItem().vb.sceneBoundingRect())
+        self.sensor_secondary_view.linkedViewChanged(plot.getPlotItem().vb, self.sensor_secondary_view.XAxis)
+
+    def _current_axis_mode(self) -> str:
+        return self.axis_mode_combo.currentText()
+
+    def _session_start_time(self) -> datetime:
+        return self._session_started

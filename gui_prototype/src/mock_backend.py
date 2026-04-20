@@ -75,6 +75,7 @@ BLE_CAPABILITIES_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10002"
 BLE_EVENT_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10003"
 PREFERRED_BLE_NAME_PREFIXES = ("M5STAMP-MONITOR",)
 PREFERRED_WIRED_PORT_TOKENS = ("usbmodem", "usbserial", "tty.usb", "cu.usb")
+BLE_SCAN_TIMEOUT_S = 2.5
 
 
 @dataclass
@@ -155,6 +156,9 @@ class MockBackend(QObject):
         if self._mode != BLE_MODE:
             self.ble_devices_discovered.emit([])
             return
+
+        if self._ble_discovered_devices:
+            self.ble_devices_discovered.emit(list(self._ble_discovered_devices.keys()))
 
         if BleakScanner is None:
             self._ble_discovered_devices = {
@@ -367,7 +371,7 @@ class MockBackend(QObject):
 
     def _scan_ble_worker(self) -> None:
         try:
-            devices = asyncio.run(BleakScanner.discover(timeout=6.0))
+            devices = asyncio.run(BleakScanner.discover(timeout=BLE_SCAN_TIMEOUT_S))
         except Exception as exc:
             self._ble_discovered_devices = {}
             self.ble_devices_discovered.emit([])
@@ -416,8 +420,11 @@ class MockBackend(QObject):
 
     def _connect_live_ble_device(self, identifier: str, target_identifier: str) -> None:
         if self._ble_thread is not None and self._ble_thread.is_alive():
-            self.log_generated.emit("warn", "BLE session is already active.")
-            return
+            if self._ble_disconnect_requested or not self._connected:
+                self._ble_thread.join(timeout=1.0)
+            if self._ble_thread is not None and self._ble_thread.is_alive():
+                self.log_generated.emit("warn", "BLE session is already active.")
+                return
 
         self._ble_session_kind = "live"
         self._ble_disconnect_requested = False
@@ -429,7 +436,10 @@ class MockBackend(QObject):
         self._ble_thread.start()
 
     def _disconnect_live_ble_device(self) -> None:
+        identifier = self._connected_name or "BLE device"
         self._ble_disconnect_requested = True
+        if self._connected:
+            self._emit_ble_disconnected(identifier)
 
     def _run_ble_session_thread(self, identifier: str, target_identifier: str) -> None:
         loop = asyncio.new_event_loop()
@@ -589,7 +599,6 @@ class MockBackend(QObject):
     def _emit_ble_disconnected(self, identifier: str) -> None:
         self._connected = False
         self._connected_name = ""
-        self._ble_disconnect_requested = False
         self._ble_status_notify_available = False
         self._ble_event_notify_available = False
         self._ble_capabilities_read_available = False
