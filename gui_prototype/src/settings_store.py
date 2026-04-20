@@ -160,8 +160,8 @@ class SettingsStore:
 
     @staticmethod
     def _normalize_selected_plot(plot_label: str) -> str:
-        if plot_label in {"Zirconia", "Flow", "Sensor / Flow"}:
-            return "Sensor / Flow"
-        if plot_label == "Heater":
-            return "Heater"
-        return "Sensor / Flow"
+        if plot_label in {"Zirconia", "Flow", "Sensor / Flow", "Flow / O2"}:
+            return "Flow / O2"
+        if plot_label in {"Heater", "Zirconia / Heater"}:
+            return "Zirconia / Heater"
+        return "Flow / O2"

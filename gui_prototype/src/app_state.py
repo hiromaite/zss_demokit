@@ -11,7 +11,7 @@ class PlotPreferences:
     time_span: str = "2 min"
     axis_mode: str = "Relative"
     auto_scale: bool = True
-    selected_plot: str = "Sensor / Flow"
+    selected_plot: str = "Flow / O2"
     x_follow_enabled: bool = True
     manual_y_ranges: dict[str, tuple[float, float]] = field(default_factory=dict)
 

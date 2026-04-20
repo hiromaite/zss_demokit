@@ -39,6 +39,7 @@ from controllers import (
 )
 from dialogs import ModeSwitchDialog, SettingsDialog
 from mock_backend import MockBackend, TelemetryPoint
+from mock_backend import PREFERRED_BLE_NAME_PREFIXES, PREFERRED_WIRED_PORT_TOKENS
 from protocol_constants import (
     BLE_MODE,
     WIRED_MODE,
@@ -322,7 +323,13 @@ class MainWindow(QMainWindow):
         self.left_column.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.left_column.setFrameShape(QFrame.NoFrame)
         self.left_column.setWidget(self.left_column_content)
-        self.right_column = self._build_right_column()
+        self.right_column_content = self._build_right_column()
+        self.right_column = VerticalOnlyScrollArea()
+        self.right_column.setWidgetResizable(True)
+        self.right_column.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.right_column.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.right_column.setFrameShape(QFrame.NoFrame)
+        self.right_column.setWidget(self.right_column_content)
         self.left_column.setMinimumWidth(272)
         self.left_column.setMaximumWidth(420)
         self.right_column.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
@@ -370,12 +377,8 @@ class MainWindow(QMainWindow):
         self.ble_connect_button = QPushButton("Connect")
         self.ble_connect_button.setObjectName("PrimaryButton")
         self.ble_connect_button.clicked.connect(self._toggle_connection)
-        self.ble_settings_button = QPushButton("Settings")
-        self.ble_settings_button.setObjectName("SecondaryButton")
-        self.ble_settings_button.clicked.connect(self._open_settings)
         row.addWidget(self.ble_connect_button)
         row.addWidget(self.ble_scan_button)
-        row.addWidget(self.ble_settings_button)
         layout.addLayout(row)
         return frame
 
@@ -390,13 +393,9 @@ class MainWindow(QMainWindow):
         self.wired_connect_button = QPushButton("Connect")
         self.wired_connect_button.setObjectName("PrimaryButton")
         self.wired_connect_button.clicked.connect(self._toggle_connection)
-        self.wired_settings_button = QPushButton("Settings")
-        self.wired_settings_button.setObjectName("SecondaryButton")
-        self.wired_settings_button.clicked.connect(self._open_settings)
         row.addWidget(self.port_selector, 1)
         row.addWidget(self.refresh_ports_button)
         row.addWidget(self.wired_connect_button)
-        row.addWidget(self.wired_settings_button)
         layout.addLayout(row)
 
         serial_hint = QLabel("Fixed serial setting: 115200 baud / 8N1")
@@ -437,6 +436,14 @@ class MainWindow(QMainWindow):
             grid.addWidget(value_label, row_index, 1)
 
         layout.addLayout(grid)
+        settings_row = QHBoxLayout()
+        settings_row.setSpacing(8)
+        self.status_settings_button = QPushButton("Settings")
+        self.status_settings_button.setObjectName("SecondaryButton")
+        self.status_settings_button.clicked.connect(self._open_settings)
+        settings_row.addWidget(self.status_settings_button)
+        settings_row.addStretch(1)
+        layout.addLayout(settings_row)
         return frame
 
     def _build_controls_panel(self) -> QWidget:
@@ -499,7 +506,7 @@ class MainWindow(QMainWindow):
         layout.setSpacing(10)
 
         cards = QWidget()
-        cards_layout = QGridLayout(cards)
+        cards_layout = QHBoxLayout(cards)
         cards_layout.setContentsMargins(0, 0, 0, 0)
         cards_layout.setSpacing(10)
 
@@ -507,12 +514,10 @@ class MainWindow(QMainWindow):
         self.metric_o2 = MetricCard("O2 Concentration (1-cell)", "%")
         self.metric_heater = MetricCard("Heater RTD Resistance", "Ohm")
         self.metric_flow = MetricCard("Flow Rate", "L/min")
-        cards_layout.addWidget(self.metric_zirconia, 0, 0)
-        cards_layout.addWidget(self.metric_o2, 0, 1)
-        cards_layout.addWidget(self.metric_heater, 1, 0)
-        cards_layout.addWidget(self.metric_flow, 1, 1)
-        cards_layout.setColumnStretch(0, 1)
-        cards_layout.setColumnStretch(1, 1)
+        cards_layout.addWidget(self.metric_flow, 1)
+        cards_layout.addWidget(self.metric_o2, 1)
+        cards_layout.addWidget(self.metric_zirconia, 1)
+        cards_layout.addWidget(self.metric_heater, 1)
         layout.addWidget(cards)
 
         toolbar, toolbar_layout = _panel("Plot Toolbar", "Time range, time-axis display, and view reset controls.")
@@ -552,7 +557,7 @@ class MainWindow(QMainWindow):
         self.plot_splitter.setHandleWidth(10)
         layout.addWidget(self.plot_splitter, 1)
 
-        sensor_frame, sensor_layout = _panel("Sensor / Flow", "Blue: zirconia voltage, orange: flow rate.")
+        sensor_frame, sensor_layout = _panel("Flow / O2 Concentration", "Blue: flow rate, orange: O2 concentration when calibrated.")
         sensor_view_box = PlotInteractionViewBox("sensor", self._handle_plot_user_interaction)
         sensor_axis_items = {
             "bottom": TimeAxisItem(
@@ -568,15 +573,15 @@ class MainWindow(QMainWindow):
         sensor_plot = pg.PlotWidget(viewBox=sensor_view_box, axisItems=sensor_axis_items)
         self._configure_plot_widget(sensor_plot)
         sensor_plot.setMinimumHeight(180)
-        sensor_plot.addLegend(offset=(10, 10))
+        sensor_legend = sensor_plot.addLegend(offset=(10, 10))
         sensor_plot.getPlotItem().showAxis("right")
-        sensor_plot.getPlotItem().getAxis("left").setLabel("Zirconia (V)")
-        sensor_plot.getPlotItem().getAxis("right").setLabel("Flow (L/min)")
+        sensor_plot.getPlotItem().getAxis("left").setLabel("Flow (L/min)")
+        sensor_plot.getPlotItem().getAxis("right").setLabel("O2 (%)")
         sensor_plot.getPlotItem().getAxis("right").setTextPen(QColor("#B5781A"))
         sensor_plot.getPlotItem().getAxis("right").setPen(QColor("#B5781A"))
         sensor_view_box.sigRangeChangedManually.connect(self._on_plot_range_changed_manually)
         self._viewbox_to_plot_key[sensor_view_box] = "sensor"
-        sensor_curve = sensor_plot.plot(pen=pg.mkPen(color="#315C8C", width=2.1), name="Zirconia")
+        sensor_curve = sensor_plot.plot(pen=pg.mkPen(color="#315C8C", width=2.1), name="Flow")
         sensor_curve.setSkipFiniteCheck(True)
 
         self.sensor_secondary_view = pg.ViewBox()
@@ -587,13 +592,15 @@ class MainWindow(QMainWindow):
         self.sensor_secondary_curve = pg.PlotCurveItem(pen=pg.mkPen(color="#B5781A", width=2.0))
         self.sensor_secondary_curve.setSkipFiniteCheck(True)
         self.sensor_secondary_view.addItem(self.sensor_secondary_curve)
+        sensor_legend.addItem(self.sensor_secondary_curve, "O2")
+        self.sensor_secondary_legend_item = sensor_legend.items[-1]
         sensor_plot.getPlotItem().vb.sigResized.connect(self._update_sensor_secondary_geometry)
         sensor_layout.addWidget(sensor_plot)
         self.plot_splitter.addWidget(sensor_frame)
         self.plot_widgets["sensor"] = sensor_plot
         self.plot_curves["sensor"] = sensor_curve
 
-        heater_frame, heater_layout = _panel("Heater RTD Resistance")
+        heater_frame, heater_layout = _panel("Zirconia Output Voltage / Heater RTD Resistance")
         heater_view_box = PlotInteractionViewBox("heater", self._handle_plot_user_interaction)
         heater_axis_items = {
             "bottom": TimeAxisItem(
@@ -609,11 +616,28 @@ class MainWindow(QMainWindow):
         heater_plot = pg.PlotWidget(viewBox=heater_view_box, axisItems=heater_axis_items)
         self._configure_plot_widget(heater_plot)
         heater_plot.setMinimumHeight(140)
+        heater_legend = heater_plot.addLegend(offset=(10, 10))
+        heater_plot.getPlotItem().showAxis("right")
         heater_plot.getPlotItem().getAxis("left").setLabel("Heater (Ohm)")
+        heater_plot.getPlotItem().getAxis("right").setLabel("Zirconia (V)")
+        heater_plot.getPlotItem().getAxis("right").setTextPen(QColor("#315C8C"))
+        heater_plot.getPlotItem().getAxis("right").setPen(QColor("#315C8C"))
         heater_view_box.sigRangeChangedManually.connect(self._on_plot_range_changed_manually)
         self._viewbox_to_plot_key[heater_view_box] = "heater"
-        heater_curve = heater_plot.plot(pen=pg.mkPen(color="#5E7D4B", width=2.1))
+        heater_curve = heater_plot.plot(pen=pg.mkPen(color="#5E7D4B", width=2.1), name="Heater")
         heater_curve.setSkipFiniteCheck(True)
+
+        self.heater_secondary_view = pg.ViewBox()
+        self.heater_secondary_view.setMouseEnabled(x=False, y=False)
+        heater_plot.scene().addItem(self.heater_secondary_view)
+        heater_plot.getPlotItem().getAxis("right").linkToView(self.heater_secondary_view)
+        self.heater_secondary_view.setXLink(heater_plot.getPlotItem().vb)
+        self.heater_secondary_curve = pg.PlotCurveItem(pen=pg.mkPen(color="#315C8C", width=2.0))
+        self.heater_secondary_curve.setSkipFiniteCheck(True)
+        self.heater_secondary_view.addItem(self.heater_secondary_curve)
+        heater_legend.addItem(self.heater_secondary_curve, "Zirconia")
+        self.heater_secondary_legend_item = heater_legend.items[-1]
+        heater_plot.getPlotItem().vb.sigResized.connect(self._update_heater_secondary_geometry)
         heater_layout.addWidget(heater_plot)
         self.plot_splitter.addWidget(heater_frame)
         self.plot_widgets["heater"] = heater_plot
@@ -622,11 +646,17 @@ class MainWindow(QMainWindow):
         self.plot_widgets["heater"].setXLink(self.plot_widgets["sensor"])
         QTimer.singleShot(0, self._apply_plot_splitter_sizes)
 
-        log_frame, log_layout = _panel("Warning / Event Log", object_name="WarningCard")
+        log_frame = CollapsiblePanel(
+            "Warning / Event Log",
+            "Review runtime warnings, events, and transport diagnostics.",
+            expanded=False,
+        )
+        log_frame.setObjectName("WarningCard")
+        log_layout = log_frame.content_layout
         self.log_pane = QPlainTextEdit()
         self.log_pane.setObjectName("LogPane")
         self.log_pane.setReadOnly(True)
-        self.log_pane.setMinimumHeight(150)
+        self.log_pane.setMinimumHeight(225)
         log_layout.addWidget(self.log_pane)
         layout.addWidget(log_frame)
 
@@ -686,14 +716,20 @@ class MainWindow(QMainWindow):
                 plot.enableAutoRange(axis="y", enable=False)
                 plot.setYRange(y_range[0], y_range[1], padding=0.02)
         self._update_axis_labels()
+        self._update_sensor_secondary_visibility()
 
     def _prime_mode_specific_lists(self) -> None:
         if self.mode == BLE_MODE:
             self.ble_device_selector.clear()
-            self.ble_device_selector.addItem("M5STAMP-MONITOR")
-            self._append_log("info", "BLE mode is ready. Click Scan to discover devices.")
+            self.ble_device_selector.addItem("Scanning for compatible BLE device...")
+            self.ble_device_selector.setEnabled(False)
+            self._append_log("info", "BLE mode is ready. Starting an initial scan for compatible devices.")
+            QTimer.singleShot(0, self.connection_controller.scan_ble_devices)
             return
 
+        self.port_selector.clear()
+        self.port_selector.addItem("Scanning for compatible serial device...")
+        self.port_selector.setEnabled(False)
         self.connection_controller.refresh_ports()
         self._append_log("info", f"{self.mode} mode is ready for visual review.")
 
@@ -703,11 +739,15 @@ class MainWindow(QMainWindow):
     def _sync_connection_controls(self) -> None:
         connected = self.connection_controller.is_connected()
         connect_text = "Disconnect" if connected else "Connect"
+        ble_available = self._has_expected_ble_selection()
+        wired_available = self._has_expected_wired_selection()
         self.ble_connect_button.setText(connect_text)
         self.wired_connect_button.setText(connect_text)
-        self.ble_device_selector.setEnabled(not connected)
+        self.ble_connect_button.setEnabled(connected or ble_available)
+        self.wired_connect_button.setEnabled(connected or wired_available)
+        self.ble_device_selector.setEnabled((not connected) and ble_available)
         self.ble_scan_button.setEnabled(not connected)
-        self.port_selector.setEnabled(not connected)
+        self.port_selector.setEnabled((not connected) and wired_available)
         self.refresh_ports_button.setEnabled(not connected)
 
     def _toggle_connection(self) -> None:
@@ -773,12 +813,17 @@ class MainWindow(QMainWindow):
             self.ble_device_selector.addItems(devices)
             preferred_index = max(0, self.ble_device_selector.findText(current))
             self.ble_device_selector.setCurrentIndex(preferred_index)
-            return
-        self.ble_device_selector.addItem("M5STAMP-MONITOR")
+        else:
+            self.ble_device_selector.addItem("No compatible BLE device detected")
+        self._sync_connection_controls()
 
     def _on_ports_discovered(self, ports: list[str]) -> None:
         self.port_selector.clear()
-        self.port_selector.addItems(ports)
+        if ports:
+            self.port_selector.addItems(ports)
+        else:
+            self.port_selector.addItem("No compatible serial device detected")
+        self._sync_connection_controls()
 
     def _on_telemetry(self, point: TelemetryPoint) -> None:
         plot_update = self.plot_controller.append_sample(point)
@@ -812,9 +857,20 @@ class MainWindow(QMainWindow):
         if not x_values:
             return
 
-        self.plot_curves["sensor"].setData(x_values, render_data["series"]["zirconia"])
-        self.sensor_secondary_curve.setData(x_values, render_data["series"]["flow"])
+        flow_values = render_data["series"]["flow"]
+        zirconia_values = render_data["series"]["zirconia"]
+        heater_values = render_data["series"]["heater"]
+        o2_values = self._build_o2_series(zirconia_values)
+
+        self.plot_curves["sensor"].setData(x_values, flow_values)
+        if o2_values is None:
+            self.sensor_secondary_curve.setData([], [])
+        else:
+            self.sensor_secondary_curve.setData(x_values, o2_values)
+        self._update_sensor_secondary_visibility()
+
         self.plot_curves["heater"].setData(x_values, render_data["series"]["heater"])
+        self.heater_secondary_curve.setData(x_values, zirconia_values)
         if self.plot_controller.x_follow_enabled:
             self._set_plot_x_range(render_data["xmin"], render_data["xmax"])
         self._update_axis_labels()
@@ -842,6 +898,7 @@ class MainWindow(QMainWindow):
             self.plot_widgets["sensor"].enableAutoRange(axis="y", enable=True)
             self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
             self.plot_widgets["heater"].enableAutoRange(axis="y", enable=True)
+            self.heater_secondary_view.enableAutoRange(axis="y", enable=True)
             self.plot_controller.manual_y_ranges.clear()
         self._persist_current_settings()
 
@@ -852,6 +909,7 @@ class MainWindow(QMainWindow):
         self.plot_widgets["sensor"].enableAutoRange(axis="y", enable=self.auto_scale_check.isChecked())
         self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
         self.plot_widgets["heater"].enableAutoRange(axis="y", enable=self.auto_scale_check.isChecked())
+        self.heater_secondary_view.enableAutoRange(axis="y", enable=True)
         self._refresh_plots()
         self._persist_current_settings()
 
@@ -897,7 +955,7 @@ class MainWindow(QMainWindow):
         self._persist_current_settings()
 
     def _sync_recording_controls(self) -> None:
-        can_toggle = self.connection_controller.is_connected() or self.recording_controller.is_recording
+        can_toggle = self._has_expected_connected_device() or self.recording_controller.is_recording
         self.record_toggle_button.setEnabled(can_toggle)
         checked = self.recording_controller.is_recording
         self.record_toggle_button.blockSignals(True)
@@ -941,7 +999,7 @@ class MainWindow(QMainWindow):
     def _start_recording(self) -> None:
         if self.recording_controller.is_recording:
             return
-        if not self.connection_controller.is_connected():
+        if not self._has_expected_connected_device():
             self._append_log("warn", "Connect to a device before starting recording.")
             return
 
@@ -992,7 +1050,7 @@ class MainWindow(QMainWindow):
         self._append_log("info", "Recording stopped.")
 
     def _toggle_pump_from_button(self, checked: bool) -> None:
-        if not self.connection_controller.is_connected():
+        if not self._has_expected_connected_device():
             self._append_log("warn", "Connect to a device before controlling the pump.")
             self._sync_pump_toggle()
             return
@@ -1007,7 +1065,7 @@ class MainWindow(QMainWindow):
 
     def _sync_pump_toggle(self) -> None:
         is_on = self.pump_state_value.text() == "ON"
-        self.pump_toggle_button.setEnabled(self.connection_controller.is_connected())
+        self.pump_toggle_button.setEnabled(self._has_expected_connected_device())
         self.pump_toggle_button.blockSignals(True)
         self.pump_toggle_button.setChecked(is_on)
         self.pump_toggle_button.setText("Stop Pump" if is_on else "Start Pump")
@@ -1111,6 +1169,7 @@ class MainWindow(QMainWindow):
         for curve in self.plot_curves.values():
             curve.setData([], [])
         self.sensor_secondary_curve.setData([], [])
+        self.heater_secondary_curve.setData([], [])
 
     def _refresh_metric_cards(self, metrics: dict[str, float] | None = None, point: TelemetryPoint | None = None) -> None:
         metrics = metrics or self.plot_controller.metric_snapshot()
@@ -1182,7 +1241,6 @@ class MainWindow(QMainWindow):
         available_width = max(640, self.width() - 36)
         left_width = max(272, min(360, int(available_width * 0.26)))
         self.left_column.setFixedWidth(left_width)
-        self._sync_left_column_content_width()
 
     def _apply_plot_splitter_sizes(self) -> None:
         if hasattr(self, "plot_splitter"):
@@ -1212,6 +1270,13 @@ class MainWindow(QMainWindow):
         self.sensor_secondary_view.setGeometry(plot.getPlotItem().vb.sceneBoundingRect())
         self.sensor_secondary_view.linkedViewChanged(plot.getPlotItem().vb, self.sensor_secondary_view.XAxis)
 
+    def _update_heater_secondary_geometry(self) -> None:
+        plot = self.plot_widgets.get("heater")
+        if plot is None:
+            return
+        self.heater_secondary_view.setGeometry(plot.getPlotItem().vb.sceneBoundingRect())
+        self.heater_secondary_view.linkedViewChanged(plot.getPlotItem().vb, self.heater_secondary_view.XAxis)
+
     def _current_axis_mode(self) -> str:
         return self.axis_mode_combo.currentText()
 
@@ -1219,7 +1284,68 @@ class MainWindow(QMainWindow):
         return self._session_started
 
     def _plot_key_from_label(self, label: str) -> str:
-        return "heater" if label == "Heater" else "sensor"
+        return "heater" if label == "Zirconia / Heater" else "sensor"
 
     def _plot_label_for_key(self, plot_key: str) -> str:
-        return "Heater" if plot_key == "heater" else "Sensor / Flow"
+        return "Zirconia / Heater" if plot_key == "heater" else "Flow / O2"
+
+    def _is_expected_ble_identifier(self, identifier: str) -> bool:
+        return any(identifier.startswith(prefix) for prefix in PREFERRED_BLE_NAME_PREFIXES)
+
+    def _is_expected_wired_identifier(self, identifier: str) -> bool:
+        haystack = identifier.lower()
+        return any(token in haystack for token in PREFERRED_WIRED_PORT_TOKENS)
+
+    def _is_expected_identifier_for_mode(self, mode: str, identifier: str) -> bool:
+        if not identifier or identifier == "Disconnected":
+            return False
+        if mode == BLE_MODE:
+            return self._is_expected_ble_identifier(identifier)
+        return self._is_expected_wired_identifier(identifier)
+
+    def _has_expected_ble_selection(self) -> bool:
+        return self._is_expected_ble_identifier(self.ble_device_selector.currentText().strip())
+
+    def _has_expected_wired_selection(self) -> bool:
+        return self._is_expected_wired_identifier(self.port_selector.currentText().strip())
+
+    def _has_expected_connected_device(self) -> bool:
+        return self.connection_controller.is_connected() and self._is_expected_identifier_for_mode(
+            self.mode,
+            self.ui_state.connection.identifier,
+        )
+
+    def _build_o2_series(self, zirconia_values: list[float]) -> list[float] | None:
+        if self.app_settings.o2.air_calibration_voltage_v is None:
+            return None
+        o2_values: list[float] = []
+        for zirconia_value in zirconia_values:
+            o2_percent = derive_o2_concentration_percent(
+                zirconia_value,
+                air_calibration_voltage_v=self.app_settings.o2.air_calibration_voltage_v,
+                zero_reference_voltage_v=self.app_settings.o2.zero_reference_voltage_v,
+                ambient_reference_percent=self.app_settings.o2.ambient_reference_percent,
+                invert_polarity=self.app_settings.o2.invert_polarity,
+            )
+            o2_values.append(float("nan") if o2_percent is None else o2_percent)
+        return o2_values
+
+    def _update_sensor_secondary_visibility(self) -> None:
+        visible = self.app_settings.o2.air_calibration_voltage_v is not None
+        plot = self.plot_widgets.get("sensor")
+        if plot is None:
+            return
+        if visible:
+            plot.getPlotItem().showAxis("right")
+        else:
+            plot.getPlotItem().hideAxis("right")
+        self._set_legend_entry_visible(self.sensor_secondary_legend_item, visible)
+
+    @staticmethod
+    def _set_legend_entry_visible(entry: object, visible: bool) -> None:
+        if not isinstance(entry, tuple) or len(entry) != 2:
+            return
+        sample, label = entry
+        for item in (sample, label):
+            if hasattr(item, "setVisible"):
+                item.setVisible(visible)

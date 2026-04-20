@@ -298,7 +298,7 @@ class SettingsDialog(QDialog):
         self.auto_scale_check = QCheckBox("Enable auto scale by default")
         self.auto_scale_check.setChecked(self._settings.plot.auto_scale)
         self.default_plot_combo = QComboBox()
-        self.default_plot_combo.addItems(["Sensor / Flow", "Heater"])
+        self.default_plot_combo.addItems(["Flow / O2", "Zirconia / Heater"])
         self.default_plot_combo.setCurrentText(self._settings.plot.selected_plot)
         form.addRow("Default time span", self.default_time_span_combo)
         form.addRow("Time axis display", self.axis_mode_combo)

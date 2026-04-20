@@ -177,8 +177,6 @@ class MockBackend(QObject):
         if list_ports is not None:
             discovered_ports = list(list_ports.comports())
             ports = self._preferred_wired_ports(discovered_ports)
-        if not ports:
-            ports = ["Prototype-Port", "/dev/cu.usbmodem-prototype"]
         self.ports_discovered.emit(ports)
         if self._mode == WIRED_MODE:
             self.log_generated.emit("info", "Serial port list refreshed.")
