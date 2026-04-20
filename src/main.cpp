@@ -301,8 +301,12 @@ void setup() {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Boot",
-        "Board config: pump=%d button=%d led=%d flow=%d i2c=(%d,%d) power_en=%d",
+        "Board config: pump=%d pwm=%luHz/%ubit on=%u%% off=%u%% button=%d led=%d flow=%d i2c=(%d,%d) power_en=%d",
         zss::board::kPumpOutputPin,
+        static_cast<unsigned long>(zss::board::kPumpPwmFrequencyHz),
+        static_cast<unsigned>(zss::board::kPumpPwmResolutionBits),
+        static_cast<unsigned>(zss::board::kPumpPwmDutyOnPercent),
+        static_cast<unsigned>(zss::board::kPumpPwmDutyOffPercent),
         zss::board::kPumpToggleButtonPin,
         zss::board::kStatusLedDataPin,
         zss::board::kFlowSensorAdcPin,

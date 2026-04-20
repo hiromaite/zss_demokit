@@ -14,6 +14,7 @@ class PumpController {
     bool isEnabled() const;
 
   private:
+    uint32_t dutyValueForPercent(uint8_t duty_percent) const;
     void applyHardwareState() const;
 
     int8_t output_pin_;

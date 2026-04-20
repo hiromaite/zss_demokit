@@ -85,6 +85,12 @@
 - M5StampS3 の button / boot strap pin を使う場合、`power-on held` 時の挙動には注意が必要
 - runtime toggle と boot mode selection は切り分ける
 
+実装メモ:
+
+- 2026-04-20 時点で `PumpController` は KNF `NMP03 KPDC-B3` 向け PWM 出力へ更新済み
+- 初期 duty policy は `20 kHz`, `10-bit`, `OFF=0 %`, `ON=50 %`
+- local button / BLE / wired のどの command source でも同じ PWM policy を通す
+
 #### A-2. WS2812 status LED state machine
 
 現行の `StatusLedController` は fault 時の simple GPIO placeholder であり、

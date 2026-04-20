@@ -197,6 +197,9 @@
 - `python3.12 -m compileall gui_prototype/src tools/protocol_fixture_smoke.py`、`./.venv_gui_prototype/bin/python3.12 tools/protocol_fixture_smoke.py`、`./.venv_pio/bin/pio run` を実施し、diagnostic wiring 後も GUI compile、shared protocol regression、firmware build が継続して成立することを確認した
 - Bundle A の初期実装として `InputButtonController`、ADS1115 ch0 `zirconia_ip_voltage_v` 読み取り、WS2812 `StatusLedController` state machine を追加した
 - `./.venv_pio/bin/pio run`、`./.venv_pio/bin/pio run -t upload --upload-port /dev/cu.usbmodem3101`、`source .venv_gui_prototype/bin/activate && python3.12 tools/protocol_fixture_smoke.py`、`source .venv_gui_prototype/bin/activate && python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` を実施し、Bundle A 追加後も build / upload / shared regression / wired transport が継続して成立することを確認した
+- KNF `NMP03 KPDC-B3` への切替に合わせて `PumpController` を PWM 駆動へ更新し、`20 kHz`, `10-bit`, `OFF=0 %`, `ON=50 %` を firmware へ反映した
+- PWM 化後は `./.venv_pio/bin/pio run` と `source .venv_gui_prototype/bin/activate && python3.12 tools/protocol_fixture_smoke.py` を再実施し、build と shared protocol regression の継続成立を確認した
+- 現セッションでは `/dev/cu.usbmodem*` / `/dev/cu.usbserial*` が見えておらず、NMP03 向け PWM 化後の upload / 実ポンプ確認は次回の device reconnect 後に実施する
 
 ## 8. 更新ルール
 
