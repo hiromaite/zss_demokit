@@ -48,6 +48,8 @@ directory、partial recovery detection、wired real transport まで反映済み
   - 現段階で実施可能な GUI / firmware / integration 検証項目
 - `windows_beta_smoke_checklist_v1.md`
   - Windows 11 Pro で beta packaging と実機 smoke を行うための手順
+- `timing_jitter_investigation_v1.md`
+  - wired `10 ms` path の jitter 観測と切り分け方針をまとめた調査メモ
 
 ## 読み進め方
 
@@ -65,6 +67,7 @@ directory、partial recovery detection、wired real transport まで反映済み
 12. `implementation_backlog_v1.md` で着手順と依存関係を確認する
 13. `validation_checklist_v1.md` で現段階の検証対象を確認する
 14. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
+15. `timing_jitter_investigation_v1.md` で timing jitter の current hypothesis と調査順を確認する
 
 ## 運用メモ
 

@@ -752,6 +752,8 @@
 - `tools/wired_timing_probe.py --samples 1200 --warmup 20` により initial timing probe を実施済み
 - current run では `1200` samples、non-unit sequence gap `0`、host inter-arrival `mean=9.131 ms / p95=20.095 ms / max=20.320 ms` を観測
 - host inter-arrival は USB / host buffering の影響を含むため、device-side cadence は sequence gap と併せて評価する
+- 2026-04-21 の follow-up では `mean=10.007 ms / stdev=6.521 ms / min=0.003 ms / p95=20.728 ms / max=21.160 ms` を再観測し、
+  `sequence gap=0` と合わせて current jitter の主因は host-side receive / timestamp path である可能性が高いという investigation hypothesis を立てた
 - `tools/wired_soak_probe.py --duration-s 30 --toggle-interval-s 2.5` により continuous run と pump repetition の初回実測を完了
 - current soak run では `3001` telemetry samples、sequence gap `0`、`Pump ON/OFF` toggle `12` 回、telemetry 上の status flags は `[2, 3]` で安定した
 - `tools/gui_wired_session_probe.py --duration-s 18 --toggle-interval-s 3` により offscreen GUI 経由の session-level stress 初回実測を完了

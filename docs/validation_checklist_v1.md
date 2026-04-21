@@ -174,6 +174,9 @@
 - `tools/protocol_fixture_smoke.py` を実施し、GUI 側 BLE / wired decoder、invalid-case parser、CSV row formatting、firmware-side C++ encoder の全ケース照合が通ることを確認
 - current fixture smoke では正常系 9 ケース、異常系 4 ケース、CSV row 1 ケースが `PASS` となり、`protocol_fixture_smoke_ok` を確認
 - `flow_rate_lpm` の placeholder policy を `dummy_selected_dp_orifice_v1` へ更新し、`selected differential pressure -> signed flow_rate_lpm` の換算へ置き換えた
+- 2026-04-21 の再計測では `tools/wired_timing_probe.py --port /dev/cu.usbmodem4101 --samples 1200 --warmup 20` により
+  `mean=10.007 ms / stdev=6.521 ms / min=0.003 ms / p95=20.728 ms / max=21.160 ms`, `sequence gap=0` を確認し、
+  CSV / host probe の大きな jitter は device cadence だけでなく host receive jitter を強く含むという current hypothesis を記録した
 - `python3.12 -m compileall gui_prototype/src tools/protocol_fixture_smoke.py` を再実施し、derived metric policy と session summary 追加後も compile を確認
 - `tools/protocol_fixture_smoke.py` を再実施し、差圧ベース placeholder へ更新後も shared fixture regression が維持されることを確認
 - direct helper smoke により `TelemetrySessionStats` が disconnect 時に summary log を生成し、sample count / gap total を含むことを確認
