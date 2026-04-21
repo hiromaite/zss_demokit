@@ -194,6 +194,8 @@
 - `gui_prototype` の wired backend は debug timing diagnostic を受け取れるよう更新し、
   `RecordingController` は `inter_arrival_ms` を device cadence 優先にしつつ
   `host_inter_arrival_ms`, `device_inter_arrival_ms`, `device_sample_tick_us` を CSV へ記録するよう更新した
+- wired backend の `host_received_at` は `frame decode 後` ではなく `serial chunk read 直後` を採るよう更新し、
+  host-side timing semantics を current transport boundary に近づけた
 - `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` により、
   debug timing support 追加後も offscreen GUI wired session が継続動作することを確認した
 - `python3.12 -m compileall gui_prototype/src tools/protocol_fixture_smoke.py` を再実施し、derived metric policy と session summary 追加後も compile を確認

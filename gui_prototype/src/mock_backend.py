@@ -739,6 +739,7 @@ class MockBackend(QObject):
             if waiting <= 0:
                 return
             chunk = self._wired_serial.read(waiting)
+            received_at = datetime.now()
         except Exception as exc:
             self.log_generated.emit("error", f"Serial read failed: {exc}")
             self.disconnect_device()
@@ -747,11 +748,10 @@ class MockBackend(QObject):
         frames = self._wired_frame_buffer.push(chunk)
         if not frames:
             return
-        handled_at = datetime.now()
         pending_points: list[TelemetryPoint] = []
         for frame in frames:
             if frame.message_type == 0x01:
-                pending_points.append(self._decode_wired_telemetry_point(frame, handled_at))
+                pending_points.append(self._decode_wired_telemetry_point(frame, received_at))
                 continue
             if frame.message_type == 0x16:
                 timing = decode_timing_diagnostic(frame)
@@ -765,13 +765,13 @@ class MockBackend(QObject):
                 point.device_sample_tick_us = device_sample_tick_us
             self.telemetry_generated.emit(point)
 
-    def _decode_wired_telemetry_point(self, frame: WiredFrame, handled_at: datetime) -> TelemetryPoint:
+    def _decode_wired_telemetry_point(self, frame: WiredFrame, received_at: datetime) -> TelemetryPoint:
         payload = decode_telemetry_sample(frame)
         self._pump_on = bool(payload["pump_on"])
         self._warning_latched = bool(payload["status_flags"] & STATUS_FLAG_TELEMETRY_RATE_WARNING)
         return TelemetryPoint(
             sequence=int(payload["sequence"]),
-            host_received_at=handled_at,
+            host_received_at=received_at,
             nominal_sample_period_ms=int(payload["nominal_sample_period_ms"]),
             status_flags=int(payload["status_flags"]),
             zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
