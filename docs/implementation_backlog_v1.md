@@ -758,6 +758,12 @@
   `304` 件の consecutive sample が同一 receive timestamp を共有することを確認した
 - current hypothesis は「GUI / host 側 poll と serial buffering が inter-arrival jitter の主因」であり、
   next low-risk step は worker-side receive timestamp を GUI timestamp と分離して観測すること
+- `tools/wired_receive_path_probe.py` により poll interval 感度を観測し、
+  `1 ms` poll では handling delay `mean=0.657 ms / p95=1.180 ms`、
+  `5 ms` poll では `mean=3.063 ms / p95=5.730 ms`、
+  `10 ms` poll では `mean=5.983 ms / p95=11.583 ms` を確認した
+- この比較から、GUI poll cadence は handled timestamp jitter を増やす secondary factor であり、
+  broad な distribution の主因は reader-side serial chunking / host buffering だと判断できる
 - `tools/wired_soak_probe.py --duration-s 30 --toggle-interval-s 2.5` により continuous run と pump repetition の初回実測を完了
 - current soak run では `3001` telemetry samples、sequence gap `0`、`Pump ON/OFF` toggle `12` 回、telemetry 上の status flags は `[2, 3]` で安定した
 - `tools/gui_wired_session_probe.py --duration-s 18 --toggle-interval-s 3` により offscreen GUI 経由の session-level stress 初回実測を完了

@@ -180,6 +180,12 @@
 - 続けて `tools/wired_batch_probe.py --port /dev/cu.usbmodem4101 --samples 1200 --warmup 20` を実施し、
   `513 / 1200` sample が multi-frame chunk から decode され、`304` 件の consecutive sample が同一 receive timestamp を共有することを確認した
 - current evidence は、CSV / host probe 上の大きな jitter の主因が host-side polling / buffering / batching にある可能性をさらに強める
+- `tools/wired_receive_path_probe.py` により reader-side receive timestamp と poll-handled timestamp を比較し、
+  `5 ms` poll では handling delay `mean=3.063 ms / p95=5.730 ms`,
+  `1 ms` poll では `mean=0.657 ms / p95=1.180 ms`,
+  `10 ms` poll では `mean=5.983 ms / p95=11.583 ms` を確認した
+- current evidence は、GUI poll cadence が handled timestamp jitter を増やす一方で、
+  broad な receive distribution 自体は reader-side serial chunking / host buffering に起因する可能性が高いことを示す
 - `python3.12 -m compileall gui_prototype/src tools/protocol_fixture_smoke.py` を再実施し、derived metric policy と session summary 追加後も compile を確認
 - `tools/protocol_fixture_smoke.py` を再実施し、差圧ベース placeholder へ更新後も shared fixture regression が維持されることを確認
 - direct helper smoke により `TelemetrySessionStats` が disconnect 時に summary log を生成し、sample count / gap total を含むことを確認

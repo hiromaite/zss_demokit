@@ -77,4 +77,4 @@ directory、partial recovery detection、wired real transport まで反映済み
 - GUI 関連文書は、top bar を持たない main layout、compact launcher、stable column width の prototype feedback を取り込んで更新する
 - GUI 関連文書は、controller layer と `QSettings` ベースの persistence 実装進捗も反映して更新する
 - shared regression baseline は `test/fixtures/protocol_golden_v1.json` に置き、protocol / CSV 回帰は `tools/protocol_fixture_smoke.py` で確認する
-- timing jitter の切り分けは `tools/wired_timing_probe.py` と `tools/wired_batch_probe.py` を使い、host-side batching と device-side cadence を分けて観測する
+- timing jitter の切り分けは `tools/wired_timing_probe.py`, `tools/wired_batch_probe.py`, `tools/wired_receive_path_probe.py` を使い、host-side batching と poll sensitivity と device-side cadence を分けて観測する
