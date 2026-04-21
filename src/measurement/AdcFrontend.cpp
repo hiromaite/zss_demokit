@@ -23,9 +23,6 @@ bool AdcFrontend::begin() {
     Wire.setTimeOut(zss::board::kI2cTimeoutMs);
 
     analogReadResolution(12);
-    if (zss::board::kFlowSensorAdcPin >= 0) {
-        analogSetPinAttenuation(zss::board::kFlowSensorAdcPin, ADC_11db);
-    }
     if (zss::board::kLegacyInputAdcPin >= 0) {
         analogSetPinAttenuation(zss::board::kLegacyInputAdcPin, ADC_11db);
     }
@@ -46,7 +43,7 @@ SensorMeasurements AdcFrontend::readMeasurements() {
             .zirconia_ip_voltage_v = NAN,
             .zirconia_output_voltage_v = NAN,
             .heater_rtd_resistance_ohm = NAN,
-            .flow_sensor_voltage_v = NAN,
+            .differential_pressure_selected_pa = NAN,
         };
     }
 
@@ -54,7 +51,7 @@ SensorMeasurements AdcFrontend::readMeasurements() {
         .zirconia_ip_voltage_v = NAN,
         .zirconia_output_voltage_v = NAN,
         .heater_rtd_resistance_ohm = NAN,
-        .flow_sensor_voltage_v = readOversampledInternalVoltage(zss::board::kFlowSensorAdcPin),
+        .differential_pressure_selected_pa = NAN,
     };
 
     if (!external_adc_available_) {
@@ -73,8 +70,7 @@ SensorMeasurements AdcFrontend::readMeasurements() {
         external_adc_available_ &&
         isfinite(measurements.zirconia_ip_voltage_v) &&
         isfinite(measurements.zirconia_output_voltage_v) &&
-        isfinite(measurements.heater_rtd_resistance_ohm) &&
-        isfinite(measurements.flow_sensor_voltage_v);
+        isfinite(measurements.heater_rtd_resistance_ohm);
     return measurements;
 }
 
@@ -118,22 +114,6 @@ bool AdcFrontend::initializeExternalAdc() {
     return true;
 }
 
-float AdcFrontend::readOversampledInternalVoltage(int8_t pin) const {
-    if (pin < 0) {
-        return NAN;
-    }
-
-    uint32_t sum_millivolts = 0;
-    for (uint8_t i = 0; i < zss::board::kInternalAdcOversamplingCount; ++i) {
-        sum_millivolts += static_cast<uint32_t>(analogReadMilliVolts(pin));
-    }
-
-    const float average_voltage = static_cast<float>(sum_millivolts) /
-                                  static_cast<float>(zss::board::kInternalAdcOversamplingCount) /
-                                  1000.0f;
-    return convertToActualVoltage(average_voltage);
-}
-
 bool AdcFrontend::tryReadAdsChannelVoltage(uint8_t channel, float& voltage_out) {
     if (!external_adc_available_) {
         setError("External ADC not initialized");
@@ -175,10 +155,6 @@ bool AdcFrontend::tryReadLegacySensorSet(SensorMeasurements& measurements) {
     }
 
     return isfinite(measurements.heater_rtd_resistance_ohm);
-}
-
-float AdcFrontend::convertToActualVoltage(float measured_voltage) const {
-    return measured_voltage * zss::board::kVoltageDividerRatio;
 }
 
 void AdcFrontend::setError(const char* message) {

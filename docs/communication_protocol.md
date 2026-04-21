@@ -150,7 +150,12 @@ v1 の主要 measurement 候補:
 
 - `zirconia_output_voltage_v`
 - `heater_rtd_resistance_ohm`
-- `flow_sensor_voltage_v`
+- `differential_pressure_selected_pa`
+
+v1 の diagnostic measurement 候補:
+
+- `differential_pressure_low_range_pa`
+- `differential_pressure_high_range_pa`
 
 v1 の主要 derived value:
 
@@ -236,13 +241,13 @@ v1 方針:
 - `status_flags`
 - `zirconia_output_voltage_v`
 - `heater_rtd_resistance_ohm`
-- `flow_sensor_voltage_v`
+- `differential_pressure_selected_pa`
 
 備考:
 
 - 現行 old_firmware は 32 byte notify を送っている
 - 新仕様では将来拡張に備え、version / flags / sequence を明示的に先頭へ持たせたい
-- GUI 側で `host_received_at` を付与し、`flow_rate_lpm` を計算する
+- GUI 側で `host_received_at` を付与し、`selected differential pressure` から `flow_rate_lpm` を計算する
 
 ### 7.4 BLE command encoding 案
 
@@ -300,7 +305,9 @@ payload の v1 候補:
 
 - `zirconia_output_voltage_v`
 - `heater_rtd_resistance_ohm`
-- `flow_sensor_voltage_v`
+- `differential_pressure_selected_pa`
+- `differential_pressure_low_range_pa` optional
+- `differential_pressure_high_range_pa` optional
 
 ### 8.4 テキスト系 fallback 案
 
@@ -311,13 +318,13 @@ payload の v1 候補:
 [caps] device_type=zirconia_sensor
 [caps] transport_type=serial
 [status] pong=1
-[telemetry] seq=123,zirconia_output_voltage_v=...,heater_rtd_resistance_ohm=...,flow_sensor_voltage_v=...
+[telemetry] seq=123,zirconia_output_voltage_v=...,heater_rtd_resistance_ohm=...,differential_pressure_selected_pa=...
 ```
 
 または:
 
 ```text
-{"type":"telemetry","seq":123,"channels":{"zirconia_output_voltage_v":0.64,"heater_rtd_resistance_ohm":123.4,"flow_sensor_voltage_v":1.25}}
+{"type":"telemetry","seq":123,"channels":{"zirconia_output_voltage_v":0.64,"heater_rtd_resistance_ohm":123.4,"differential_pressure_selected_pa":1.25}}
 ```
 
 比較観点:

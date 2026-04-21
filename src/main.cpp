@@ -217,20 +217,23 @@ void runSamplingStep(uint32_t now_ms) {
 
     const auto measurements = g_measurement_core.acquire();
     const auto& differential_pressure = g_measurement_core.latestDifferentialPressureMeasurements();
+    auto canonical_measurements = measurements;
     updateDiagnosticBits();
     g_app_state.setStatusFlag(zss::protocol::kStatusFlagAdcFaultMask, !g_measurement_core.isHealthy());
     const bool sensor_fault =
         !g_measurement_core.lastReadSucceeded() ||
         !isfinite(measurements.zirconia_ip_voltage_v) ||
         !isfinite(measurements.zirconia_output_voltage_v) ||
-        !isfinite(measurements.heater_rtd_resistance_ohm) ||
-        !isfinite(measurements.flow_sensor_voltage_v);
+        !isfinite(measurements.heater_rtd_resistance_ohm);
     g_app_state.setStatusFlag(zss::protocol::kStatusFlagSensorFaultMask, sensor_fault);
     if (g_measurement_core.differentialPressureHealthy() &&
         isfinite(differential_pressure.selected_differential_pressure_pa)) {
+        canonical_measurements.differential_pressure_selected_pa =
+            differential_pressure.selected_differential_pressure_pa;
         g_app_state.setDifferentialPressureSelectedPa(
             differential_pressure.selected_differential_pressure_pa);
     } else {
+        canonical_measurements.differential_pressure_selected_pa = NAN;
         g_app_state.clearDifferentialPressureSelectedPa();
     }
     if (g_measurement_core.differentialPressureHealthy() &&
@@ -243,7 +246,7 @@ void runSamplingStep(uint32_t now_ms) {
         g_app_state.clearDifferentialPressureRawPa();
     }
     const uint32_t sequence = g_app_state.nextSequence();
-    g_app_state.updateMeasurements(sequence, measurements);
+    g_app_state.updateMeasurements(sequence, canonical_measurements);
 
     emitStatusTransitionEvents(previous_status_flags, g_app_state.statusFlags());
 
@@ -265,12 +268,12 @@ void emitSummaryLog(uint32_t now_ms) {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Sample",
-        "seq=%lu Vip=%.3fV Vout=%.3fV RTD=%.1fOhm FlowRaw=%.3fV DpSel=%.2fPa Dp125=%.2fPa Dp500=%.2fPa DpLow=%u flags=0x%08lX diag=0x%08lX overruns=%lu",
+        "seq=%lu Vip=%.3fV Vout=%.3fV RTD=%.1fOhm DpSel=%.2fPa Dp125=%.2fPa Dp500=%.2fPa DpLow=%u flags=0x%08lX diag=0x%08lX overruns=%lu",
         static_cast<unsigned long>(g_app_state.latestSequence()),
         measurements.zirconia_ip_voltage_v,
         measurements.zirconia_output_voltage_v,
         measurements.heater_rtd_resistance_ohm,
-        measurements.flow_sensor_voltage_v,
+        measurements.differential_pressure_selected_pa,
         differential_pressure.selected_differential_pressure_pa,
         differential_pressure.low_range_differential_pressure_pa,
         differential_pressure.high_range_differential_pressure_pa,
@@ -351,7 +354,7 @@ void setup() {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Boot",
-        "Board config: pump=%d pwm=%luHz/%ubit on=%u%% off=%u%% button=%d led=%d flow=%d i2c=(%d,%d) power_en=%d",
+        "Board config: pump=%d pwm=%luHz/%ubit on=%u%% off=%u%% button=%d led=%d i2c=(%d,%d) power_en=%d",
         zss::board::kPumpOutputPin,
         static_cast<unsigned long>(zss::board::kPumpPwmFrequencyHz),
         static_cast<unsigned>(zss::board::kPumpPwmResolutionBits),
@@ -359,7 +362,6 @@ void setup() {
         static_cast<unsigned>(zss::board::kPumpPwmDutyOffPercent),
         zss::board::kPumpToggleButtonPin,
         zss::board::kStatusLedDataPin,
-        zss::board::kFlowSensorAdcPin,
         zss::board::kI2cSdaPin,
         zss::board::kI2cSclPin,
         zss::board::kSensorPowerEnablePin);

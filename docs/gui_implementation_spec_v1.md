@@ -293,17 +293,17 @@ AppUiState
 v1 では placeholder として以下を採用する。
 
 ```text
-differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
-flow_rate_lpm = sign(differential_pressure_pa) * (1.0 * sqrt(abs(differential_pressure_pa)) + 0.0)
+flow_rate_lpm = sign(differential_pressure_selected_pa) * (1.0 * sqrt(abs(differential_pressure_selected_pa)) + 0.0)
 ```
 
 metadata:
 
-- `derived_metric_policy = dummy_orifice_dp_v1`
+- `derived_metric_policy = dummy_selected_dp_orifice_v1`
 
 補足:
 
-- v1 では差圧そのものは transport field として持たず、GUI 側の derived pipeline 内で扱う
+- v1 では `selected differential pressure` を canonical transport field として持つ
+- raw `SDP810 / SDP811` は diagnostics として optional に扱う
 - 正式な差圧変換係数とオリフィス係数は、流量計とガスラインを使った後続評価で更新する
 
 ## 13. 推奨モジュール分割

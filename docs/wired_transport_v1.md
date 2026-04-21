@@ -83,7 +83,7 @@ total_frame_size = 16 + payload_length + 2
 | `6` | `2` | `uint16` | `telemetry_field_bits` | See `protocol_catalog_v1.md` |
 | `8` | `4` | `float32` | `zirconia_output_voltage_v` | Canonical measurement |
 | `12` | `4` | `float32` | `heater_rtd_resistance_ohm` | Canonical measurement |
-| `16` | `4` | `float32` | `flow_sensor_voltage_v` | Canonical measurement |
+| `16` | `4` | `float32` | `differential_pressure_selected_pa` | Canonical measurement |
 
 Payload size: `20 bytes`
 

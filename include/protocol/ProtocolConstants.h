@@ -105,8 +105,7 @@ inline constexpr uint16_t kSupportedCommandBits =
 
 inline constexpr uint16_t kTelemetryFieldBits =
     (1u << 0) |
-    (1u << 1) |
-    (1u << 2);
+    (1u << 1);
 inline constexpr uint16_t kTelemetryFieldDifferentialPressureSelectedMask = 1u << 3;
 inline constexpr uint16_t kTelemetryFieldDifferentialPressureLowRangeMask = 1u << 4;
 inline constexpr uint16_t kTelemetryFieldDifferentialPressureHighRangeMask = 1u << 5;

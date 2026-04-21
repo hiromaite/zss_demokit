@@ -20,7 +20,9 @@ CSV_COLUMNS = [
     "pump_state",
     "zirconia_output_voltage_v",
     "heater_rtd_resistance_ohm",
-    "flow_sensor_voltage_v",
+    "differential_pressure_selected_pa",
+    "differential_pressure_low_range_pa",
+    "differential_pressure_high_range_pa",
     "flow_rate_lpm",
 ]
 

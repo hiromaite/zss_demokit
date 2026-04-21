@@ -231,7 +231,7 @@ void BleTransport::publishTelemetry(const protocol::TelemetryPayloadV1& payload)
     writeU32Le(encoded_payload + 8, payload.status_flags);
     writeFloat32Le(encoded_payload + 12, payload.zirconia_output_voltage_v);
     writeFloat32Le(encoded_payload + 16, payload.heater_rtd_resistance_ohm);
-    writeFloat32Le(encoded_payload + 20, payload.flow_sensor_voltage_v);
+    writeFloat32Le(encoded_payload + 20, payload.differential_pressure_selected_pa);
     writeU16Le(encoded_payload + 24, payload.nominal_sample_period_ms);
     writeU16Le(encoded_payload + 26, payload.telemetry_field_bits);
     writeU32Le(encoded_payload + 28, payload.diagnostic_bits);
@@ -257,7 +257,7 @@ void BleTransport::publishStatusSnapshot(const protocol::StatusSnapshotPayloadV1
     writeU16Le(encoded_payload + 14, payload.telemetry_field_bits);
     writeFloat32Le(encoded_payload + 16, payload.zirconia_output_voltage_v);
     writeFloat32Le(encoded_payload + 20, payload.heater_rtd_resistance_ohm);
-    writeFloat32Le(encoded_payload + 24, payload.flow_sensor_voltage_v);
+    writeFloat32Le(encoded_payload + 24, payload.differential_pressure_selected_pa);
 
     g_status_characteristic->setValue(encoded_payload, sizeof(encoded_payload));
     if (connected_) {

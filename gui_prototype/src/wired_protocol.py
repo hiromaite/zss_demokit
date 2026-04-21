@@ -175,14 +175,12 @@ def decode_capabilities(frame: WiredFrame) -> dict[str, object]:
         telemetry_fields.append(TELEMETRY_FIELDS[0])
     if telemetry_bits & (1 << 1):
         telemetry_fields.append(TELEMETRY_FIELDS[1])
-    if telemetry_bits & (1 << 2):
-        telemetry_fields.append(TELEMETRY_FIELDS[2])
     if telemetry_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED:
-        telemetry_fields.append(TELEMETRY_FIELDS[3])
+        telemetry_fields.append(TELEMETRY_FIELDS[2])
     if telemetry_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE:
-        telemetry_fields.append(TELEMETRY_FIELDS[4])
+        telemetry_fields.append(TELEMETRY_FIELDS[3])
     if telemetry_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE:
-        telemetry_fields.append(TELEMETRY_FIELDS[5])
+        telemetry_fields.append(TELEMETRY_FIELDS[4])
 
     return {
         "protocol_version": build_protocol_version_text(frame),
@@ -228,7 +226,6 @@ def decode_status_snapshot(frame: WiredFrame) -> dict[str, object]:
         "telemetry_field_bits": telemetry_field_bits,
         "zirconia_output_voltage_v": zirconia,
         "heater_rtd_resistance_ohm": heater,
-        "flow_sensor_voltage_v": flow_raw,
         "differential_pressure_selected_pa": differential_pressure_selected_pa,
         "differential_pressure_low_range_pa": low_range_raw,
         "differential_pressure_high_range_pa": high_range_raw,

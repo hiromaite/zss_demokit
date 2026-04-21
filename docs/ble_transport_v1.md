@@ -111,7 +111,7 @@ If `EXTENSION_SERVICE_UUID` is absent:
 | `8` | `4` | `uint32` | `status_flags` | See `protocol_catalog_v1.md` |
 | `12` | `4` | `float32` | `zirconia_output_voltage_v` | Canonical measurement |
 | `16` | `4` | `float32` | `heater_rtd_resistance_ohm` | Canonical measurement |
-| `20` | `4` | `float32` | `flow_sensor_voltage_v` | Canonical measurement |
+| `20` | `4` | `float32` | `differential_pressure_selected_pa` | Canonical measurement |
 | `24` | `2` | `uint16` | `nominal_sample_period_ms` | Target sample period |
 | `26` | `2` | `uint16` | `telemetry_field_bits` | See `protocol_catalog_v1.md` |
 | `28` | `4` | `uint32` | `diagnostic_bits` | Optional diagnostics; default `0` |
@@ -119,7 +119,7 @@ If `EXTENSION_SERVICE_UUID` is absent:
 ### 7.3 Interpretation
 
 - GUI adds `host_received_at` when the packet is received
-- GUI computes `flow_rate_lpm` from `flow_sensor_voltage_v`
+- GUI computes `flow_rate_lpm` from `differential_pressure_selected_pa`
 - `telemetry_field_bits` allows future optional field negotiation while keeping packet size fixed
 
 ## 8. Status Snapshot Payload v1
@@ -149,7 +149,7 @@ If `EXTENSION_SERVICE_UUID` is absent:
 | `14` | `2` | `uint16` | `telemetry_field_bits` | See `protocol_catalog_v1.md` |
 | `16` | `4` | `float32` | `zirconia_output_voltage_v` | Latest cached measurement |
 | `20` | `4` | `float32` | `heater_rtd_resistance_ohm` | Latest cached measurement |
-| `24` | `4` | `float32` | `flow_sensor_voltage_v` | Latest cached measurement |
+| `24` | `4` | `float32` | `differential_pressure_selected_pa` | Latest cached measurement |
 
 Packet size: `28 bytes`
 
@@ -246,7 +246,7 @@ Packet size: `12 bytes`
 - GUI shall subscribe to telemetry notifications before enabling record mode
 - GUI shall read capabilities if extension service is present
 - GUI shall treat missing extension service as degraded mode, not fatal error
-- GUI shall compute `flow_rate_lpm` from `flow_sensor_voltage_v`
+- GUI shall compute `flow_rate_lpm` from `differential_pressure_selected_pa`
 - GUI shall use `sequence` and host receive time to detect gaps and rate instability
 
 ## 12. Compatibility Notes

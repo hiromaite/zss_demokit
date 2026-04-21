@@ -66,7 +66,9 @@
 | :--- | :--- | :--- | :--- | :--- |
 | `zirconia_output_voltage_v` | `float32` | `V` | Yes | Zirconia output voltage |
 | `heater_rtd_resistance_ohm` | `float32` | `Ohm` | Yes | Heater RTD resistance |
-| `flow_sensor_voltage_v` | `float32` | `V` | Yes | Raw voltage from the differential-pressure sensing frontend |
+| `differential_pressure_selected_pa` | `float32` | `Pa` | Yes | Canonical differential pressure selected by device-side selector |
+| `differential_pressure_low_range_pa` | `float32` | `Pa` | Optional | Raw low-range differential pressure (`SDP810`) for diagnostics |
+| `differential_pressure_high_range_pa` | `float32` | `Pa` | Optional | Raw high-range differential pressure (`SDP811`) for diagnostics |
 
 ### 4.2 GUI-Derived Display Fields
 
@@ -77,14 +79,14 @@
 方針:
 
 - `flow_rate_lpm` は GUI 側で計算する
-- device は raw/canonical measurement として `flow_sensor_voltage_v` を送る
-- v1 実装では placeholder として `dummy_orifice_dp_v1` を使う
+- device は canonical measurement として `differential_pressure_selected_pa` を送る
+- raw 2ch は diagnostic measurement として transport ごとに optional とする
+- v1 実装では placeholder として `dummy_selected_dp_orifice_v1` を使う
 
 v1 placeholder formula:
 
 ```text
-differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
-flow_rate_lpm = sign(differential_pressure_pa) * (1.0 * sqrt(abs(differential_pressure_pa)) + 0.0)
+flow_rate_lpm = sign(differential_pressure_selected_pa) * (1.0 * sqrt(abs(differential_pressure_selected_pa)) + 0.0)
 ```
 
 補足:
@@ -109,7 +111,9 @@ TelemetrySample
   measurements:
     zirconia_output_voltage_v
     heater_rtd_resistance_ohm
-    flow_sensor_voltage_v
+    differential_pressure_selected_pa
+    differential_pressure_low_range_pa?
+    differential_pressure_high_range_pa?
   derived_values:
     flow_rate_lpm
 ```
@@ -214,8 +218,10 @@ binary transport 上では、一部の項目が code / bit field に符号化さ
 | :--- | :--- |
 | `0` | `zirconia_output_voltage_v` |
 | `1` | `heater_rtd_resistance_ohm` |
-| `2` | `flow_sensor_voltage_v` |
-| `3..15` | `reserved` |
+| `3` | `differential_pressure_selected_pa` |
+| `4` | `differential_pressure_low_range_pa` |
+| `5` | `differential_pressure_high_range_pa` |
+| `2, 6..15` | `reserved` |
 
 ### 9.3 Logical-to-Wire Mapping Notes
 
@@ -233,7 +239,9 @@ binary transport 上では、一部の項目が code / bit field に符号化さ
 | :--- | :--- | :--- | :--- |
 | `zirconia_output_voltage_v` | Required | Required | Common display item |
 | `heater_rtd_resistance_ohm` | Required | Required | Common display item |
-| `flow_sensor_voltage_v` | Required | Required | GUI computes flow rate |
+| `differential_pressure_selected_pa` | Required | Required | GUI computes flow rate from this canonical field |
+| `differential_pressure_low_range_pa` | Optional / usually omitted | Optional | Diagnostic field; typically available on wired only |
+| `differential_pressure_high_range_pa` | Optional / usually omitted | Optional | Diagnostic field; typically available on wired only |
 | `flow_rate_lpm` | GUI-derived | GUI-derived | Not canonical transport field |
 | `get_capabilities` | Required | Required | Common logical command |
 | `get_status` | Required | Required | Common logical command |

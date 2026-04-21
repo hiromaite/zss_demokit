@@ -64,10 +64,10 @@ session_20260408_153000.partial.csv
 # firmware_version=1.0.0
 # protocol_version=1.0
 # nominal_sample_period_ms=50
-# derived_metric_policy=dummy_orifice_dp_v1
+# derived_metric_policy=dummy_selected_dp_orifice_v1
 # source_endpoint=BLE:M5STAMP-MONITOR
 # notes=
-host_received_at_iso,host_received_at_unix_ms,mode,transport_type,sequence,sequence_gap,inter_arrival_ms,nominal_sample_period_ms,status_flags_hex,pump_state,zirconia_output_voltage_v,heater_rtd_resistance_ohm,flow_sensor_voltage_v,flow_rate_lpm
+host_received_at_iso,host_received_at_unix_ms,mode,transport_type,sequence,sequence_gap,inter_arrival_ms,nominal_sample_period_ms,status_flags_hex,pump_state,zirconia_output_voltage_v,heater_rtd_resistance_ohm,differential_pressure_selected_pa,differential_pressure_low_range_pa,differential_pressure_high_range_pa,flow_rate_lpm
 ```
 
 ## 5. Required Header Metadata Keys
@@ -87,7 +87,7 @@ host_received_at_iso,host_received_at_unix_ms,mode,transport_type,sequence,seque
 | `protocol_version` | Recommended | Protocol version if known |
 | `nominal_sample_period_ms` | Recommended | Target sample period |
 | `source_endpoint` | Recommended | `BLE:<name>` or `COM<n>` など |
-| `derived_metric_policy` | Recommended | Example: `dummy_orifice_dp_v1` |
+| `derived_metric_policy` | Recommended | Example: `dummy_selected_dp_orifice_v1` |
 | `notes` | Optional | Free text |
 
 ## 6. CSV Columns
@@ -107,7 +107,9 @@ status_flags_hex
 pump_state
 zirconia_output_voltage_v
 heater_rtd_resistance_ohm
-flow_sensor_voltage_v
+differential_pressure_selected_pa
+differential_pressure_low_range_pa
+differential_pressure_high_range_pa
 flow_rate_lpm
 ```
 
@@ -127,7 +129,9 @@ flow_rate_lpm
 | `pump_state` | `uint8` | - | Yes | `1` when pump on, otherwise `0` |
 | `zirconia_output_voltage_v` | `float32` | V | Yes | Canonical measurement |
 | `heater_rtd_resistance_ohm` | `float32` | Ohm | Yes | Canonical measurement |
-| `flow_sensor_voltage_v` | `float32` | V | Yes | Canonical measurement |
+| `differential_pressure_selected_pa` | `float32` | Pa | Yes | Canonical differential pressure selected by device |
+| `differential_pressure_low_range_pa` | `float32` | Pa | Optional | Raw low-range differential pressure; blank when unavailable |
+| `differential_pressure_high_range_pa` | `float32` | Pa | Optional | Raw high-range differential pressure; blank when unavailable |
 | `flow_rate_lpm` | `float32` | L/min | Yes | GUI-derived value |
 
 ## 7. Interpretation Rules
@@ -151,20 +155,20 @@ flow_rate_lpm
 
 ### 7.4 Numeric Missing Values
 
-- v1 の主要 measurement は required のため、基本は空欄にしない
+- v1 の core measurement は基本空欄にしない
 - 取得不能時は空欄ではなく warning を伴う fallback 値使用を避け、可能ならその行を記録しないか fault 状態で扱う
+- raw diagnostic field (`differential_pressure_low_range_pa`, `differential_pressure_high_range_pa`) は transport に存在しない場合のみ空欄としてよい
 
 ### 7.5 `flow_rate_lpm`
 
-- v1 では placeholder として `dummy_orifice_dp_v1` を使う
-- formula は以下の 2 段階 placeholder とする
+- v1 では placeholder として `dummy_selected_dp_orifice_v1` を使う
+- formula は以下の placeholder とする
 
 ```text
-differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
-flow_rate_lpm = sign(differential_pressure_pa) * (1.0 * sqrt(abs(differential_pressure_pa)) + 0.0)
+flow_rate_lpm = sign(differential_pressure_selected_pa) * (1.0 * sqrt(abs(differential_pressure_selected_pa)) + 0.0)
 ```
 
-- metadata に `derived_metric_policy=dummy_orifice_dp_v1` を残すことを推奨する
+- metadata に `derived_metric_policy=dummy_selected_dp_orifice_v1` を残すことを推奨する
 - flow rate は signed value として記録し、後続の calibration で呼気/吸気方向を維持する
 
 ## 8. Example Rows

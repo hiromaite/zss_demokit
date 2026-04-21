@@ -39,7 +39,6 @@ def decode_ble_telemetry_packet(data: bytes) -> dict[str, object]:
         "status_flags": struct.unpack_from("<I", data, 8)[0],
         "zirconia_output_voltage_v": struct.unpack_from("<f", data, 12)[0],
         "heater_rtd_resistance_ohm": struct.unpack_from("<f", data, 16)[0],
-        "flow_sensor_voltage_v": flow_raw,
         "nominal_sample_period_ms": struct.unpack_from("<H", data, 24)[0],
         "telemetry_field_bits": telemetry_field_bits,
         "differential_pressure_selected_pa": differential_pressure_selected_pa,
@@ -69,7 +68,6 @@ def decode_ble_status_snapshot(data: bytes) -> dict[str, object]:
         "telemetry_field_bits": telemetry_field_bits,
         "zirconia_output_voltage_v": struct.unpack_from("<f", data, 16)[0],
         "heater_rtd_resistance_ohm": struct.unpack_from("<f", data, 20)[0],
-        "flow_sensor_voltage_v": flow_raw,
         "differential_pressure_selected_pa": differential_pressure_selected_pa,
         "pump_on": (status_flags & STATUS_FLAG_PUMP_ON) != 0,
     }
@@ -99,14 +97,12 @@ def decode_ble_capabilities_packet(data: bytes) -> dict[str, object]:
         telemetry_fields.append(TELEMETRY_FIELDS[0])
     if telemetry_field_bits & (1 << 1):
         telemetry_fields.append(TELEMETRY_FIELDS[1])
-    if telemetry_field_bits & (1 << 2):
-        telemetry_fields.append(TELEMETRY_FIELDS[2])
     if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED:
-        telemetry_fields.append(TELEMETRY_FIELDS[3])
+        telemetry_fields.append(TELEMETRY_FIELDS[2])
     if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE:
-        telemetry_fields.append(TELEMETRY_FIELDS[4])
+        telemetry_fields.append(TELEMETRY_FIELDS[3])
     if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE:
-        telemetry_fields.append(TELEMETRY_FIELDS[5])
+        telemetry_fields.append(TELEMETRY_FIELDS[4])
 
     device_type = "unknown"
     if device_type_code == DEVICE_TYPE_CODE_ZIRCONIA_SENSOR:

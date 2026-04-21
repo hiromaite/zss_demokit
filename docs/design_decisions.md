@@ -117,19 +117,20 @@
 v1 の解釈:
 
 - `Flow Rate` のような表示寄りの換算値は GUI 側計算を第一候補とする
-- transport では、必要に応じて `flow_sensor_voltage_v` のような元信号を送る
-- v1 実装では `dummy_orifice_dp_v1` を使い、`flow_sensor_voltage_v -> differential_pressure_pa -> signed flow_rate_lpm` の 2 段階 placeholder を採用する
+- transport では `selected_differential_pressure_pa` を canonical measurement として送る
+- raw `SDP810 / SDP811` 値は diagnostic field として扱い、transport ごとに availability が違ってよい
+- v1 実装では `dummy_selected_dp_orifice_v1` を使い、`selected_differential_pressure_pa -> signed flow_rate_lpm` の placeholder を採用する
 
 placeholder formula:
 
 ```text
-differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
-flow_rate_lpm = sign(differential_pressure_pa) * (1.0 * sqrt(abs(differential_pressure_pa)) + 0.0)
+flow_rate_lpm = sign(selected_differential_pressure_pa) * (1.0 * sqrt(abs(selected_differential_pressure_pa)) + 0.0)
 ```
 
 補足:
 
-- `flow_sensor_voltage_v` は差圧センサ前段の raw signal とみなし、正式な差圧変換係数とオリフィス係数は後続フェーズで置き換える
+- 旧 `flow_sensor_voltage_v` アナログ経路は廃止した
+- 正式な差圧変換係数とオリフィス係数は後続フェーズで置き換える
 
 ## 13. v1 対象外
 
@@ -233,4 +234,4 @@ flow_rate_lpm =
 補足:
 
 - `k_flow_gain` と `dp_offset_pa` は初期実装では placeholder のままでよい
-- dual-SDP 導入後は、現行の `flow_sensor_voltage_v` placeholder policy から差圧ベースへ段階移行する
+- dual-SDP 導入後は `selected_differential_pressure_pa` を core field とし、raw 2ch は diagnostic field として扱う

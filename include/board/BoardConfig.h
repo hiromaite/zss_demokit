@@ -9,7 +9,6 @@ inline constexpr int8_t kPumpOutputPin = 7;
 inline constexpr int8_t kStatusLedPin = -1;
 inline constexpr int8_t kStatusLedDataPin = 21;
 inline constexpr int8_t kPumpToggleButtonPin = 0;
-inline constexpr int8_t kFlowSensorAdcPin = 1;
 inline constexpr int8_t kLegacyInputAdcPin = 5;
 inline constexpr int8_t kZss2CellAdcPin = 3;
 inline constexpr int8_t kI2cSdaPin = 13;

@@ -22,7 +22,7 @@ Notes:
 - plot history now uses an explicit `1800 s` retention window, and manual axis/view interactions disable auto-follow consistently in both BLE and wired modes
 - the Settings mode page now makes mode changes explicit with a `Save and Switch` action and disconnected reopen copy
 - plot rendering now runs with pyqtgraph antialiasing disabled and span-aware downsampling / windowed data extraction to reduce redraw cost
-- `flow_rate_lpm` uses the approved placeholder policy `dummy_orifice_dp_v1`, converting raw flow voltage into dummy differential pressure and then into dummy orifice flow
+- `flow_rate_lpm` uses the approved placeholder policy `dummy_selected_dp_orifice_v1`, deriving signed dummy flow directly from `selected differential pressure`
 - telemetry session summary is logged on disconnect to support BLE continuity / reconnect validation
 - settings are persisted locally with `QSettings`
 - recording directory, plot defaults, and launcher / main window sizes are restored on next startup

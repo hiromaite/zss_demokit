@@ -15,7 +15,7 @@ from protocol_constants import (
     BLE_MODE,
     DERIVED_METRIC_POLICY_ID,
     STATUS_FLAG_PUMP_ON,
-    derive_flow_rate_lpm_from_inputs,
+    derive_flow_rate_lpm_from_selected_differential_pressure_pa,
     format_status_flags,
 )
 from recording_io import create_recording_paths, write_csv_header
@@ -115,7 +115,7 @@ class PlotController:
         self.time_values: deque[float] = deque()
         self.zirconia_values: deque[float] = deque()
         self.heater_values: deque[float] = deque()
-        self.flow_voltage_values: deque[float] = deque()
+        self.differential_pressure_selected_values: deque[float] = deque()
         self.flow_rate_values: deque[float] = deque()
         self.last_sequence: int | None = None
         self.plot_sequence_origin: int | None = None
@@ -128,15 +128,17 @@ class PlotController:
             self.plot_sequence_origin = point.sequence
 
         elapsed = ((point.sequence - self.plot_sequence_origin) * point.nominal_sample_period_ms) / 1000.0
-        flow_rate = derive_flow_rate_lpm_from_inputs(
-            point.flow_sensor_voltage_v,
-            point.differential_pressure_selected_pa,
+        differential_pressure_selected_pa = point.differential_pressure_selected_pa
+        flow_rate = derive_flow_rate_lpm_from_selected_differential_pressure_pa(
+            differential_pressure_selected_pa,
         )
 
         self.time_values.append(elapsed)
         self.zirconia_values.append(point.zirconia_output_voltage_v)
         self.heater_values.append(point.heater_rtd_resistance_ohm)
-        self.flow_voltage_values.append(point.flow_sensor_voltage_v)
+        self.differential_pressure_selected_values.append(
+            differential_pressure_selected_pa if differential_pressure_selected_pa is not None else math.nan
+        )
         self.flow_rate_values.append(flow_rate)
         self._trim_history(elapsed)
 
@@ -157,7 +159,7 @@ class PlotController:
         self.time_values.clear()
         self.zirconia_values.clear()
         self.heater_values.clear()
-        self.flow_voltage_values.clear()
+        self.differential_pressure_selected_values.clear()
         self.flow_rate_values.clear()
         self.last_sequence = None
         self.plot_sequence_origin = None
@@ -233,7 +235,7 @@ class PlotController:
             self.time_values.popleft()
             self.zirconia_values.popleft()
             self.heater_values.popleft()
-            self.flow_voltage_values.popleft()
+            self.differential_pressure_selected_values.popleft()
             self.flow_rate_values.popleft()
 
     def _extract_visible_series(
@@ -543,13 +545,11 @@ class RecordingController:
         transport_type: str,
     ) -> float:
         if self._csv_writer is None:
-            return derive_flow_rate_lpm_from_inputs(
-                point.flow_sensor_voltage_v,
+            return derive_flow_rate_lpm_from_selected_differential_pressure_pa(
                 point.differential_pressure_selected_pa,
             )
 
-        flow_rate_lpm = derive_flow_rate_lpm_from_inputs(
-            point.flow_sensor_voltage_v,
+        flow_rate_lpm = derive_flow_rate_lpm_from_selected_differential_pressure_pa(
             point.differential_pressure_selected_pa,
         )
         host_received_at = point.host_received_at.astimezone()
@@ -576,7 +576,21 @@ class RecordingController:
             str(1 if (point.status_flags & STATUS_FLAG_PUMP_ON) != 0 else 0),
             f"{point.zirconia_output_voltage_v:.6f}",
             f"{point.heater_rtd_resistance_ohm:.6f}",
-            f"{point.flow_sensor_voltage_v:.6f}",
+            (
+                f"{point.differential_pressure_selected_pa:.6f}"
+                if point.differential_pressure_selected_pa is not None
+                else ""
+            ),
+            (
+                f"{point.differential_pressure_low_range_pa:.6f}"
+                if point.differential_pressure_low_range_pa is not None
+                else ""
+            ),
+            (
+                f"{point.differential_pressure_high_range_pa:.6f}"
+                if point.differential_pressure_high_range_pa is not None
+                else ""
+            ),
             f"{flow_rate_lpm:.6f}",
         ]
         self._csv_writer.writerow(row)

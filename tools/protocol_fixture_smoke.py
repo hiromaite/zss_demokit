@@ -222,7 +222,21 @@ def build_point(payload: dict[str, Any]) -> TelemetryPoint:
         status_flags=int(payload["status_flags"]),
         zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
         heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
-        flow_sensor_voltage_v=float(payload["flow_sensor_voltage_v"]),
+        differential_pressure_selected_pa=(
+            float(payload["differential_pressure_selected_pa"])
+            if payload.get("differential_pressure_selected_pa") not in (None, "")
+            else None
+        ),
+        differential_pressure_low_range_pa=(
+            float(payload["differential_pressure_low_range_pa"])
+            if payload.get("differential_pressure_low_range_pa") not in (None, "")
+            else None
+        ),
+        differential_pressure_high_range_pa=(
+            float(payload["differential_pressure_high_range_pa"])
+            if payload.get("differential_pressure_high_range_pa") not in (None, "")
+            else None
+        ),
     )
 
 

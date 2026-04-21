@@ -21,7 +21,7 @@ BLE_NOMINAL_SAMPLE_PERIOD_MS = 80
 WIRED_NOMINAL_SAMPLE_PERIOD_MS = 10
 
 FIRMWARE_VERSION_PLACEHOLDER = "prototype-ui"
-DERIVED_METRIC_POLICY_ID = "dummy_orifice_dp_v1"
+DERIVED_METRIC_POLICY_ID = "dummy_selected_dp_orifice_v1"
 
 DEVICE_TYPE_CODE_ZIRCONIA_SENSOR = 1
 TRANSPORT_TYPE_CODE_BLE = 1
@@ -53,14 +53,13 @@ SUPPORTED_COMMANDS = (
 TELEMETRY_FIELDS = (
     "zirconia_output_voltage_v",
     "heater_rtd_resistance_ohm",
-    "flow_sensor_voltage_v",
     "differential_pressure_selected_pa",
     "differential_pressure_low_range_pa",
     "differential_pressure_high_range_pa",
 )
 
 SUPPORTED_COMMAND_BITS = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
-TELEMETRY_FIELD_BITS = (1 << 0) | (1 << 1) | (1 << 2)
+TELEMETRY_FIELD_BITS = (1 << 0) | (1 << 1)
 TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED = 1 << 3
 TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE = 1 << 4
 TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE = 1 << 5
@@ -103,8 +102,6 @@ EVENT_CODE_COMMAND_ERROR = 0x04
 EVENT_CODE_ADC_FAULT_RAISED = 0x05
 EVENT_CODE_ADC_FAULT_CLEARED = 0x06
 
-DIFFERENTIAL_PRESSURE_DUMMY_GAIN_PA_PER_V = 100.0
-DIFFERENTIAL_PRESSURE_DUMMY_OFFSET_PA = 0.0
 ORIFICE_FLOW_DUMMY_GAIN_LPM_PER_SQRT_PA = 1.0
 ORIFICE_FLOW_DUMMY_OFFSET_LPM = 0.0
 O2_ZERO_REFERENCE_V = 2.5
@@ -151,49 +148,25 @@ def format_status_flags(status_flags: int) -> str:
     return f"0x{status_flags:08X}"
 
 
-def derive_differential_pressure_pa(flow_sensor_voltage_v: float) -> float:
-    return (
-        DIFFERENTIAL_PRESSURE_DUMMY_GAIN_PA_PER_V * flow_sensor_voltage_v
-        + DIFFERENTIAL_PRESSURE_DUMMY_OFFSET_PA
-    )
-
-
-def resolve_differential_pressure_pa(
-    flow_sensor_voltage_v: float,
-    differential_pressure_selected_pa: float | None = None,
+def derive_flow_rate_lpm_from_differential_pressure_pa(
+    differential_pressure_selected_pa: float | None,
 ) -> float:
-    if differential_pressure_selected_pa is not None and math.isfinite(differential_pressure_selected_pa):
-        return differential_pressure_selected_pa
-    return derive_differential_pressure_pa(flow_sensor_voltage_v)
-
-
-def derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa: float) -> float:
-    if not math.isfinite(differential_pressure_pa):
+    if differential_pressure_selected_pa is None or not math.isfinite(differential_pressure_selected_pa):
         return 0.0
 
     magnitude_lpm = (
-        ORIFICE_FLOW_DUMMY_GAIN_LPM_PER_SQRT_PA * math.sqrt(abs(differential_pressure_pa))
+        ORIFICE_FLOW_DUMMY_GAIN_LPM_PER_SQRT_PA * math.sqrt(abs(differential_pressure_selected_pa))
         + ORIFICE_FLOW_DUMMY_OFFSET_LPM
     )
-    if differential_pressure_pa < 0.0:
+    if differential_pressure_selected_pa < 0.0:
         return -magnitude_lpm
     return magnitude_lpm
 
 
-def derive_flow_rate_lpm(flow_sensor_voltage_v: float) -> float:
-    differential_pressure_pa = derive_differential_pressure_pa(flow_sensor_voltage_v)
-    return derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa)
-
-
-def derive_flow_rate_lpm_from_inputs(
-    flow_sensor_voltage_v: float,
-    differential_pressure_selected_pa: float | None = None,
+def derive_flow_rate_lpm_from_selected_differential_pressure_pa(
+    differential_pressure_selected_pa: float | None,
 ) -> float:
-    differential_pressure_pa = resolve_differential_pressure_pa(
-        flow_sensor_voltage_v,
-        differential_pressure_selected_pa,
-    )
-    return derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa)
+    return derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_selected_pa)
 
 
 def derive_o2_concentration_percent(

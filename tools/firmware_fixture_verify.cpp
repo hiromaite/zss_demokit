@@ -64,11 +64,11 @@ uint16_t computeCrcCcittFalse(const uint8_t* data, size_t length) {
     return crc;
 }
 
-SensorMeasurements makeMeasurements(float zirconia, float heater, float flow) {
+SensorMeasurements makeMeasurements(float zirconia, float heater, float selected_differential_pressure_pa) {
     SensorMeasurements measurements{};
     measurements.zirconia_output_voltage_v = zirconia;
     measurements.heater_rtd_resistance_ohm = heater;
-    measurements.flow_sensor_voltage_v = flow;
+    measurements.differential_pressure_selected_pa = selected_differential_pressure_pa;
     return measurements;
 }
 
@@ -100,7 +100,7 @@ std::vector<uint8_t> encodeWiredTelemetryPayload(const TelemetryPayloadV1& paylo
     writeU16Le(out, 6, payload.telemetry_field_bits);
     writeFloat32Le(out, 8, payload.zirconia_output_voltage_v);
     writeFloat32Le(out, 12, payload.heater_rtd_resistance_ohm);
-    writeFloat32Le(out, 16, payload.flow_sensor_voltage_v);
+    writeFloat32Le(out, 16, payload.differential_pressure_selected_pa);
     if (has_raw_channels) {
         writeFloat32Le(out, 20, payload.differential_pressure_low_range_pa);
         writeFloat32Le(out, 24, payload.differential_pressure_high_range_pa);
@@ -123,7 +123,7 @@ std::vector<uint8_t> encodeWiredStatusPayload(const StatusSnapshotPayloadV1& pay
     writeU16Le(out, 6, payload.telemetry_field_bits);
     writeFloat32Le(out, 8, payload.zirconia_output_voltage_v);
     writeFloat32Le(out, 12, payload.heater_rtd_resistance_ohm);
-    writeFloat32Le(out, 16, payload.flow_sensor_voltage_v);
+    writeFloat32Le(out, 16, payload.differential_pressure_selected_pa);
     if (has_raw_channels) {
         writeFloat32Le(out, 20, payload.differential_pressure_low_range_pa);
         writeFloat32Le(out, 24, payload.differential_pressure_high_range_pa);
@@ -141,7 +141,7 @@ std::vector<uint8_t> encodeBleTelemetryPayload(const TelemetryPayloadV1& payload
     writeU32Le(out, 8, payload.status_flags);
     writeFloat32Le(out, 12, payload.zirconia_output_voltage_v);
     writeFloat32Le(out, 16, payload.heater_rtd_resistance_ohm);
-    writeFloat32Le(out, 20, payload.flow_sensor_voltage_v);
+    writeFloat32Le(out, 20, payload.differential_pressure_selected_pa);
     writeU16Le(out, 24, payload.nominal_sample_period_ms);
     writeU16Le(out, 26, payload.telemetry_field_bits);
     writeU32Le(out, 28, payload.diagnostic_bits);
@@ -160,7 +160,7 @@ std::vector<uint8_t> encodeBleStatusPayload(const StatusSnapshotPayloadV1& paylo
     writeU16Le(out, 14, payload.telemetry_field_bits);
     writeFloat32Le(out, 16, payload.zirconia_output_voltage_v);
     writeFloat32Le(out, 20, payload.heater_rtd_resistance_ohm);
-    writeFloat32Le(out, 24, payload.flow_sensor_voltage_v);
+    writeFloat32Le(out, 24, payload.differential_pressure_selected_pa);
     return out;
 }
 

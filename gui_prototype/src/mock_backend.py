@@ -86,7 +86,6 @@ class TelemetryPoint:
     status_flags: int
     zirconia_output_voltage_v: float
     heater_rtd_resistance_ohm: float
-    flow_sensor_voltage_v: float
     differential_pressure_selected_pa: float | None = None
     differential_pressure_low_range_pa: float | None = None
     differential_pressure_high_range_pa: float | None = None
@@ -625,7 +624,6 @@ class MockBackend(QObject):
             status_flags=int(payload["status_flags"]),
             zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
             heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
-            flow_sensor_voltage_v=float(payload["flow_sensor_voltage_v"]),
             differential_pressure_selected_pa=(
                 float(payload["differential_pressure_selected_pa"])
                 if payload.get("differential_pressure_selected_pa") is not None
@@ -759,7 +757,6 @@ class MockBackend(QObject):
                 status_flags=int(payload["status_flags"]),
                 zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
                 heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
-                flow_sensor_voltage_v=float(payload["flow_sensor_voltage_v"]),
                 differential_pressure_selected_pa=(
                     float(payload["differential_pressure_selected_pa"])
                     if payload.get("differential_pressure_selected_pa") is not None
@@ -899,7 +896,9 @@ class MockBackend(QObject):
 
         zirconia = 0.64 + 0.03 * math.sin(elapsed * 1.5)
         heater = 121.5 + 2.6 * math.sin(elapsed * 0.55 + 0.8)
-        flow_voltage = 1.18 + 0.18 * math.sin(elapsed * 0.95 + (0.7 if self._pump_on else 0.2))
+        differential_pressure_selected_pa = (
+            18.0 * math.sin(elapsed * 0.95 + (0.7 if self._pump_on else 0.2))
+        )
 
         status_flags = build_status_flags(
             pump_on=self._pump_on,
@@ -914,8 +913,7 @@ class MockBackend(QObject):
             status_flags=status_flags,
             zirconia_output_voltage_v=zirconia,
             heater_rtd_resistance_ohm=heater,
-            flow_sensor_voltage_v=flow_voltage,
-            differential_pressure_selected_pa=None,
+            differential_pressure_selected_pa=differential_pressure_selected_pa,
         )
 
         self.telemetry_generated.emit(point)

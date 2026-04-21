@@ -111,7 +111,9 @@ class StatusSnapshot:
     status_flags: int
     zirconia_output_voltage_v: float
     heater_rtd_resistance_ohm: float
-    flow_sensor_voltage_v: float
+    differential_pressure_selected_pa: float | None = None
+    differential_pressure_low_range_pa: float | None = None
+    differential_pressure_high_range_pa: float | None = None
 ```
 
 ### 6.3 TelemetrySample
@@ -127,7 +129,9 @@ class TelemetrySample:
     status_flags: int
     zirconia_output_voltage_v: float
     heater_rtd_resistance_ohm: float
-    flow_sensor_voltage_v: float
+    differential_pressure_selected_pa: float | None = None
+    differential_pressure_low_range_pa: float | None = None
+    differential_pressure_high_range_pa: float | None = None
 ```
 
 ### 6.4 DeviceEvent
@@ -241,17 +245,17 @@ adapter は `flow_rate_lpm` を計算しない。
 GUI 側 service が以下を使って計算する。
 
 ```text
-differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
-flow_rate_lpm = sign(differential_pressure_pa) * (1.0 * sqrt(abs(differential_pressure_pa)) + 0.0)
+flow_rate_lpm = sign(differential_pressure_selected_pa) * (1.0 * sqrt(abs(differential_pressure_selected_pa)) + 0.0)
 ```
 
 policy id:
 
-- `dummy_orifice_dp_v1`
+- `dummy_selected_dp_orifice_v1`
 
 理由:
 
 - transport payload を canonical raw measurement 中心に保つため
+- raw 2ch を diagnostic field として transport ごとに optional 化しやすくするため
 - 将来、正式な差圧変換係数とオリフィス係数へ差し替えやすくするため
 
 ## 12. Error and Warning Policy

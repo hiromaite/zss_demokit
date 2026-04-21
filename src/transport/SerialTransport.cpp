@@ -92,7 +92,7 @@ void SerialTransport::publishTelemetry(const protocol::TelemetryPayloadV1& paylo
     writeU16Le(encoded_payload + 6, payload.telemetry_field_bits);
     writeFloat32Le(encoded_payload + 8, payload.zirconia_output_voltage_v);
     writeFloat32Le(encoded_payload + 12, payload.heater_rtd_resistance_ohm);
-    writeFloat32Le(encoded_payload + 16, payload.flow_sensor_voltage_v);
+    writeFloat32Le(encoded_payload + 16, payload.differential_pressure_selected_pa);
     if (has_raw_channels) {
         writeFloat32Le(encoded_payload + 20, payload.differential_pressure_low_range_pa);
         writeFloat32Le(encoded_payload + 24, payload.differential_pressure_high_range_pa);
@@ -126,7 +126,7 @@ void SerialTransport::publishStatusSnapshot(const protocol::StatusSnapshotPayloa
     writeU16Le(encoded_payload + 6, payload.telemetry_field_bits);
     writeFloat32Le(encoded_payload + 8, payload.zirconia_output_voltage_v);
     writeFloat32Le(encoded_payload + 12, payload.heater_rtd_resistance_ohm);
-    writeFloat32Le(encoded_payload + 16, payload.flow_sensor_voltage_v);
+    writeFloat32Le(encoded_payload + 16, payload.differential_pressure_selected_pa);
     if (has_raw_channels) {
         writeFloat32Le(encoded_payload + 20, payload.differential_pressure_low_range_pa);
         writeFloat32Le(encoded_payload + 24, payload.differential_pressure_high_range_pa);

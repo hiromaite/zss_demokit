@@ -16,7 +16,7 @@ from protocol_constants import (  # noqa: E402
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED,
     WIRED_COMMAND_ID_GET_CAPABILITIES,
     WIRED_DEFAULT_BAUDRATE,
-    derive_flow_rate_lpm_from_inputs,
+    derive_flow_rate_lpm_from_selected_differential_pressure_pa,
 )
 from wired_protocol import (  # noqa: E402
     WiredFrameBuffer,
@@ -129,11 +129,10 @@ def main() -> int:
                 if high_range_raw is not None and math.isfinite(float(high_range_raw)):
                     high_range_pressures.append(float(high_range_raw))
 
-                flow_rate_lpm = derive_flow_rate_lpm_from_inputs(
-                    float(payload["flow_sensor_voltage_v"]),
+                flow_rate_lpm = derive_flow_rate_lpm_from_selected_differential_pressure_pa(
                     float(differential_pressure_selected_pa)
                     if differential_pressure_selected_pa is not None
-                    else None,
+                    else None
                 )
                 if math.isfinite(flow_rate_lpm):
                     flow_rates.append(float(flow_rate_lpm))

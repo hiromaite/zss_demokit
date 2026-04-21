@@ -5,7 +5,7 @@
     {
       "id": "ble_telemetry_nominal",
       "kind": "ble_telemetry",
-      "raw_hex": "0100010034120000030000000000203f0000f1420000a03f5000070000000000",
+      "raw_hex": "0100010034120000030000000000203f0000f1420000a03f50000b0000000000",
       "firmware_case": true,
       "expected": {
         "protocol_version": "1.0",
@@ -15,9 +15,9 @@
         "status_flags": 3,
         "zirconia_output_voltage_v": 0.625,
         "heater_rtd_resistance_ohm": 120.5,
-        "flow_sensor_voltage_v": 1.25,
+        "differential_pressure_selected_pa": 1.25,
         "nominal_sample_period_ms": 80,
-        "telemetry_field_bits": 7,
+        "telemetry_field_bits": 11,
         "diagnostic_bits": 0,
         "pump_on": true
       }
@@ -25,7 +25,7 @@
     {
       "id": "ble_status_fault",
       "kind": "ble_status",
-      "raw_hex": "01000100351200001600000050000700e17a143e0080c5423d0ad73e",
+      "raw_hex": "01000100351200001600000050000b00e17a143e0080c5423d0ad73e",
       "firmware_case": true,
       "expected": {
         "protocol_version": "1.0",
@@ -36,16 +36,16 @@
         "status_flags_hex": "0x00000016",
         "zirconia_output_voltage_v": 0.145,
         "heater_rtd_resistance_ohm": 98.75,
-        "flow_sensor_voltage_v": 0.42,
+        "differential_pressure_selected_pa": 0.42,
         "nominal_sample_period_ms": 80,
-        "telemetry_field_bits": 7,
+        "telemetry_field_bits": 11,
         "pump_on": false
       }
     },
     {
       "id": "ble_capabilities_ble",
       "kind": "ble_capabilities",
-      "raw_hex": "01000101010001000f00070050000100200000000f000000",
+      "raw_hex": "01000101010001000f00030050000100200000000f000000",
       "firmware_case": true,
       "expected": {
         "protocol_version": "1.0",
@@ -62,11 +62,10 @@
           "set_pump_state",
           "ping"
         ],
-        "telemetry_field_bits": 7,
+        "telemetry_field_bits": 3,
         "telemetry_fields": [
           "zirconia_output_voltage_v",
-          "heater_rtd_resistance_ohm",
-          "flow_sensor_voltage_v"
+          "heater_rtd_resistance_ohm"
         ],
         "nominal_sample_period_ms": 80,
         "status_flag_schema_version": 1,
@@ -91,7 +90,7 @@
     {
       "id": "wired_telemetry_serial_nominal",
       "kind": "wired_telemetry",
-      "raw_hex": "a55a0100010014002222000000000000030000000a0007006666363f0080ee420000c03f9caa",
+      "raw_hex": "a55a0100010014002222000000000000030000000a000b006666363f0080ee420000c03f52bc",
       "firmware_case": true,
       "expected_frame": {
         "version_major": 1,
@@ -106,16 +105,16 @@
         "status_flags": 3,
         "zirconia_output_voltage_v": 0.7125,
         "heater_rtd_resistance_ohm": 119.25,
-        "flow_sensor_voltage_v": 1.5,
+        "differential_pressure_selected_pa": 1.5,
         "nominal_sample_period_ms": 10,
-        "telemetry_field_bits": 7,
+        "telemetry_field_bits": 11,
         "pump_on": true
       }
     },
     {
       "id": "wired_status_serial_fault",
       "kind": "wired_status",
-      "raw_hex": "a55a0100020014002322000007000000560000000a00070048e13a3e0080c242c3f5a83e658b",
+      "raw_hex": "a55a0100020014002322000007000000560000000a000b0048e13a3e0080c242c3f5a83eab9d",
       "firmware_case": true,
       "expected_frame": {
         "version_major": 1,
@@ -129,16 +128,16 @@
         "status_flags": 86,
         "zirconia_output_voltage_v": 0.1825,
         "heater_rtd_resistance_ohm": 97.25,
-        "flow_sensor_voltage_v": 0.33,
+        "differential_pressure_selected_pa": 0.33,
         "nominal_sample_period_ms": 10,
-        "telemetry_field_bits": 7,
+        "telemetry_field_bits": 11,
         "pump_on": false
       }
     },
     {
       "id": "wired_capabilities_serial",
       "kind": "wired_capabilities",
-      "raw_hex": "a55a01000300140000000000080000000101020001000f0007000a00010040000f000000e38e",
+      "raw_hex": "a55a01000300140000000000080000000101020001000f0003000a00010040000f0000003783",
       "firmware_case": true,
       "expected_frame": {
         "version_major": 1,
@@ -162,11 +161,10 @@
           "set_pump_state",
           "ping"
         ],
-        "telemetry_field_bits": 7,
+        "telemetry_field_bits": 3,
         "telemetry_fields": [
           "zirconia_output_voltage_v",
-          "heater_rtd_resistance_ohm",
-          "flow_sensor_voltage_v"
+          "heater_rtd_resistance_ohm"
         ],
         "nominal_sample_period_ms": 10,
         "status_flag_schema_version": 1,
@@ -269,7 +267,9 @@
         "status_flags": 2,
         "zirconia_output_voltage_v": 0.7005,
         "heater_rtd_resistance_ohm": 118.9,
-        "flow_sensor_voltage_v": 1.45
+        "differential_pressure_selected_pa": 1.45,
+        "differential_pressure_low_range_pa": 1.45,
+        "differential_pressure_high_range_pa": 1.41
       },
       "target_point": {
         "sequence": 8738,
@@ -278,7 +278,9 @@
         "status_flags": 3,
         "zirconia_output_voltage_v": 0.7125,
         "heater_rtd_resistance_ohm": 119.25,
-        "flow_sensor_voltage_v": 1.5
+        "differential_pressure_selected_pa": 1.5,
+        "differential_pressure_low_range_pa": 1.5,
+        "differential_pressure_high_range_pa": 1.44
       },
       "expected_row": [
         "2026-04-15T10:00:00.011+09:00",
@@ -294,7 +296,9 @@
         "0.712500",
         "119.250000",
         "1.500000",
-        "12.247449"
+        "1.500000",
+        "1.440000",
+        "1.224745"
       ]
     }
   ]
