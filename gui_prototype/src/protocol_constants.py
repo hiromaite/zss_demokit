@@ -168,11 +168,16 @@ def resolve_differential_pressure_pa(
 
 
 def derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_pa: float) -> float:
-    return max(
-        0.0,
-        ORIFICE_FLOW_DUMMY_GAIN_LPM_PER_SQRT_PA * math.sqrt(max(0.0, differential_pressure_pa))
-        + ORIFICE_FLOW_DUMMY_OFFSET_LPM,
+    if not math.isfinite(differential_pressure_pa):
+        return 0.0
+
+    magnitude_lpm = (
+        ORIFICE_FLOW_DUMMY_GAIN_LPM_PER_SQRT_PA * math.sqrt(abs(differential_pressure_pa))
+        + ORIFICE_FLOW_DUMMY_OFFSET_LPM
     )
+    if differential_pressure_pa < 0.0:
+        return -magnitude_lpm
+    return magnitude_lpm
 
 
 def derive_flow_rate_lpm(flow_sensor_voltage_v: float) -> float:

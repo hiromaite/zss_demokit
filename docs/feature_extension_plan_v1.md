@@ -452,6 +452,7 @@ flow_rate_lpm =
 
 - この式は `dummy placeholder` として維持する
 - gas line / orifice hardware 完成後に、実測から係数と offset を再同定する
+- calibration は呼気/吸気の両方向を持つ `signed flow` 前提で行う
 
 ### 相補利用アルゴリズムの推奨形
 

@@ -118,13 +118,13 @@ v1 の解釈:
 
 - `Flow Rate` のような表示寄りの換算値は GUI 側計算を第一候補とする
 - transport では、必要に応じて `flow_sensor_voltage_v` のような元信号を送る
-- v1 実装では `dummy_orifice_dp_v1` を使い、`flow_sensor_voltage_v -> differential_pressure_pa -> flow_rate_lpm` の 2 段階 placeholder を採用する
+- v1 実装では `dummy_orifice_dp_v1` を使い、`flow_sensor_voltage_v -> differential_pressure_pa -> signed flow_rate_lpm` の 2 段階 placeholder を採用する
 
 placeholder formula:
 
 ```text
 differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
-flow_rate_lpm = max(0.0, 1.0 * sqrt(max(0.0, differential_pressure_pa)) + 0.0)
+flow_rate_lpm = sign(differential_pressure_pa) * (1.0 * sqrt(abs(differential_pressure_pa)) + 0.0)
 ```
 
 補足:

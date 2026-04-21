@@ -84,13 +84,14 @@ v1 placeholder formula:
 
 ```text
 differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
-flow_rate_lpm = max(0.0, 1.0 * sqrt(max(0.0, differential_pressure_pa)) + 0.0)
+flow_rate_lpm = sign(differential_pressure_pa) * (1.0 * sqrt(abs(differential_pressure_pa)) + 0.0)
 ```
 
 補足:
 
 - raw voltage から差圧への dummy coefficient は `100.0 Pa/V`, `0.0 Pa`
 - オリフィス流量換算の dummy coefficient は `1.0 L/min/sqrt(Pa)`, `0.0 L/min`
+- 呼気/吸気の両方向を表現できるよう、placeholder の段階から flow rate は signed value とする
 - 実流量構成に基づく正式換算式は将来バージョンで置き換える
 
 ## 5. Telemetry Sample Shape

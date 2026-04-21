@@ -161,10 +161,11 @@ flow_rate_lpm
 
 ```text
 differential_pressure_pa = 100.0 * flow_sensor_voltage_v + 0.0
-flow_rate_lpm = max(0.0, 1.0 * sqrt(max(0.0, differential_pressure_pa)) + 0.0)
+flow_rate_lpm = sign(differential_pressure_pa) * (1.0 * sqrt(abs(differential_pressure_pa)) + 0.0)
 ```
 
 - metadata に `derived_metric_policy=dummy_orifice_dp_v1` を残すことを推奨する
+- flow rate は signed value として記録し、後続の calibration で呼気/吸気方向を維持する
 
 ## 8. Example Rows
 
