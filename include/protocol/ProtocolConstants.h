@@ -60,6 +60,7 @@ enum class WiredMessageType : uint8_t {
     Error = 0x13,
     Ping = 0x14,
     Pong = 0x15,
+    TimingDiagnostic = 0x16,
 };
 
 enum class ResultCode : uint8_t {
@@ -136,6 +137,7 @@ inline constexpr size_t kWiredErrorPayloadSize = 8;
 inline constexpr size_t kWiredCommandRequestPayloadSize = 16;
 inline constexpr size_t kWiredCapabilitiesPayloadSize = 20;
 inline constexpr size_t kWiredCommandAckPayloadSize = 8;
+inline constexpr size_t kWiredTimingDiagnosticPayloadSize = 4;
 
 inline constexpr float kDummyFlowRateGain = 1.0f;
 inline constexpr float kDummyFlowRateOffset = 0.0f;

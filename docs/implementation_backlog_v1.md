@@ -764,6 +764,11 @@
   `10 ms` poll では `mean=5.983 ms / p95=11.583 ms` を確認した
 - この比較から、GUI poll cadence は handled timestamp jitter を増やす secondary factor であり、
   broad な distribution の主因は reader-side serial chunking / host buffering だと判断できる
+- debug-only の `TimingDiagnostic` frame と `tools/wired_device_tick_probe.py` を追加し、
+  device-side cadence `mean=10.001 ms / stdev=1.204 ms / p95=10.932 ms / max=10.962 ms` を確認した
+- current diagnosis は「true device cadence は比較的 tight で、CSV 上の大きな jitter は主に host-side timestamp semantics に起因する」である
+- immediate remediation candidate は、GUI recording CSV に `device_inter_arrival_ms` と `host_inter_arrival_ms` を併記し、
+  `inter_arrival_ms` を device cadence 優先にすること
 - `tools/wired_soak_probe.py --duration-s 30 --toggle-interval-s 2.5` により continuous run と pump repetition の初回実測を完了
 - current soak run では `3001` telemetry samples、sequence gap `0`、`Pump ON/OFF` toggle `12` 回、telemetry 上の status flags は `[2, 3]` で安定した
 - `tools/gui_wired_session_probe.py --duration-s 18 --toggle-interval-s 3` により offscreen GUI 経由の session-level stress 初回実測を完了

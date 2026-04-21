@@ -205,6 +205,22 @@ void SerialTransport::publishCommandAck(const protocol::CommandAckPayloadV1& pay
         sizeof(encoded_payload));
 }
 
+void SerialTransport::publishTimingDiagnostic(uint32_t sequence, uint32_t sample_tick_us) {
+    if (!session_active_) {
+        return;
+    }
+
+    uint8_t encoded_payload[protocol::kWiredTimingDiagnosticPayloadSize]{};
+    writeU32Le(encoded_payload + 0, sample_tick_us);
+
+    writeFrame(
+        protocol::WiredMessageType::TimingDiagnostic,
+        sequence,
+        0,
+        encoded_payload,
+        sizeof(encoded_payload));
+}
+
 void SerialTransport::silenceTextLoggerIfNeeded() {
     if (logger_silenced_) {
         return;

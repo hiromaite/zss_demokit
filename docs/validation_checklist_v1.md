@@ -186,6 +186,16 @@
   `10 ms` poll では `mean=5.983 ms / p95=11.583 ms` を確認した
 - current evidence は、GUI poll cadence が handled timestamp jitter を増やす一方で、
   broad な receive distribution 自体は reader-side serial chunking / host buffering に起因する可能性が高いことを示す
+- debug-only `TimingDiagnostic` frame を追加した firmware を upload し、
+  `tools/wired_device_tick_probe.py --port /dev/cu.usbmodem4101 --samples 1200 --warmup 20` により
+  device-side cadence `mean=10.001 ms / stdev=1.204 ms / min=8.378 ms / p95=10.932 ms / max=10.962 ms` を確認した
+- 同 probe では host receive inter-arrival `mean=10.001 ms / stdev=1.217 ms / p95=11.031 ms` と device cadence が近く、
+  `device minus host interval` も `stdev=0.081 ms` に収まることを確認した
+- `gui_prototype` の wired backend は debug timing diagnostic を受け取れるよう更新し、
+  `RecordingController` は `inter_arrival_ms` を device cadence 優先にしつつ
+  `host_inter_arrival_ms`, `device_inter_arrival_ms`, `device_sample_tick_us` を CSV へ記録するよう更新した
+- `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` により、
+  debug timing support 追加後も offscreen GUI wired session が継続動作することを確認した
 - `python3.12 -m compileall gui_prototype/src tools/protocol_fixture_smoke.py` を再実施し、derived metric policy と session summary 追加後も compile を確認
 - `tools/protocol_fixture_smoke.py` を再実施し、差圧ベース placeholder へ更新後も shared fixture regression が維持されることを確認
 - direct helper smoke により `TelemetrySessionStats` が disconnect 時に summary log を生成し、sample count / gap total を含むことを確認

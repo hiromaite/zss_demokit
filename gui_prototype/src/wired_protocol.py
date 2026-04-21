@@ -34,6 +34,7 @@ from protocol_constants import (
     WIRED_MESSAGE_TYPE_EVENT,
     WIRED_MESSAGE_TYPE_STATUS_SNAPSHOT,
     WIRED_MESSAGE_TYPE_TELEMETRY_SAMPLE,
+    WIRED_MESSAGE_TYPE_TIMING_DIAGNOSTIC,
     WIRED_SOF0,
     WIRED_SOF1,
     result_code_to_text,
@@ -264,6 +265,14 @@ def decode_event(frame: WiredFrame) -> dict[str, int | str]:
     }
 
 
+def decode_timing_diagnostic(frame: WiredFrame) -> dict[str, int]:
+    (sample_tick_us,) = struct.unpack("<I", frame.payload)
+    return {
+        "sequence": frame.sequence,
+        "sample_tick_us": sample_tick_us,
+    }
+
+
 def command_name_from_id(command_id: int) -> str:
     labels = {
         WIRED_COMMAND_ID_GET_CAPABILITIES: "get_capabilities",
@@ -281,5 +290,6 @@ def message_name_from_type(message_type: int) -> str:
         WIRED_MESSAGE_TYPE_CAPABILITIES: "capabilities",
         WIRED_MESSAGE_TYPE_COMMAND_ACK: "command_ack",
         WIRED_MESSAGE_TYPE_EVENT: "event",
+        WIRED_MESSAGE_TYPE_TIMING_DIAGNOSTIC: "timing_diagnostic",
     }
     return labels.get(message_type, f"unknown_{message_type}")

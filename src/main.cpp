@@ -201,6 +201,7 @@ void runSamplingStep(uint32_t now_ms) {
 
     const uint32_t previous_status_flags = g_app_state.statusFlags();
     const uint32_t nominal_period_ms = g_app_state.nominalSamplePeriodMs();
+    const uint32_t sample_started_us = micros();
     const uint32_t lateness_ms = now_ms - g_next_sample_deadline_ms;
     const uint32_t missed_intervals = nominal_period_ms == 0 ? 0u : (lateness_ms / nominal_period_ms);
     const bool overrun =
@@ -254,6 +255,7 @@ void runSamplingStep(uint32_t now_ms) {
     const auto telemetry_payload = zss::protocol::buildTelemetryPayload(g_app_state);
     g_ble_transport.publishTelemetry(telemetry_payload);
     g_serial_transport.publishTelemetry(telemetry_payload);
+    g_serial_transport.publishTimingDiagnostic(sequence, sample_started_us);
 }
 
 void emitSummaryLog(uint32_t now_ms) {

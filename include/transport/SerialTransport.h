@@ -20,6 +20,7 @@ class SerialTransport {
     void publishCapabilities(const protocol::CapabilitiesPayloadV1& payload, uint32_t request_id = 0);
     void publishEvent(const protocol::EventPayloadV1& payload, uint32_t request_id = 0);
     void publishCommandAck(const protocol::CommandAckPayloadV1& payload, uint32_t request_id);
+    void publishTimingDiagnostic(uint32_t sequence, uint32_t sample_tick_us);
 
   private:
     using PendingCommand = app::CommandRequest;

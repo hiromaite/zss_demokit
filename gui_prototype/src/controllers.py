@@ -485,6 +485,7 @@ class RecordingController:
         self._pending_rows = 0
         self._last_sequence: int | None = None
         self._last_received_at: datetime | None = None
+        self._last_device_sample_tick_us: int | None = None
         self.session_id = ""
         self.started_at: datetime | None = None
         self.recording_path: Path | None = None
@@ -531,6 +532,7 @@ class RecordingController:
         self._pending_rows = 0
         self._last_sequence = None
         self._last_received_at = None
+        self._last_device_sample_tick_us = None
         self.session_id = session_id
         self.started_at = started_at
         self.recording_path = paths.recording_path
@@ -559,9 +561,19 @@ class RecordingController:
         else:
             sequence_gap = max(0, point.sequence - self._last_sequence - 1)
 
-        inter_arrival_ms = ""
+        host_inter_arrival_ms = ""
         if self._last_received_at is not None:
-            inter_arrival_ms = f"{(point.host_received_at - self._last_received_at).total_seconds() * 1000.0:.3f}"
+            host_inter_arrival_ms = f"{(point.host_received_at - self._last_received_at).total_seconds() * 1000.0:.3f}"
+
+        device_inter_arrival_ms = ""
+        if (
+            point.device_sample_tick_us is not None and
+            self._last_device_sample_tick_us is not None
+        ):
+            delta_us = (point.device_sample_tick_us - self._last_device_sample_tick_us) & 0xFFFFFFFF
+            device_inter_arrival_ms = f"{(delta_us / 1000.0):.3f}"
+
+        inter_arrival_ms = device_inter_arrival_ms or host_inter_arrival_ms
 
         row = [
             host_received_at.isoformat(timespec="milliseconds"),
@@ -571,6 +583,9 @@ class RecordingController:
             str(point.sequence),
             str(sequence_gap),
             inter_arrival_ms,
+            host_inter_arrival_ms,
+            device_inter_arrival_ms,
+            str(point.device_sample_tick_us) if point.device_sample_tick_us is not None else "",
             str(point.nominal_sample_period_ms),
             format_status_flags(point.status_flags),
             str(1 if (point.status_flags & STATUS_FLAG_PUMP_ON) != 0 else 0),
@@ -597,6 +612,7 @@ class RecordingController:
         self._pending_rows += 1
         self._last_sequence = point.sequence
         self._last_received_at = point.host_received_at
+        self._last_device_sample_tick_us = point.device_sample_tick_us
         return flow_rate_lpm
 
     def should_flush(self, row_threshold: int) -> bool:

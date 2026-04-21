@@ -51,6 +51,7 @@ from wired_protocol import (
     decode_command_ack,
     decode_event,
     decode_status_snapshot,
+    decode_timing_diagnostic,
     decode_telemetry_sample,
 )
 
@@ -89,6 +90,7 @@ class TelemetryPoint:
     differential_pressure_selected_pa: float | None = None
     differential_pressure_low_range_pa: float | None = None
     differential_pressure_high_range_pa: float | None = None
+    device_sample_tick_us: int | None = None
 
 
 class MockBackend(QObject):
@@ -124,6 +126,7 @@ class MockBackend(QObject):
         self._pending_requests: dict[int, str] = {}
         self._wired_received_capabilities = False
         self._wired_received_status = False
+        self._pending_wired_timing_diag: dict[int, int] = {}
 
         self._ble_discovered_devices: dict[str, str | None] = {}
         self._ble_loop: asyncio.AbstractEventLoop | None = None
@@ -692,6 +695,7 @@ class MockBackend(QObject):
         self._next_request_id = 1
         self._wired_received_capabilities = False
         self._wired_received_status = False
+        self._pending_wired_timing_diag.clear()
         self._wired_poll_timer.start()
         self.connection_changed.emit(True, identifier)
         self.log_generated.emit("info", f"Connected to {identifier} using wired serial transport.")
@@ -740,39 +744,63 @@ class MockBackend(QObject):
             self.disconnect_device()
             return
 
-        for frame in self._wired_frame_buffer.push(chunk):
+        frames = self._wired_frame_buffer.push(chunk)
+        if not frames:
+            return
+        handled_at = datetime.now()
+        pending_points: list[TelemetryPoint] = []
+        for frame in frames:
+            if frame.message_type == 0x01:
+                pending_points.append(self._decode_wired_telemetry_point(frame, handled_at))
+                continue
+            if frame.message_type == 0x16:
+                timing = decode_timing_diagnostic(frame)
+                self._pending_wired_timing_diag[int(timing["sequence"])] = int(timing["sample_tick_us"])
+                continue
             self._handle_wired_frame(frame)
+
+        for point in pending_points:
+            device_sample_tick_us = self._pending_wired_timing_diag.pop(point.sequence, None)
+            if device_sample_tick_us is not None:
+                point.device_sample_tick_us = device_sample_tick_us
+            self.telemetry_generated.emit(point)
+
+    def _decode_wired_telemetry_point(self, frame: WiredFrame, handled_at: datetime) -> TelemetryPoint:
+        payload = decode_telemetry_sample(frame)
+        self._pump_on = bool(payload["pump_on"])
+        self._warning_latched = bool(payload["status_flags"] & STATUS_FLAG_TELEMETRY_RATE_WARNING)
+        return TelemetryPoint(
+            sequence=int(payload["sequence"]),
+            host_received_at=handled_at,
+            nominal_sample_period_ms=int(payload["nominal_sample_period_ms"]),
+            status_flags=int(payload["status_flags"]),
+            zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
+            heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
+            differential_pressure_selected_pa=(
+                float(payload["differential_pressure_selected_pa"])
+                if payload.get("differential_pressure_selected_pa") is not None
+                else None
+            ),
+            differential_pressure_low_range_pa=(
+                float(payload["differential_pressure_low_range_pa"])
+                if payload.get("differential_pressure_low_range_pa") is not None
+                else None
+            ),
+            differential_pressure_high_range_pa=(
+                float(payload["differential_pressure_high_range_pa"])
+                if payload.get("differential_pressure_high_range_pa") is not None
+                else None
+            ),
+        )
 
     def _handle_wired_frame(self, frame: WiredFrame) -> None:
         self._last_protocol_version = f"{frame.version_major}.{frame.version_minor}"
 
         if frame.message_type == 0x01:
-            payload = decode_telemetry_sample(frame)
-            self._pump_on = bool(payload["pump_on"])
-            self._warning_latched = bool(payload["status_flags"] & STATUS_FLAG_TELEMETRY_RATE_WARNING)
-            point = TelemetryPoint(
-                sequence=int(payload["sequence"]),
-                host_received_at=datetime.now(),
-                nominal_sample_period_ms=int(payload["nominal_sample_period_ms"]),
-                status_flags=int(payload["status_flags"]),
-                zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
-                heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
-                differential_pressure_selected_pa=(
-                    float(payload["differential_pressure_selected_pa"])
-                    if payload.get("differential_pressure_selected_pa") is not None
-                    else None
-                ),
-                differential_pressure_low_range_pa=(
-                    float(payload["differential_pressure_low_range_pa"])
-                    if payload.get("differential_pressure_low_range_pa") is not None
-                    else None
-                ),
-                differential_pressure_high_range_pa=(
-                    float(payload["differential_pressure_high_range_pa"])
-                    if payload.get("differential_pressure_high_range_pa") is not None
-                    else None
-                ),
-            )
+            point = self._decode_wired_telemetry_point(frame, datetime.now())
+            device_sample_tick_us = self._pending_wired_timing_diag.pop(point.sequence, None)
+            if device_sample_tick_us is not None:
+                point.device_sample_tick_us = device_sample_tick_us
             self.telemetry_generated.emit(point)
             return
 
