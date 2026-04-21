@@ -44,6 +44,7 @@ from protocol_constants import (
     BLE_MODE,
     WIRED_MODE,
     derive_o2_concentration_percent,
+    infer_differential_pressure_selected_source,
     transport_type_for_mode,
 )
 from settings_store import SettingsStore
@@ -1202,13 +1203,19 @@ class MainWindow(QMainWindow):
         flow_value = metrics.get("flow_rate_lpm")
         low_range_differential_pressure_pa = self._latest_low_range_differential_pressure_pa
         high_range_differential_pressure_pa = self._latest_high_range_differential_pressure_pa
+        selected_differential_pressure_pa = None
 
         if point is not None:
             zirconia_value = zirconia_value if zirconia_value is not None else point.zirconia_output_voltage_v
             heater_value = heater_value if heater_value is not None else point.heater_rtd_resistance_ohm
             flow_value = flow_value if flow_value is not None else 0.0
+            selected_differential_pressure_pa = point.differential_pressure_selected_pa
             low_range_differential_pressure_pa = point.differential_pressure_low_range_pa
             high_range_differential_pressure_pa = point.differential_pressure_high_range_pa
+        elif self.plot_controller.differential_pressure_selected_values:
+            latest_selected = self.plot_controller.differential_pressure_selected_values[-1]
+            if math.isfinite(latest_selected):
+                selected_differential_pressure_pa = latest_selected
 
         self.metric_zirconia.set_value("--" if zirconia_value is None else f"{zirconia_value:0.3f} V")
         self.metric_heater.set_value("--" if heater_value is None else f"{heater_value:0.1f} Ohm")
@@ -1219,7 +1226,14 @@ class MainWindow(QMainWindow):
             and math.isfinite(low_range_differential_pressure_pa)
             and math.isfinite(high_range_differential_pressure_pa)
         ):
+            selected_source = infer_differential_pressure_selected_source(
+                selected_differential_pressure_pa,
+                low_range_differential_pressure_pa,
+                high_range_differential_pressure_pa,
+            )
+            selected_text = f"SEL: {selected_source} / " if selected_source else ""
             self.metric_flow.set_detail(
+                f"{selected_text}"
                 f"SDP811: {high_range_differential_pressure_pa:+0.2f} Pa / "
                 f"SDP810: {low_range_differential_pressure_pa:+0.2f} Pa"
             )

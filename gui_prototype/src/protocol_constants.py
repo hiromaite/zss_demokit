@@ -170,6 +170,39 @@ def derive_flow_rate_lpm_from_selected_differential_pressure_pa(
     return derive_flow_rate_lpm_from_differential_pressure_pa(differential_pressure_selected_pa)
 
 
+def infer_differential_pressure_selected_source(
+    differential_pressure_selected_pa: float | None,
+    differential_pressure_low_range_pa: float | None,
+    differential_pressure_high_range_pa: float | None,
+    *,
+    tolerance_pa: float = 1e-4,
+) -> str:
+    if (
+        differential_pressure_selected_pa is None
+        or not math.isfinite(differential_pressure_selected_pa)
+    ):
+        return ""
+
+    matches_low = (
+        differential_pressure_low_range_pa is not None
+        and math.isfinite(differential_pressure_low_range_pa)
+        and abs(differential_pressure_selected_pa - differential_pressure_low_range_pa) <= tolerance_pa
+    )
+    matches_high = (
+        differential_pressure_high_range_pa is not None
+        and math.isfinite(differential_pressure_high_range_pa)
+        and abs(differential_pressure_selected_pa - differential_pressure_high_range_pa) <= tolerance_pa
+    )
+
+    if matches_low and not matches_high:
+        return "SDP810"
+    if matches_high and not matches_low:
+        return "SDP811"
+    if matches_low and matches_high:
+        return "BOTH"
+    return ""
+
+
 def derive_o2_concentration_percent(
     zirconia_output_voltage_v: float,
     *,

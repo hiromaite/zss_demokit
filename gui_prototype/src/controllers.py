@@ -17,6 +17,7 @@ from protocol_constants import (
     STATUS_FLAG_PUMP_ON,
     derive_flow_rate_lpm_from_selected_differential_pressure_pa,
     format_status_flags,
+    infer_differential_pressure_selected_source,
 )
 from recording_io import create_recording_paths, write_csv_header
 
@@ -554,6 +555,11 @@ class RecordingController:
         flow_rate_lpm = derive_flow_rate_lpm_from_selected_differential_pressure_pa(
             point.differential_pressure_selected_pa,
         )
+        differential_pressure_selected_source = infer_differential_pressure_selected_source(
+            point.differential_pressure_selected_pa,
+            point.differential_pressure_low_range_pa,
+            point.differential_pressure_high_range_pa,
+        )
         host_received_at = point.host_received_at.astimezone()
         host_received_unix_ms = int(point.host_received_at.timestamp() * 1000)
         if self._last_sequence is None:
@@ -596,6 +602,7 @@ class RecordingController:
                 if point.differential_pressure_selected_pa is not None
                 else ""
             ),
+            differential_pressure_selected_source,
             (
                 f"{point.differential_pressure_low_range_pa:.6f}"
                 if point.differential_pressure_low_range_pa is not None

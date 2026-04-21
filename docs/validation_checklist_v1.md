@@ -228,6 +228,10 @@
 - `/dev/cu.usbmodem3101` へ upload 後、`python3.12 tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 6` により no-flow baseline `DpSel mean=-0.0671 Pa` を確認した
 - `python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` により `telemetry_field_bits=15`, finite `differential_pressure_selected_pa`, `Pump ON/OFF`, command error event を live wired で確認した
 - `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5` により GUI wiring 後も wired session が継続し、`967` telemetry, warning/error `0`, CSV `799` rows, `gui_wired_session_probe_ok` を確認した
+- flow operator hardening として、GUI flow detail に `selected differential pressure source` を表示し、CSV には `differential_pressure_selected_source` 列を追加した
+- `python3.12 -m compileall gui_prototype/src/main_window.py gui_prototype/src/controllers.py gui_prototype/src/protocol_constants.py gui_prototype/src/recording_io.py` を実施し、selected-source 表示追加後も compile が成立することを確認した
+- `python3.12 tools/protocol_fixture_smoke.py` を再実施し、CSV row fixture が `differential_pressure_selected_source=SDP810` を含んで通過することを確認した
+- `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` を実施し、selected-source 追加後も wired GUI session が継続し、`gui_wired_session_probe_ok` を確認した
 - `python3.12 tools/wired_flow_probe.py --port /dev/cu.usbmodem3101 --duration-s 6` を実施し、no-flow baseline として `telemetry_field_bits=15`, advertised differential pressure, `DpSel mean=-0.0591 Pa`, `Non-unit sequence gap total=0` を確認した
 
 ## 8. 更新ルール

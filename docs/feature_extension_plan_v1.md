@@ -519,6 +519,8 @@ else:
   `SDP810 low-range raw` と `SDP811 high-range raw` が no-flow baseline で finite に取得できた
 - GUI 側も offscreen live connection で `flow_detail=SDP811: ... Pa / SDP810: ... Pa` を確認し、
   hardware 組み上げ中の raw channel 可視化導線は成立した
+- operator-facing hardening として、selected differential pressure の source (`SDP810` / `SDP811`) を
+  GUI detail と CSV から追えるようにする
 
 ## 9. まとめて実装すべき単位
 

@@ -1100,6 +1100,7 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
   `telemetry_field_bits=63`、finite `selected differential pressure`、finite `SDP810 / SDP811 raw` を確認した
 - final calibration / selector tuning は hardware 完成後に行う前提へ変更した
 - hardware bring-up 支援として、GUI の flow card detail に `SDP811` / `SDP810` raw value を live 表示できるようにした
+- selected differential pressure の source (`SDP810` / `SDP811`) を GUI detail と CSV から追えるよう更新した
 - signed flow placeholder を採用し、呼気/吸気の両方向を持つ前提で表示・記録する
 - next step は hardware 完成後の low / medium / high flow sweep と、bidirectional calibration への移行準備である
 
