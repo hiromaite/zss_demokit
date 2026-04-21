@@ -84,7 +84,10 @@ def main() -> int:
         non_unit_gap_total = 0
         field_bits_seen: set[int] = set()
         capabilities = None
+        has_dp_bit = False
         differential_pressures: list[float] = []
+        low_range_pressures: list[float] = []
+        high_range_pressures: list[float] = []
         flow_rates: list[float] = []
 
         while time.time() < deadline:
@@ -119,6 +122,12 @@ def main() -> int:
                 differential_pressure_selected_pa = payload.get("differential_pressure_selected_pa")
                 if differential_pressure_selected_pa is not None and math.isfinite(float(differential_pressure_selected_pa)):
                     differential_pressures.append(float(differential_pressure_selected_pa))
+                low_range_raw = payload.get("differential_pressure_low_range_pa")
+                if low_range_raw is not None and math.isfinite(float(low_range_raw)):
+                    low_range_pressures.append(float(low_range_raw))
+                high_range_raw = payload.get("differential_pressure_high_range_pa")
+                if high_range_raw is not None and math.isfinite(float(high_range_raw)):
+                    high_range_pressures.append(float(high_range_raw))
 
                 flow_rate_lpm = derive_flow_rate_lpm_from_inputs(
                     float(payload["flow_sensor_voltage_v"]),
@@ -141,8 +150,10 @@ def main() -> int:
                 int(capabilities["telemetry_field_bits"])
                 & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED
             ) != 0
-            print(f"Differential pressure advertised: {has_dp_bit}")
+        print(f"Differential pressure advertised: {has_dp_bit}")
         print(format_stats("Selected differential pressure", differential_pressures, "Pa"))
+        print(format_stats("SDP810 low-range raw", low_range_pressures, "Pa"))
+        print(format_stats("SDP811 high-range raw", high_range_pressures, "Pa"))
         print(format_stats("Derived flow rate", flow_rates, "L/min"))
 
     print("wired_flow_probe_ok")

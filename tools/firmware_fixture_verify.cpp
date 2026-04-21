@@ -27,8 +27,6 @@ using zss::protocol::EventPayloadV1;
 using zss::protocol::StatusSnapshotPayloadV1;
 using zss::protocol::TelemetryPayloadV1;
 
-static_assert(sizeof(TelemetryPayloadV1) == zss::protocol::kBleTelemetryPacketSize);
-static_assert(sizeof(StatusSnapshotPayloadV1) == zss::protocol::kBleStatusSnapshotPacketSize);
 static_assert(sizeof(CapabilitiesPayloadV1) == zss::protocol::kBleCapabilitiesPacketSize);
 static_assert(sizeof(EventPayloadV1) == zss::protocol::kBleEventPacketSize);
 static_assert(sizeof(CommandAckPayloadV1) == zss::protocol::kWiredCommandAckPayloadSize);
@@ -66,14 +64,6 @@ uint16_t computeCrcCcittFalse(const uint8_t* data, size_t length) {
     return crc;
 }
 
-template <typename T>
-std::vector<uint8_t> bytesFromObject(const T& value) {
-    static_assert(std::is_trivially_copyable_v<T>);
-    std::vector<uint8_t> out(sizeof(T));
-    std::memcpy(out.data(), &value, sizeof(T));
-    return out;
-}
-
 SensorMeasurements makeMeasurements(float zirconia, float heater, float flow) {
     SensorMeasurements measurements{};
     measurements.zirconia_output_voltage_v = zirconia;
@@ -96,24 +86,81 @@ AppState makeState(
 }
 
 std::vector<uint8_t> encodeWiredTelemetryPayload(const TelemetryPayloadV1& payload) {
-    std::vector<uint8_t> out(zss::protocol::kWiredTelemetryPayloadSize, 0);
+    const bool has_raw_channels =
+        (payload.telemetry_field_bits &
+         (zss::protocol::kTelemetryFieldDifferentialPressureLowRangeMask |
+          zss::protocol::kTelemetryFieldDifferentialPressureHighRangeMask)) != 0u;
+    const size_t payload_size =
+        has_raw_channels
+            ? zss::protocol::kWiredTelemetryPayloadExtendedSize
+            : zss::protocol::kWiredTelemetryPayloadSize;
+    std::vector<uint8_t> out(payload_size, 0);
     writeU32Le(out, 0, payload.status_flags);
     writeU16Le(out, 4, payload.nominal_sample_period_ms);
     writeU16Le(out, 6, payload.telemetry_field_bits);
     writeFloat32Le(out, 8, payload.zirconia_output_voltage_v);
     writeFloat32Le(out, 12, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(out, 16, payload.flow_sensor_voltage_v);
+    if (has_raw_channels) {
+        writeFloat32Le(out, 20, payload.differential_pressure_low_range_pa);
+        writeFloat32Le(out, 24, payload.differential_pressure_high_range_pa);
+    }
     return out;
 }
 
 std::vector<uint8_t> encodeWiredStatusPayload(const StatusSnapshotPayloadV1& payload) {
-    std::vector<uint8_t> out(zss::protocol::kWiredStatusSnapshotPayloadSize, 0);
+    const bool has_raw_channels =
+        (payload.telemetry_field_bits &
+         (zss::protocol::kTelemetryFieldDifferentialPressureLowRangeMask |
+          zss::protocol::kTelemetryFieldDifferentialPressureHighRangeMask)) != 0u;
+    const size_t payload_size =
+        has_raw_channels
+            ? zss::protocol::kWiredStatusSnapshotPayloadExtendedSize
+            : zss::protocol::kWiredStatusSnapshotPayloadSize;
+    std::vector<uint8_t> out(payload_size, 0);
     writeU32Le(out, 0, payload.status_flags);
     writeU16Le(out, 4, payload.nominal_sample_period_ms);
     writeU16Le(out, 6, payload.telemetry_field_bits);
     writeFloat32Le(out, 8, payload.zirconia_output_voltage_v);
     writeFloat32Le(out, 12, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(out, 16, payload.flow_sensor_voltage_v);
+    if (has_raw_channels) {
+        writeFloat32Le(out, 20, payload.differential_pressure_low_range_pa);
+        writeFloat32Le(out, 24, payload.differential_pressure_high_range_pa);
+    }
+    return out;
+}
+
+std::vector<uint8_t> encodeBleTelemetryPayload(const TelemetryPayloadV1& payload) {
+    std::vector<uint8_t> out(zss::protocol::kBleTelemetryPacketSize, 0);
+    out[0] = payload.protocol_version_major;
+    out[1] = payload.protocol_version_minor;
+    out[2] = payload.telemetry_schema_version;
+    out[3] = payload.header_flags;
+    writeU32Le(out, 4, payload.sequence);
+    writeU32Le(out, 8, payload.status_flags);
+    writeFloat32Le(out, 12, payload.zirconia_output_voltage_v);
+    writeFloat32Le(out, 16, payload.heater_rtd_resistance_ohm);
+    writeFloat32Le(out, 20, payload.flow_sensor_voltage_v);
+    writeU16Le(out, 24, payload.nominal_sample_period_ms);
+    writeU16Le(out, 26, payload.telemetry_field_bits);
+    writeU32Le(out, 28, payload.diagnostic_bits);
+    return out;
+}
+
+std::vector<uint8_t> encodeBleStatusPayload(const StatusSnapshotPayloadV1& payload) {
+    std::vector<uint8_t> out(zss::protocol::kBleStatusSnapshotPacketSize, 0);
+    out[0] = payload.protocol_version_major;
+    out[1] = payload.protocol_version_minor;
+    out[2] = payload.status_snapshot_schema_version;
+    out[3] = payload.response_code;
+    writeU32Le(out, 4, payload.sequence);
+    writeU32Le(out, 8, payload.status_flags);
+    writeU16Le(out, 12, payload.nominal_sample_period_ms);
+    writeU16Le(out, 14, payload.telemetry_field_bits);
+    writeFloat32Le(out, 16, payload.zirconia_output_voltage_v);
+    writeFloat32Le(out, 20, payload.heater_rtd_resistance_ohm);
+    writeFloat32Le(out, 24, payload.flow_sensor_voltage_v);
     return out;
 }
 
@@ -192,24 +239,30 @@ std::vector<uint8_t> buildFixture(const std::string& case_id) {
 
     if (case_id == "ble_telemetry_nominal") {
         auto state = makeState(80, 4660, makeMeasurements(0.625f, 120.5f, 1.25f), true, true);
-        return bytesFromObject(zss::protocol::buildTelemetryPayload(state));
+        return encodeBleTelemetryPayload(zss::protocol::buildTelemetryPayload(state));
     }
 
     if (case_id == "ble_status_fault") {
         auto state = makeState(80, 4661, makeMeasurements(0.145f, 98.75f, 0.42f), true, false);
         state.setStatusFlag(zss::protocol::kStatusFlagAdcFaultMask, true);
         state.setStatusFlag(zss::protocol::kStatusFlagSensorFaultMask, true);
-        return bytesFromObject(zss::protocol::buildStatusSnapshotPayload(state));
+        return encodeBleStatusPayload(zss::protocol::buildStatusSnapshotPayload(state));
     }
 
     if (case_id == "ble_capabilities_ble") {
         DeviceCapabilities capabilities = CapabilityBuilder::build(zss::transport::TransportKind::Ble, 80);
-        return bytesFromObject(zss::protocol::buildCapabilitiesPayload(capabilities));
+        const auto payload = zss::protocol::buildCapabilitiesPayload(capabilities);
+        std::vector<uint8_t> out(sizeof(payload), 0);
+        std::memcpy(out.data(), &payload, sizeof(payload));
+        return out;
     }
 
     if (case_id == "ble_event_command_error") {
-        return bytesFromObject(
-            zss::protocol::buildEventPayload(EventCode::CommandError, 2, 4662, 0x99u));
+        const auto payload =
+            zss::protocol::buildEventPayload(EventCode::CommandError, 2, 4662, 0x99u);
+        std::vector<uint8_t> out(sizeof(payload), 0);
+        std::memcpy(out.data(), &payload, sizeof(payload));
+        return out;
     }
 
     if (case_id == "wired_telemetry_serial_nominal") {

@@ -1072,6 +1072,8 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - `/dev/cu.usbmodem3101` への upload 後、`python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` により `telemetry_field_bits=15` と finite `differential_pressure_selected_pa` を live wired で確認済み
 - `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5` も `gui_wired_session_probe_ok` で通過済み
 - current decision として EXT-005 は close 扱いにし、以後の BLE-side operator confirmation は EXT-006 の validation task に含める
+- plan adjustment として、flow calibration / selector tuning は hardware 完成後へ defer し、現段階では dummy flow law を維持する
+- hardware bring-up を支援するため、next step では wired GUI に `SDP811` / `SDP810` raw value を一時表示し、transport / UI 上で差圧の各 channel を観察しやすくする
 
 ### EXT-006. End-to-End Validation and Operator Hardening
 
@@ -1093,8 +1095,11 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - Bundle F の最初の operator tool として `tools/wired_flow_probe.py` を追加した
 - probe は transport-level の `selected differential pressure` と `derived flow rate` を集計し、
   no-flow / low-flow / medium-flow / high-flow を同じ観測軸で比較できる
-- no-flow baseline は `python3.12 tools/wired_flow_probe.py --port /dev/cu.usbmodem3101 --duration-s 6` で通過済み
-- next step は user-operated low / medium / high flow sweep をこの probe で取り、handoff / hysteresis / flow display の operator validation を進める
+- no-flow baseline は `python3.12 tools/wired_flow_probe.py --port /dev/cu.usbmodem4101 --duration-s 4` で通過済みで、
+  `telemetry_field_bits=63`、finite `selected differential pressure`、finite `SDP810 / SDP811 raw` を確認した
+- final calibration / selector tuning は hardware 完成後に行う前提へ変更した
+- hardware bring-up 支援として、GUI の flow card detail に `SDP811` / `SDP810` raw value を live 表示できるようにした
+- next step は hardware 完成後の low / medium / high flow sweep と、dummy flow law から実 calibration への移行準備である
 
 完了条件:
 

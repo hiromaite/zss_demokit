@@ -408,6 +408,8 @@ Sensirion の SDP8xx digital datasheet によると:
 
 - `Bundle D` までは firmware local log と debug path で進める
 - `Bundle E` で初めて GUI integration と protocol extension を入れる
+- ただし final calibration と selector threshold の最終 tuning は、オリフィス前後の差圧が取れる hardware 完成後に回す
+- hardware bring-up 中は、selected differential pressure に加えて `SDP811` / `SDP810` の raw value を operator から見えるようにする
 
 ### 推奨 canonical measurement
 
@@ -446,6 +448,11 @@ flow_rate_lpm =
 - `k_flow_gain = 1.0`
 - `dp_offset_pa = 0.0`
 
+現時点の扱い:
+
+- この式は `dummy placeholder` として維持する
+- gas line / orifice hardware 完成後に、実測から係数と offset を再同定する
+
 ### 相補利用アルゴリズムの推奨形
 
 最終推奨は `selector + optional blend` の 2 段階である。
@@ -480,6 +487,7 @@ else:
 - low-flow 域で `±125 Pa` センサの分解能メリットが出る
 - high-flow 域で `±500 Pa` センサへ安全に移れる
 - GUI 側の flow rate は selected differential pressure から一貫して計算できる
+- hardware bring-up 中に `SDP811` / `SDP810` raw value を GUI から観察できる
 
 ### 完了メモ
 
@@ -504,6 +512,12 @@ else:
   - `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5`
 - live wired validation では `telemetry_field_bits=15`、finite `differential_pressure_selected_pa`、`gui_wired_session_probe_ok` を確認した
 - BLE live continuity はすでに M3 で通過済みであり、Bundle E 後の BLE operator validation は Bundle F で follow-up する
+- hardware build support の追加方針として、final calibration と selector tuning は hardware 完成後に回し、
+  それまでは dummy flow law を維持しつつ wired path で `SDP811` / `SDP810` raw value を GUI 表示に載せる
+- その後の live wired bring-up では `telemetry_field_bits=63` を確認し、selected differential pressure に加えて
+  `SDP810 low-range raw` と `SDP811 high-range raw` が no-flow baseline で finite に取得できた
+- GUI 側も offscreen live connection で `flow_detail=SDP811: ... Pa / SDP810: ... Pa` を確認し、
+  hardware 組み上げ中の raw channel 可視化導線は成立した
 
 ## 9. まとめて実装すべき単位
 

@@ -48,6 +48,18 @@ void AppState::clearDifferentialPressureSelectedPa() {
     latest_differential_pressure_selected_pa_ = 0.0f;
 }
 
+void AppState::setDifferentialPressureRawPa(float low_range_value, float high_range_value) {
+    has_differential_pressure_raw_pa_ = true;
+    latest_differential_pressure_low_range_pa_ = low_range_value;
+    latest_differential_pressure_high_range_pa_ = high_range_value;
+}
+
+void AppState::clearDifferentialPressureRawPa() {
+    has_differential_pressure_raw_pa_ = false;
+    latest_differential_pressure_low_range_pa_ = 0.0f;
+    latest_differential_pressure_high_range_pa_ = 0.0f;
+}
+
 void AppState::incrementSampleOverrunCount(uint32_t amount) {
     sample_overrun_count_ += amount;
     assignStatusFlag(status_flags_, protocol::kStatusFlagSamplingOverrunMask, true);
@@ -84,6 +96,18 @@ bool AppState::hasDifferentialPressureSelectedPa() const {
 
 float AppState::latestDifferentialPressureSelectedPa() const {
     return latest_differential_pressure_selected_pa_;
+}
+
+bool AppState::hasDifferentialPressureRawPa() const {
+    return has_differential_pressure_raw_pa_;
+}
+
+float AppState::latestDifferentialPressureLowRangePa() const {
+    return latest_differential_pressure_low_range_pa_;
+}
+
+float AppState::latestDifferentialPressureHighRangePa() const {
+    return latest_differential_pressure_high_range_pa_;
 }
 
 const char* AppState::firmwareVersion() const {

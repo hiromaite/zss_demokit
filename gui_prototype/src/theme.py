@@ -103,6 +103,11 @@ def app_stylesheet() -> str:
         font-weight: 700;
         background: transparent;
     }}
+    QLabel#MetricDetail {{
+        font-size: 10px;
+        color: {c["muted"]};
+        background: transparent;
+    }}
     QLabel#ModeStatusLabel {{
         font-size: 12px;
         font-weight: 600;

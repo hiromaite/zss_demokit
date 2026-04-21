@@ -108,6 +108,8 @@ inline constexpr uint16_t kTelemetryFieldBits =
     (1u << 1) |
     (1u << 2);
 inline constexpr uint16_t kTelemetryFieldDifferentialPressureSelectedMask = 1u << 3;
+inline constexpr uint16_t kTelemetryFieldDifferentialPressureLowRangeMask = 1u << 4;
+inline constexpr uint16_t kTelemetryFieldDifferentialPressureHighRangeMask = 1u << 5;
 
 inline constexpr uint32_t kBleFeatureBits =
     (1u << 0) |
@@ -127,7 +129,9 @@ inline constexpr size_t kBleCapabilitiesPacketSize = 24;
 inline constexpr size_t kBleEventPacketSize = 12;
 inline constexpr size_t kWiredHeaderSize = 16;
 inline constexpr size_t kWiredTelemetryPayloadSize = 20;
+inline constexpr size_t kWiredTelemetryPayloadExtendedSize = 28;
 inline constexpr size_t kWiredStatusSnapshotPayloadSize = 20;
+inline constexpr size_t kWiredStatusSnapshotPayloadExtendedSize = 28;
 inline constexpr size_t kWiredEventPayloadSize = 8;
 inline constexpr size_t kWiredErrorPayloadSize = 8;
 inline constexpr size_t kWiredCommandRequestPayloadSize = 16;

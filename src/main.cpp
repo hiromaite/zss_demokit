@@ -123,10 +123,12 @@ void logCapabilitiesPreview() {
     const auto ble_capabilities = zss::app::CapabilityBuilder::build(
         zss::transport::TransportKind::Ble,
         zss::board::kBleNominalSamplePeriodMs,
-        g_measurement_core.differentialPressureAvailable());
+        g_measurement_core.differentialPressureAvailable(),
+        false);
     const auto serial_capabilities = zss::app::CapabilityBuilder::build(
         zss::transport::TransportKind::Serial,
         zss::board::kWiredNominalSamplePeriodMs,
+        g_measurement_core.differentialPressureAvailable(),
         g_measurement_core.differentialPressureAvailable());
 
     const auto ble_payload = zss::protocol::buildCapabilitiesPayload(ble_capabilities);
@@ -231,6 +233,15 @@ void runSamplingStep(uint32_t now_ms) {
     } else {
         g_app_state.clearDifferentialPressureSelectedPa();
     }
+    if (g_measurement_core.differentialPressureHealthy() &&
+        isfinite(differential_pressure.low_range_differential_pressure_pa) &&
+        isfinite(differential_pressure.high_range_differential_pressure_pa)) {
+        g_app_state.setDifferentialPressureRawPa(
+            differential_pressure.low_range_differential_pressure_pa,
+            differential_pressure.high_range_differential_pressure_pa);
+    } else {
+        g_app_state.clearDifferentialPressureRawPa();
+    }
     const uint32_t sequence = g_app_state.nextSequence();
     g_app_state.updateMeasurements(sequence, measurements);
 
@@ -317,7 +328,8 @@ void setup() {
     const auto ble_capabilities = zss::app::CapabilityBuilder::build(
         zss::transport::TransportKind::Ble,
         zss::board::kBleNominalSamplePeriodMs,
-        g_measurement_core.differentialPressureAvailable());
+        g_measurement_core.differentialPressureAvailable(),
+        false);
     g_ble_transport.publishCapabilities(
         zss::protocol::buildCapabilitiesPayload(ble_capabilities));
     g_ble_transport.publishStatusSnapshot(
@@ -393,7 +405,9 @@ void loop() {
                         transport_kind == zss::transport::TransportKind::Ble
                             ? zss::board::kBleNominalSamplePeriodMs
                             : g_app_state.nominalSamplePeriodMs(),
-                        g_measurement_core.differentialPressureAvailable());
+                        g_measurement_core.differentialPressureAvailable(),
+                        transport_kind == zss::transport::TransportKind::Serial &&
+                            g_measurement_core.differentialPressureAvailable());
                     if constexpr (std::is_same_v<std::decay_t<decltype(transport)>, zss::transport::SerialTransport>) {
                         transport.publishCapabilities(
                             zss::protocol::buildCapabilitiesPayload(capabilities),

@@ -88,6 +88,8 @@ class TelemetryPoint:
     heater_rtd_resistance_ohm: float
     flow_sensor_voltage_v: float
     differential_pressure_selected_pa: float | None = None
+    differential_pressure_low_range_pa: float | None = None
+    differential_pressure_high_range_pa: float | None = None
 
 
 class MockBackend(QObject):
@@ -629,6 +631,8 @@ class MockBackend(QObject):
                 if payload.get("differential_pressure_selected_pa") is not None
                 else None
             ),
+            differential_pressure_low_range_pa=None,
+            differential_pressure_high_range_pa=None,
         )
         self.telemetry_generated.emit(point)
 
@@ -759,6 +763,16 @@ class MockBackend(QObject):
                 differential_pressure_selected_pa=(
                     float(payload["differential_pressure_selected_pa"])
                     if payload.get("differential_pressure_selected_pa") is not None
+                    else None
+                ),
+                differential_pressure_low_range_pa=(
+                    float(payload["differential_pressure_low_range_pa"])
+                    if payload.get("differential_pressure_low_range_pa") is not None
+                    else None
+                ),
+                differential_pressure_high_range_pa=(
+                    float(payload["differential_pressure_high_range_pa"])
+                    if payload.get("differential_pressure_high_range_pa") is not None
                     else None
                 ),
             )

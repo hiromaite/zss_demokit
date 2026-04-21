@@ -14,6 +14,8 @@ from protocol_constants import (
     PROTOCOL_VERSION_TEXT,
     STATUS_FLAG_PUMP_ON,
     SUPPORTED_COMMANDS,
+    TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE,
+    TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED,
     TELEMETRY_FIELDS,
     TRANSPORT_BLE,
@@ -177,6 +179,10 @@ def decode_capabilities(frame: WiredFrame) -> dict[str, object]:
         telemetry_fields.append(TELEMETRY_FIELDS[2])
     if telemetry_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED:
         telemetry_fields.append(TELEMETRY_FIELDS[3])
+    if telemetry_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE:
+        telemetry_fields.append(TELEMETRY_FIELDS[4])
+    if telemetry_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE:
+        telemetry_fields.append(TELEMETRY_FIELDS[5])
 
     return {
         "protocol_version": build_protocol_version_text(frame),
@@ -198,10 +204,20 @@ def decode_capabilities(frame: WiredFrame) -> dict[str, object]:
 
 
 def decode_status_snapshot(frame: WiredFrame) -> dict[str, object]:
-    status_flags, nominal_sample_period_ms, telemetry_field_bits, zirconia, heater, flow_raw = struct.unpack(
-        "<IHHfff",
-        frame.payload,
-    )
+    if len(frame.payload) == 20:
+        status_flags, nominal_sample_period_ms, telemetry_field_bits, zirconia, heater, flow_raw = struct.unpack(
+            "<IHHfff",
+            frame.payload,
+        )
+        low_range_raw = None
+        high_range_raw = None
+    elif len(frame.payload) == 28:
+        status_flags, nominal_sample_period_ms, telemetry_field_bits, zirconia, heater, flow_raw, low_range_raw, high_range_raw = struct.unpack(
+            "<IHHfffff",
+            frame.payload,
+        )
+    else:
+        raise ValueError(f"Expected 20-byte or 28-byte wired status payload, got {len(frame.payload)} bytes")
     differential_pressure_selected_pa = None
     if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED:
         differential_pressure_selected_pa = flow_raw
@@ -214,6 +230,8 @@ def decode_status_snapshot(frame: WiredFrame) -> dict[str, object]:
         "heater_rtd_resistance_ohm": heater,
         "flow_sensor_voltage_v": flow_raw,
         "differential_pressure_selected_pa": differential_pressure_selected_pa,
+        "differential_pressure_low_range_pa": low_range_raw,
+        "differential_pressure_high_range_pa": high_range_raw,
         "pump_on": (status_flags & STATUS_FLAG_PUMP_ON) != 0,
     }
 

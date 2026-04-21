@@ -17,6 +17,8 @@ struct TelemetryPayloadV1 {
     float zirconia_output_voltage_v = 0.0f;
     float heater_rtd_resistance_ohm = 0.0f;
     float flow_sensor_voltage_v = 0.0f;
+    float differential_pressure_low_range_pa = 0.0f;
+    float differential_pressure_high_range_pa = 0.0f;
     uint16_t nominal_sample_period_ms = 0;
     uint16_t telemetry_field_bits = kTelemetryFieldBits;
     uint32_t diagnostic_bits = 0;
@@ -34,6 +36,8 @@ struct StatusSnapshotPayloadV1 {
     float zirconia_output_voltage_v = 0.0f;
     float heater_rtd_resistance_ohm = 0.0f;
     float flow_sensor_voltage_v = 0.0f;
+    float differential_pressure_low_range_pa = 0.0f;
+    float differential_pressure_high_range_pa = 0.0f;
 };
 
 struct CapabilitiesPayloadV1 {

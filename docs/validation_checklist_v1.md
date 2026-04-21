@@ -92,8 +92,9 @@
 | `INT-VAL-011` | BLE GUI session probe logic smoke | GUI-level BLE probe の段取りと gate 判定が fake live backend で回る | `PASS` | `tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6` で `scan -> connect -> recording -> reconnect -> summary` を確認 |
 | `INT-VAL-012` | Windows packaged end-to-end smoke | Windows packaged app で `Wired` / `BLE` の両モードが blocking issue なく動く | `PASS` | user による Windows 11 Pro 実機確認で serial / BLE の両方に問題なしを確認 |
 | `INT-VAL-013` | GUI wired flow integration | GUI が selected differential pressure を含む wired session を継続処理できる | `PASS` | `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5` で `967` telemetry, warning/error `0`, CSV `799` rows, `gui_wired_session_probe_ok` を確認 |
-| `INT-VAL-014` | Wired flow probe baseline | wired transport 上で selected differential pressure と derived flow rate を集計できる | `PASS` | `tools/wired_flow_probe.py --port /dev/cu.usbmodem3101 --duration-s 6` で `telemetry_field_bits=15`, advertised differential pressure, finite no-flow baseline を確認 |
+| `INT-VAL-014` | Wired flow probe baseline | wired transport 上で selected differential pressure と derived flow rate を集計できる | `PASS` | `tools/wired_flow_probe.py --port /dev/cu.usbmodem4101 --duration-s 4` で `telemetry_field_bits=63`, advertised differential pressure, finite `selected / SDP810 / SDP811` no-flow baseline を確認 |
 | `INT-VAL-015` | Wired flow operator sweep | low / medium / high flow で transport-level flow probe が handoff を観測できる | `TODO` | `tools/wired_flow_probe.py` を用いた user-operated flow sweep を次回実施 |
+| `GUI-VAL-022` | Flow card raw SDP visibility | wired differential pressure raw values が flow metric card に表示される | `PASS` | offscreen live connection で `flow_detail=SDP811: -0.05 Pa / SDP810: -0.05 Pa`, `detail_visible=True` を確認 |
 
 ## 7. 実施ログ
 

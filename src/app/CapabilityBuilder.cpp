@@ -7,12 +7,18 @@ namespace zss::app {
 DeviceCapabilities CapabilityBuilder::build(
     transport::TransportKind transport_kind,
     uint16_t nominal_sample_period_ms,
-    bool advertise_differential_pressure_selected) {
+    bool advertise_differential_pressure_selected,
+    bool advertise_differential_pressure_raw_channels) {
     DeviceCapabilities capabilities{};
     capabilities.nominal_sample_period_ms = nominal_sample_period_ms;
     if (advertise_differential_pressure_selected) {
         capabilities.telemetry_field_bits |=
             protocol::kTelemetryFieldDifferentialPressureSelectedMask;
+    }
+    if (advertise_differential_pressure_raw_channels) {
+        capabilities.telemetry_field_bits |=
+            protocol::kTelemetryFieldDifferentialPressureLowRangeMask |
+            protocol::kTelemetryFieldDifferentialPressureHighRangeMask;
     }
 
     if (transport_kind == transport::TransportKind::Serial) {

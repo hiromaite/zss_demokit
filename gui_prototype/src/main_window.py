@@ -80,12 +80,21 @@ class MetricCard(QFrame):
         self.name_label.setObjectName("MetricName")
         self.value_label = QLabel("--")
         self.value_label.setObjectName("MetricValue")
+        self.detail_label = QLabel("")
+        self.detail_label.setObjectName("MetricDetail")
+        self.detail_label.setWordWrap(True)
+        self.detail_label.setVisible(False)
 
         layout.addWidget(self.name_label)
         layout.addWidget(self.value_label)
+        layout.addWidget(self.detail_label)
 
     def set_value(self, value_text: str) -> None:
         self.value_label.setText(value_text)
+
+    def set_detail(self, detail_text: str) -> None:
+        self.detail_label.setText(detail_text)
+        self.detail_label.setVisible(bool(detail_text))
 
 
 class ElidedLabel(QLabel):
@@ -296,6 +305,8 @@ class MainWindow(QMainWindow):
         self._viewbox_to_plot_key: dict[object, str] = {}
         self._active_plot_key = self._plot_key_from_label(self.app_settings.plot.selected_plot)
         self._pending_mode_switch_target: str | None = None
+        self._latest_low_range_differential_pressure_pa: float | None = None
+        self._latest_high_range_differential_pressure_pa: float | None = None
 
         self._build_ui()
         self._bind_controllers()
@@ -780,6 +791,8 @@ class MainWindow(QMainWindow):
             self._append_log(severity, message)
         if not connected:
             self._stop_recording()
+            self._latest_low_range_differential_pressure_pa = None
+            self._latest_high_range_differential_pressure_pa = None
             if self._pending_mode_switch_target is not None:
                 pending_target = self._pending_mode_switch_target
                 self._pending_mode_switch_target = None
@@ -837,6 +850,8 @@ class MainWindow(QMainWindow):
             self._session_started = point.host_received_at
         self.telemetry_session_stats.on_telemetry(point)
         self.gap_value.setText(str(plot_update["sequence_gap_total"]))
+        self._latest_low_range_differential_pressure_pa = point.differential_pressure_low_range_pa
+        self._latest_high_range_differential_pressure_pa = point.differential_pressure_high_range_pa
         for severity, message in self.telemetry_health_monitor.on_telemetry(point):
             self._append_log(severity, message)
 
@@ -1155,6 +1170,7 @@ class MainWindow(QMainWindow):
         self.metric_o2.set_value("Calibrate")
         self.metric_heater.set_value("--")
         self.metric_flow.set_value("--")
+        self.metric_flow.set_detail("")
         self._sync_pump_toggle()
         self._sync_recording_controls()
         self._persist_current_settings()
@@ -1172,6 +1188,8 @@ class MainWindow(QMainWindow):
         self.plot_controller.clear()
         self.gap_value.setText("0")
         self._session_started = datetime.now()
+        self._latest_low_range_differential_pressure_pa = None
+        self._latest_high_range_differential_pressure_pa = None
         for curve in self.plot_curves.values():
             curve.setData([], [])
         self.sensor_secondary_curve.setData([], [])
@@ -1182,15 +1200,31 @@ class MainWindow(QMainWindow):
         zirconia_value = metrics.get("zirconia_output_voltage_v")
         heater_value = metrics.get("heater_rtd_resistance_ohm")
         flow_value = metrics.get("flow_rate_lpm")
+        low_range_differential_pressure_pa = self._latest_low_range_differential_pressure_pa
+        high_range_differential_pressure_pa = self._latest_high_range_differential_pressure_pa
 
         if point is not None:
             zirconia_value = zirconia_value if zirconia_value is not None else point.zirconia_output_voltage_v
             heater_value = heater_value if heater_value is not None else point.heater_rtd_resistance_ohm
             flow_value = flow_value if flow_value is not None else 0.0
+            low_range_differential_pressure_pa = point.differential_pressure_low_range_pa
+            high_range_differential_pressure_pa = point.differential_pressure_high_range_pa
 
         self.metric_zirconia.set_value("--" if zirconia_value is None else f"{zirconia_value:0.3f} V")
         self.metric_heater.set_value("--" if heater_value is None else f"{heater_value:0.1f} Ohm")
         self.metric_flow.set_value("--" if flow_value is None else f"{flow_value:0.3f} L/min")
+        if (
+            low_range_differential_pressure_pa is not None
+            and high_range_differential_pressure_pa is not None
+            and math.isfinite(low_range_differential_pressure_pa)
+            and math.isfinite(high_range_differential_pressure_pa)
+        ):
+            self.metric_flow.set_detail(
+                f"SDP811: {high_range_differential_pressure_pa:+0.2f} Pa / "
+                f"SDP810: {low_range_differential_pressure_pa:+0.2f} Pa"
+            )
+        else:
+            self.metric_flow.set_detail("")
         self.metric_o2.set_value(self._format_o2_metric_value(zirconia_value))
 
     def _format_o2_metric_value(self, zirconia_value: float | None) -> str:
