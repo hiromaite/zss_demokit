@@ -8,8 +8,8 @@
 ## Current Packaging Target
 
 - package style: `onedir`
-- package directory name: `zss_demokit_gui_win64_beta1`
-- app version: `0.1.0-beta.1`
+- package directory name: `zss_demokit_gui_win64_beta2`
+- app version: `0.1.0-beta.2`
 - executable name: `zss_demokit_gui.exe`
 
 ## Preconditions
@@ -36,14 +36,14 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 
 Expected result:
 
-- package directory exists at `dist\zss_demokit_gui_win64_beta1\`
-- executable exists at `dist\zss_demokit_gui_win64_beta1\zss_demokit_gui.exe`
+- package directory exists at `dist\zss_demokit_gui_win64_beta2\`
+- executable exists at `dist\zss_demokit_gui_win64_beta2\zss_demokit_gui.exe`
 
 ## Launch Smoke
 
-1. Launch `dist\zss_demokit_gui_win64_beta1\zss_demokit_gui.exe`
+1. Launch `dist\zss_demokit_gui_win64_beta2\zss_demokit_gui.exe`
 2. Confirm that the launcher window appears
-3. Confirm that the app version displayed is `0.1.0-beta.1`
+3. Confirm that the app version displayed is `0.1.0-beta.2`
 4. Confirm that the generated app icon is shown in the window / taskbar if Windows picks it up
 
 ## Wired Smoke

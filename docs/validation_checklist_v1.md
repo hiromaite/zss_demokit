@@ -189,7 +189,7 @@
 - `pyinstaller>=6,<7` を `.venv_gui_prototype` へ導入し、`pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` により `dist/zss_demokit_gui/` を生成できることを確認
 - packaged binary `dist/zss_demokit_gui/zss_demokit_gui` を `QT_QPA_PLATFORM=offscreen` で短時間起動し、bundle が即時クラッシュせず立ち上がることを確認
 - packaging metadata scaffold を追加した後も `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` を再実施し、build と packaged offscreen short launch が継続して成立することを確認
-- beta naming `zss_demokit_gui_win64_beta1`, version `0.1.0-beta.1`, publisher metadata, generated icon asset を反映した後も packaging smoke が継続して成立することを確認
+- beta2 naming `zss_demokit_gui_win64_beta2`, version `0.1.0-beta.2`, publisher metadata, generated icon asset を反映した後も packaging smoke が継続して成立することを確認
 - user により Windows 11 Pro 上で packaging を実施し、packaged app の起動と `Wired` / `BLE` の両モード実行に問題がないことを確認
 
 ### 2026-04-20

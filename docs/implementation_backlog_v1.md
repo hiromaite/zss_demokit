@@ -440,7 +440,7 @@
 - macOS 上で `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` が成功し、`dist/zss_demokit_gui/` を生成できることを確認済み
 - packaging metadata は `gui_prototype/src/app_metadata.py` に集約し、PyInstaller spec から Windows version resource を自動生成できる状態にした
 - icon は `gui_prototype/assets/app_icon.*` に置かれた場合のみ自動で埋め込む optional path とした
-- 初回 beta 方針は `onedir`, version `0.1.0-beta.1`, 配布名 `zss_demokit_gui_win64_beta1` とした
+- current beta packaging 方針は `onedir`, version `0.1.0-beta.2`, 配布名 `zss_demokit_gui_win64_beta2` とした
 - geometric first-pass icon を `tools/generate_app_icon.py` で生成し、`app_icon.png` / `app_icon.ico` を asset 化済み
 - Windows 11 Pro 上で packaging と packaged app 実行を確認し、`Wired` / `BLE` 両モードの smoke が通過
 - 残タスクは final art direction の要否判断と release 向け metadata / installer policy の最終化

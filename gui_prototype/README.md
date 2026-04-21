@@ -59,6 +59,7 @@ python gui_prototype/main.py
 
 - spec file: `gui_prototype/zss_demokit_gui.spec`
 - packaging notes: `gui_prototype/packaging_README.md`
+- current Windows beta target: `zss_demokit_gui_win64_beta2` / `0.1.0-beta.2`
 - local smoke build:
 
 ```bash

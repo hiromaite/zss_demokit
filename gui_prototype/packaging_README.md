@@ -10,8 +10,8 @@ This note tracks the current packaging path for the desktop GUI.
 ## Current Packaging Entry Point
 
 - spec file: `gui_prototype/zss_demokit_gui.spec`
-- current beta naming target: `zss_demokit_gui_win64_beta1`
-- current application version: `0.1.0-beta.1`
+- current beta naming target: `zss_demokit_gui_win64_beta2`
+- current application version: `0.1.0-beta.2`
 
 The current spec is intentionally conservative:
 
@@ -33,7 +33,7 @@ pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec
 
 Expected output:
 
-- bundle directory under `dist/zss_demokit_gui_win64_beta1/`
+- bundle directory under `dist/zss_demokit_gui_win64_beta2/`
 - executable launches the same `LauncherWindow` as the source run
 
 ## Windows-Focused Follow-up
