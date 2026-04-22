@@ -33,6 +33,7 @@ from flow_verification import (
     FlowVerificationController,
     FlowVerificationLatestSummary,
     FlowVerificationPersistence,
+    VerificationSession,
     VerificationStrokeResult,
     ZeroCheckResult,
 )
@@ -165,6 +166,7 @@ class SettingsDialog(QDialog):
         self._flow_verification_summary = flow_verification_summary
         self._flow_verification_available = flow_verification_available
         self._open_flow_verification_requested = False
+        self._show_flow_verification_details_requested = False
         self._pending_o2_air_calibration_voltage_v = settings.o2.air_calibration_voltage_v
         self._pending_o2_calibrated_at_iso = settings.o2.calibrated_at_iso
         self.setWindowTitle("Settings")
@@ -256,6 +258,10 @@ class SettingsDialog(QDialog):
     @property
     def flow_verification_requested(self) -> bool:
         return self._open_flow_verification_requested
+
+    @property
+    def flow_verification_details_requested(self) -> bool:
+        return self._show_flow_verification_details_requested
 
     def _page_wrapper(self) -> tuple[QWidget, QVBoxLayout]:
         page = QWidget()
@@ -458,7 +464,12 @@ class SettingsDialog(QDialog):
         self.flow_verification_button.setObjectName("PrimaryButton")
         self.flow_verification_button.setEnabled(self._flow_verification_available)
         self.flow_verification_button.clicked.connect(self._request_flow_verification)
+        self.flow_verification_details_button = QPushButton("Show Latest Details")
+        self.flow_verification_details_button.setObjectName("SecondaryButton")
+        self.flow_verification_details_button.setEnabled(self._flow_verification_summary is not None)
+        self.flow_verification_details_button.clicked.connect(self._request_flow_verification_details)
         verification_row.addWidget(self.flow_verification_button)
+        verification_row.addWidget(self.flow_verification_details_button)
         verification_row.addStretch(1)
         verification_layout.addLayout(verification_row)
         layout.addWidget(verification_card)
@@ -556,6 +567,8 @@ class SettingsDialog(QDialog):
         self.o2_reset_button.setEnabled(True)
 
     def _refresh_flow_verification_state(self) -> None:
+        self.flow_verification_button.setEnabled(self._flow_verification_available)
+        self.flow_verification_details_button.setEnabled(self._flow_verification_summary is not None)
         if self._flow_verification_summary is None:
             self.flow_verification_status_label.setText("Last result: not verified")
             if self._flow_verification_available:
@@ -581,6 +594,120 @@ class SettingsDialog(QDialog):
     def _request_flow_verification(self) -> None:
         self._open_flow_verification_requested = True
         self.accept()
+
+    def _request_flow_verification_details(self) -> None:
+        self._show_flow_verification_details_requested = True
+        self.accept()
+
+
+class FlowVerificationDetailsDialog(QDialog):
+    def __init__(self, session: VerificationSession, session_path: Path | None = None, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Latest Flow Verification Details")
+        self.resize(920, 760)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        header = _dialog_header(
+            "Latest Flow Verification Details",
+            "Review the latest saved verification session summary and stroke-level results.",
+        )
+        layout.addWidget(header)
+
+        summary_card = QFrame()
+        summary_card.setObjectName("AccentCard")
+        summary_layout = QGridLayout(summary_card)
+        summary_layout.setHorizontalSpacing(12)
+        summary_layout.setVerticalSpacing(8)
+        summary_rows = [
+            ("Overall", session.overall_result or "--"),
+            ("Exhalation", session.exhalation_result or "--"),
+            ("Inhalation", session.inhalation_result or "--"),
+            ("Completed at", session.completed_at_iso or "--"),
+            ("Device", session.device_identifier or "--"),
+            ("Transport", session.transport_type or "--"),
+            ("Protocol", session.protocol_version or "--"),
+            ("Criterion", session.criterion_version or "--"),
+            ("Saved path", str(session_path) if session_path is not None else "--"),
+        ]
+        for row_index, (name, value) in enumerate(summary_rows):
+            summary_layout.addWidget(QLabel(name), row_index, 0)
+            value_label = QLabel(value)
+            value_label.setWordWrap(True)
+            summary_layout.addWidget(value_label, row_index, 1)
+        layout.addWidget(summary_card)
+
+        zero_card = QFrame()
+        zero_card.setObjectName("SurfaceCard")
+        zero_layout = QGridLayout(zero_card)
+        zero_layout.setHorizontalSpacing(12)
+        zero_layout.setVerticalSpacing(8)
+        zero_result = session.zero_check_result
+        zero_rows = [
+            ("Zero status", "--" if zero_result is None else zero_result.status),
+            ("Mean flow", _format_optional(zero_result.mean_flow_lpm, "{:+0.3f} L/min") if zero_result else "--"),
+            ("Peak abs flow", _format_optional(zero_result.peak_abs_flow_lpm, "{:0.3f} L/min") if zero_result else "--"),
+            ("Selected DP mean", _format_optional(zero_result.selected_dp_mean_pa, "{:+0.3f} Pa") if zero_result else "--"),
+            ("SDP811 mean", _format_optional(zero_result.sdp811_mean_pa, "{:+0.3f} Pa") if zero_result else "--"),
+            ("SDP810 mean", _format_optional(zero_result.sdp810_mean_pa, "{:+0.3f} Pa") if zero_result else "--"),
+            ("Warnings", "--" if zero_result is None or not zero_result.warning_flags else ", ".join(zero_result.warning_flags)),
+        ]
+        for row_index, (name, value) in enumerate(zero_rows):
+            zero_layout.addWidget(QLabel(name), row_index, 0)
+            value_label = QLabel(value)
+            value_label.setWordWrap(True)
+            zero_layout.addWidget(value_label, row_index, 1)
+        layout.addWidget(zero_card)
+
+        stroke_card = QFrame()
+        stroke_card.setObjectName("SurfaceCard")
+        stroke_layout = QVBoxLayout(stroke_card)
+        stroke_title = QLabel("Stroke Results")
+        stroke_title.setObjectName("SectionTitle")
+        stroke_layout.addWidget(stroke_title)
+        stroke_table = QGridLayout()
+        stroke_table.setHorizontalSpacing(10)
+        stroke_table.setVerticalSpacing(6)
+        headers = ["Step", "Result", "Recovered", "Error %", "Peak flow", "Source", "Switches", "Warnings"]
+        for column_index, header_text in enumerate(headers):
+            header_label = QLabel(header_text)
+            header_label.setObjectName("SectionTitle")
+            stroke_table.addWidget(header_label, 0, column_index)
+        for row_index, result in enumerate(session.stroke_results, start=1):
+            values = [
+                _format_step_label(result),
+                result.result_status or "--",
+                f"{result.recovered_volume_l:0.3f} L",
+                f"{result.volume_error_percent:+0.2f} %",
+                f"{result.peak_flow_lps:0.3f} L/s",
+                result.dominant_source or "--",
+                str(result.source_switch_count),
+                ", ".join(result.warning_flags) if result.warning_flags else "--",
+            ]
+            for column_index, value in enumerate(values):
+                label = QLabel(value)
+                label.setWordWrap(True)
+                stroke_table.addWidget(label, row_index, column_index)
+        stroke_layout.addLayout(stroke_table)
+        layout.addWidget(stroke_card)
+
+        note_card = QFrame()
+        note_card.setObjectName("SurfaceCard")
+        note_layout = QVBoxLayout(note_card)
+        note_title = QLabel("Operator Note")
+        note_title.setObjectName("SectionTitle")
+        note_value = QLabel(session.operator_note or "--")
+        note_value.setWordWrap(True)
+        note_layout.addWidget(note_title)
+        note_layout.addWidget(note_value)
+        layout.addWidget(note_card)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        _style_dialog_buttons(button_box)
+        button_box.accepted.connect(self.accept)
+        layout.addWidget(button_box)
 
 
 class FlowVerificationDialog(QDialog):
@@ -916,3 +1043,15 @@ class FlowVerificationDialog(QDialog):
                 "--" if row["peak_flow_lps"] is None else f"{row['peak_flow_lps']:0.3f} L/s"
             )
             labels["source"].setText(row["source"] or "--")
+
+
+def _format_optional(value: float | None, pattern: str) -> str:
+    if value is None:
+        return "--"
+    return pattern.format(value)
+
+
+def _format_step_label(result: VerificationStrokeResult) -> str:
+    direction = "Exh" if result.direction == "exhalation" else "Inh"
+    band = result.speed_band.capitalize()
+    return f"{direction} {band}"

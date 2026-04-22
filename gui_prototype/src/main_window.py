@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 import math
+from pathlib import Path
 from typing import Callable
 
 import pyqtgraph as pg
@@ -37,7 +38,7 @@ from controllers import (
     TelemetrySessionStats,
     WarningController,
 )
-from dialogs import FlowVerificationDialog, ModeSwitchDialog, SettingsDialog
+from dialogs import FlowVerificationDetailsDialog, FlowVerificationDialog, ModeSwitchDialog, SettingsDialog
 from flow_verification import FlowVerificationController, FlowVerificationPersistence
 from mock_backend import MockBackend, TelemetryPoint
 from mock_backend import PREFERRED_BLE_NAME_PREFIXES, PREFERRED_WIRED_PORT_TOKENS
@@ -1123,8 +1124,15 @@ class MainWindow(QMainWindow):
         previous_mode = self.mode
         requested_mode = dialog.requested_mode
         flow_verification_requested = dialog.flow_verification_requested
+        flow_verification_details_requested = dialog.flow_verification_details_requested
         previous_o2_air_calibration_voltage_v = self.app_settings.o2.air_calibration_voltage_v
         previous_o2_calibrated_at_iso = self.app_settings.o2.calibrated_at_iso
+        if flow_verification_details_requested:
+            self._open_flow_verification_details_dialog()
+            return
+        if flow_verification_requested:
+            self._open_flow_verification_dialog()
+            return
         self._apply_dialog_settings(dialog)
         if requested_mode == previous_mode:
             self.app_settings.last_mode = previous_mode
@@ -1136,8 +1144,6 @@ class MainWindow(QMainWindow):
                 previous_o2_calibrated_at_iso,
             )
             self._append_log("info", "Settings updated.")
-            if flow_verification_requested:
-                self._open_flow_verification_dialog()
             return
 
         confirm = ModeSwitchDialog(previous_mode, requested_mode, self)
@@ -1202,6 +1208,9 @@ class MainWindow(QMainWindow):
     def _latest_flow_verification_summary(self):
         return self._flow_verification_persistence().load_latest_summary()
 
+    def _latest_flow_verification_session(self):
+        return self._flow_verification_persistence().load_latest_session()
+
     def _open_flow_verification_dialog(self) -> None:
         if not self._has_expected_connected_device():
             self._append_log("warn", "Connect to an expected device before starting flow verification.")
@@ -1237,6 +1246,16 @@ class MainWindow(QMainWindow):
         finally:
             self.connection_controller.telemetry_received.disconnect(controller.on_telemetry)
             self.connection_controller.connection_changed.disconnect(controller.on_connection_changed)
+
+    def _open_flow_verification_details_dialog(self) -> None:
+        session = self._latest_flow_verification_session()
+        if session is None:
+            self._append_log("warn", "No saved flow verification session is available yet.")
+            return
+        summary = self._latest_flow_verification_summary()
+        session_path = Path(summary.path) if summary is not None and summary.path else None
+        dialog = FlowVerificationDetailsDialog(session, session_path=session_path, parent=self)
+        dialog.exec()
 
     def _clear_plot_buffers(self) -> None:
         self.plot_controller.clear()

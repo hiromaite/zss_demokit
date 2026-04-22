@@ -55,6 +55,7 @@
 | `GUI-VAL-021` | Windows packaged GUI smoke | Windows packaged app が起動し、基本操作が成立する | `PASS` | user による Windows 11 Pro 実機確認で packaging 成功、packaged app 起動成功、blocking issue なしを確認 |
 | `GUI-VAL-022` | Flow verification settings entry smoke | `Settings > Device` から guided verification 入口が見え、expected device 接続時に有効化される | `PASS` | offscreen `SettingsDialog` smoke で `flow_verification_button.isEnabled()` を確認 |
 | `GUI-VAL-023` | Flow verification controller/dialog smoke | guided verification controller と dialog skeleton が起動し、basic capture/save path が崩れない | `PASS` | offscreen smoke で controller-only capture path による JSON save と `FlowVerificationDialog` 起動を確認 |
+| `GUI-VAL-024` | Flow verification latest details smoke | latest saved verification session を `Settings > Device` から開いて review できる | `PASS` | offscreen smoke で saved JSON を読み込み、`Show Latest Details` button と `FlowVerificationDetailsDialog` 起動を確認 |
 
 ## 5. Firmware Checklist
 

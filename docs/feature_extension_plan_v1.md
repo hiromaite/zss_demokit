@@ -527,7 +527,8 @@ else:
 - calibration ではなく verification を先行実装し、formal model calibration は後続フェーズに分離する
 - 詳細設計は `flow_verification_plan_v1.md` を参照する
 - first implementation slice として、`FlowVerificationController`, `FlowVerificationDialog`, JSON persistence, `Settings > Device` entry を追加した
-- offscreen smoke により controller-only capture path、settings entry、dialog skeleton の起動を確認した
+- follow-up slice として、`Show Latest Details` 導線と latest saved session summary dialog を追加し、saved JSON を operator が見返せるようにした
+- offscreen smoke により controller-only capture path、settings entry、dialog skeleton、latest details dialog の起動を確認した
 
 ## 9. まとめて実装すべき単位
 

@@ -144,6 +144,18 @@ class ZeroCheckResult:
     sdp811_mean_pa: float | None
     warning_flags: list[str] = field(default_factory=list)
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "ZeroCheckResult":
+        return cls(
+            status=str(payload.get("status", "")),
+            mean_flow_lpm=float(payload.get("mean_flow_lpm", 0.0)),
+            peak_abs_flow_lpm=float(payload.get("peak_abs_flow_lpm", 0.0)),
+            selected_dp_mean_pa=_optional_float(payload.get("selected_dp_mean_pa")),
+            sdp810_mean_pa=_optional_float(payload.get("sdp810_mean_pa")),
+            sdp811_mean_pa=_optional_float(payload.get("sdp811_mean_pa")),
+            warning_flags=[str(value) for value in payload.get("warning_flags", [])],
+        )
+
 
 @dataclass
 class VerificationStrokeResult:
@@ -168,6 +180,31 @@ class VerificationStrokeResult:
     warning_flags: list[str] = field(default_factory=list)
     note: str = ""
 
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "VerificationStrokeResult":
+        return cls(
+            step_id=str(payload.get("step_id", "")),
+            direction=str(payload.get("direction", "")),
+            speed_band=str(payload.get("speed_band", "")),
+            result_status=str(payload.get("result_status", "")),
+            attempt_count=int(payload.get("attempt_count", 0)),
+            accepted_attempt_index=int(payload.get("accepted_attempt_index", 0)),
+            recovered_volume_l=float(payload.get("recovered_volume_l", 0.0)),
+            reference_volume_l=float(payload.get("reference_volume_l", FLOW_VERIFICATION_REFERENCE_VOLUME_L)),
+            volume_error_l=float(payload.get("volume_error_l", 0.0)),
+            volume_error_percent=float(payload.get("volume_error_percent", 0.0)),
+            peak_flow_lps=float(payload.get("peak_flow_lps", 0.0)),
+            stroke_duration_s=float(payload.get("stroke_duration_s", 0.0)),
+            dominant_source=str(payload.get("dominant_source", "")),
+            source_switch_count=int(payload.get("source_switch_count", 0)),
+            selected_dp_mean_pa=_optional_float(payload.get("selected_dp_mean_pa")),
+            selected_dp_peak_abs_pa=_optional_float(payload.get("selected_dp_peak_abs_pa")),
+            sdp810_mean_pa=_optional_float(payload.get("sdp810_mean_pa")),
+            sdp811_mean_pa=_optional_float(payload.get("sdp811_mean_pa")),
+            warning_flags=[str(value) for value in payload.get("warning_flags", [])],
+            note=str(payload.get("note", "")),
+        )
+
 
 @dataclass
 class VerificationSession:
@@ -190,6 +227,37 @@ class VerificationSession:
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "VerificationSession":
+        zero_payload = payload.get("zero_check_result")
+        stroke_payloads = payload.get("stroke_results", [])
+        return cls(
+            session_id=str(payload.get("session_id", "")),
+            started_at_iso=str(payload.get("started_at_iso", "")),
+            completed_at_iso=str(payload.get("completed_at_iso", "")),
+            status=str(payload.get("status", "")),
+            transport_type=str(payload.get("transport_type", "")),
+            mode=str(payload.get("mode", "")),
+            device_identifier=str(payload.get("device_identifier", "")),
+            firmware_version=str(payload.get("firmware_version", "")),
+            protocol_version=str(payload.get("protocol_version", "")),
+            criterion_version=str(payload.get("criterion_version", "")),
+            zero_check_result=(
+                ZeroCheckResult.from_dict(zero_payload)
+                if isinstance(zero_payload, dict)
+                else None
+            ),
+            exhalation_result=str(payload.get("exhalation_result", "")),
+            inhalation_result=str(payload.get("inhalation_result", "")),
+            overall_result=str(payload.get("overall_result", "")),
+            operator_note=str(payload.get("operator_note", "")),
+            stroke_results=[
+                VerificationStrokeResult.from_dict(item)
+                for item in stroke_payloads
+                if isinstance(item, dict)
+            ],
+        )
 
 
 @dataclass(frozen=True)
@@ -238,27 +306,37 @@ class FlowVerificationPersistence:
         return path
 
     def load_latest_summary(self) -> FlowVerificationLatestSummary | None:
-        if not self._base_dir.exists():
+        latest = self.load_latest_session()
+        if latest is None:
             return None
+        return FlowVerificationLatestSummary(
+            result=latest.overall_result or "unknown",
+            completed_at_iso=latest.completed_at_iso,
+            criterion_version=latest.criterion_version,
+            exhalation_result=latest.exhalation_result,
+            inhalation_result=latest.inhalation_result,
+            path=str(self._latest_path() or ""),
+        )
 
-        candidates = sorted(self._base_dir.glob("flow_verification_*.json"))
-        if not candidates:
+    def load_latest_session(self) -> VerificationSession | None:
+        latest = self._latest_path()
+        if latest is None:
             return None
-
-        latest = candidates[-1]
         try:
             payload = json.loads(latest.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
+        if not isinstance(payload, dict):
+            return None
+        return VerificationSession.from_dict(payload)
 
-        return FlowVerificationLatestSummary(
-            result=str(payload.get("overall_result", "unknown")),
-            completed_at_iso=str(payload.get("completed_at_iso", "")),
-            criterion_version=str(payload.get("criterion_version", "")),
-            exhalation_result=str(payload.get("exhalation_result", "")),
-            inhalation_result=str(payload.get("inhalation_result", "")),
-            path=str(latest),
-        )
+    def _latest_path(self) -> Path | None:
+        if not self._base_dir.exists():
+            return None
+        candidates = sorted(self._base_dir.glob("flow_verification_*.json"))
+        if not candidates:
+            return None
+        return candidates[-1]
 
 
 class FlowVerificationController(QObject):
@@ -835,3 +913,13 @@ class FlowVerificationController(QObject):
         if result.result_status == "skipped":
             return "Step was skipped."
         return "Capture looks incomplete. Retry is recommended."
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if math.isfinite(parsed) else None
