@@ -12,11 +12,13 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QListWidget,
     QListWidgetItem,
+    QPlainTextEdit,
     QPushButton,
     QRadioButton,
     QStackedWidget,
@@ -26,6 +28,14 @@ from PySide6.QtWidgets import (
 
 from app_metadata import APP_NAME
 from app_state import AppSettings
+from flow_verification import (
+    FLOW_VERIFICATION_STEPS,
+    FlowVerificationController,
+    FlowVerificationLatestSummary,
+    FlowVerificationPersistence,
+    VerificationStrokeResult,
+    ZeroCheckResult,
+)
 from protocol_constants import (
     BLE_MODE,
     DERIVED_METRIC_POLICY_ID,
@@ -143,6 +153,8 @@ class SettingsDialog(QDialog):
         current_mode: str,
         connection_identifier: str,
         current_zirconia_voltage_v: float | None = None,
+        flow_verification_summary: FlowVerificationLatestSummary | None = None,
+        flow_verification_available: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -150,6 +162,9 @@ class SettingsDialog(QDialog):
         self._current_mode = current_mode
         self._connection_identifier = connection_identifier
         self._current_zirconia_voltage_v = current_zirconia_voltage_v
+        self._flow_verification_summary = flow_verification_summary
+        self._flow_verification_available = flow_verification_available
+        self._open_flow_verification_requested = False
         self._pending_o2_air_calibration_voltage_v = settings.o2.air_calibration_voltage_v
         self._pending_o2_calibrated_at_iso = settings.o2.calibrated_at_iso
         self.setWindowTitle("Settings")
@@ -237,6 +252,10 @@ class SettingsDialog(QDialog):
     @property
     def selected_o2_calibrated_at_iso(self) -> str:
         return self._pending_o2_calibrated_at_iso
+
+    @property
+    def flow_verification_requested(self) -> bool:
+        return self._open_flow_verification_requested
 
     def _page_wrapper(self) -> tuple[QWidget, QVBoxLayout]:
         page = QWidget()
@@ -410,6 +429,41 @@ class SettingsDialog(QDialog):
         layout.addWidget(calibration_card)
 
         self._refresh_o2_calibration_state()
+
+        verification_card = QFrame()
+        verification_card.setObjectName("AccentCard")
+        verification_layout = QVBoxLayout(verification_card)
+        verification_title = QLabel("Flow Verification")
+        verification_title.setObjectName("SectionTitle")
+        verification_hint = QLabel(
+            "Open the guided 3 L syringe verification workflow for exhalation and inhalation strokes."
+        )
+        verification_hint.setObjectName("SectionHint")
+        verification_hint.setWordWrap(True)
+        verification_layout.addWidget(verification_title)
+        verification_layout.addWidget(verification_hint)
+
+        self.flow_verification_status_label = QLabel("")
+        self.flow_verification_status_label.setObjectName("SectionHint")
+        self.flow_verification_status_label.setWordWrap(True)
+        verification_layout.addWidget(self.flow_verification_status_label)
+
+        self.flow_verification_detail_label = QLabel("")
+        self.flow_verification_detail_label.setObjectName("SectionHint")
+        self.flow_verification_detail_label.setWordWrap(True)
+        verification_layout.addWidget(self.flow_verification_detail_label)
+
+        verification_row = QHBoxLayout()
+        self.flow_verification_button = QPushButton("Open Guided Verification")
+        self.flow_verification_button.setObjectName("PrimaryButton")
+        self.flow_verification_button.setEnabled(self._flow_verification_available)
+        self.flow_verification_button.clicked.connect(self._request_flow_verification)
+        verification_row.addWidget(self.flow_verification_button)
+        verification_row.addStretch(1)
+        verification_layout.addLayout(verification_row)
+        layout.addWidget(verification_card)
+
+        self._refresh_flow_verification_state()
         layout.addStretch(1)
         return page
 
@@ -500,3 +554,365 @@ class SettingsDialog(QDialog):
             status_text = f"{status_text}. {message}"
         self.o2_calibration_status_label.setText(status_text)
         self.o2_reset_button.setEnabled(True)
+
+    def _refresh_flow_verification_state(self) -> None:
+        if self._flow_verification_summary is None:
+            self.flow_verification_status_label.setText("Last result: not verified")
+            if self._flow_verification_available:
+                self.flow_verification_detail_label.setText(
+                    "An expected connected device is available. You can start the guided workflow now."
+                )
+            else:
+                self.flow_verification_detail_label.setText(
+                    "Connect an expected device to enable the guided workflow."
+                )
+            return
+
+        summary = self._flow_verification_summary
+        self.flow_verification_status_label.setText(
+            f"Last result: {summary.result} ({summary.completed_at_iso or 'timestamp unavailable'})"
+        )
+        self.flow_verification_detail_label.setText(
+            f"Criterion: {summary.criterion_version} | "
+            f"Exhalation: {summary.exhalation_result or '--'} | "
+            f"Inhalation: {summary.inhalation_result or '--'}"
+        )
+
+    def _request_flow_verification(self) -> None:
+        self._open_flow_verification_requested = True
+        self.accept()
+
+
+class FlowVerificationDialog(QDialog):
+    def __init__(
+        self,
+        controller: FlowVerificationController,
+        persistence: FlowVerificationPersistence,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.controller = controller
+        self.persistence = persistence
+        self.saved_session_path: Path | None = None
+        self.setWindowTitle("Flow Verification")
+        self.resize(900, 760)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        self.header_title = QLabel("Flow Verification")
+        self.header_title.setObjectName("SectionTitle")
+        self.header_subtitle = QLabel("")
+        self.header_subtitle.setObjectName("SectionHint")
+        self.header_subtitle.setWordWrap(True)
+        self.progress_label = QLabel("")
+        self.progress_label.setObjectName("SectionHint")
+        self.section_badge = QLabel("")
+        self.section_badge.setObjectName("RecordingStateBadge")
+        header = QFrame()
+        header.setObjectName("AccentCard")
+        header_layout = QVBoxLayout(header)
+        badge_row = QHBoxLayout()
+        badge_row.addWidget(self.section_badge, 0)
+        badge_row.addStretch(1)
+        header_layout.addWidget(self.header_title)
+        header_layout.addWidget(self.header_subtitle)
+        header_layout.addWidget(self.progress_label)
+        header_layout.addLayout(badge_row)
+        layout.addWidget(header)
+
+        self.instruction_card = QFrame()
+        self.instruction_card.setObjectName("SurfaceCard")
+        instruction_layout = QVBoxLayout(self.instruction_card)
+        self.instruction_label = QLabel("")
+        self.instruction_label.setObjectName("SectionHint")
+        self.instruction_label.setWordWrap(True)
+        self.message_label = QLabel("")
+        self.message_label.setObjectName("SectionHint")
+        self.message_label.setWordWrap(True)
+        instruction_layout.addWidget(self.instruction_label)
+        instruction_layout.addWidget(self.message_label)
+        layout.addWidget(self.instruction_card)
+
+        self.live_card = QFrame()
+        self.live_card.setObjectName("SurfaceCard")
+        live_layout = QGridLayout(self.live_card)
+        live_layout.setHorizontalSpacing(10)
+        live_layout.setVerticalSpacing(8)
+        self.capture_state_label = QLabel("--")
+        self.live_flow_label = QLabel("--")
+        self.live_volume_label = QLabel("--")
+        self.live_source_label = QLabel("--")
+        self.live_selected_dp_label = QLabel("--")
+        self.live_sdp811_label = QLabel("--")
+        self.live_sdp810_label = QLabel("--")
+        live_rows = [
+            ("Capture state", self.capture_state_label),
+            ("Live flow", self.live_flow_label),
+            ("Integrated volume", self.live_volume_label),
+            ("Selected source", self.live_source_label),
+            ("Selected DP", self.live_selected_dp_label),
+            ("SDP811", self.live_sdp811_label),
+            ("SDP810", self.live_sdp810_label),
+        ]
+        for row_index, (name, label) in enumerate(live_rows):
+            live_layout.addWidget(QLabel(name), row_index, 0)
+            live_layout.addWidget(label, row_index, 1)
+        layout.addWidget(self.live_card)
+
+        self.result_card = QFrame()
+        self.result_card.setObjectName("SurfaceCard")
+        result_layout = QGridLayout(self.result_card)
+        result_layout.setHorizontalSpacing(10)
+        result_layout.setVerticalSpacing(8)
+        self.result_status_label = QLabel("--")
+        self.result_volume_label = QLabel("--")
+        self.result_error_label = QLabel("--")
+        self.result_peak_label = QLabel("--")
+        self.result_duration_label = QLabel("--")
+        self.result_source_label = QLabel("--")
+        result_rows = [
+            ("Result", self.result_status_label),
+            ("Recovered volume", self.result_volume_label),
+            ("Volume error", self.result_error_label),
+            ("Peak flow", self.result_peak_label),
+            ("Stroke duration", self.result_duration_label),
+            ("Dominant source", self.result_source_label),
+        ]
+        for row_index, (name, label) in enumerate(result_rows):
+            result_layout.addWidget(QLabel(name), row_index, 0)
+            result_layout.addWidget(label, row_index, 1)
+        layout.addWidget(self.result_card)
+
+        self.review_card = QFrame()
+        self.review_card.setObjectName("SurfaceCard")
+        review_layout = QVBoxLayout(self.review_card)
+        summary_grid = QGridLayout()
+        summary_grid.setHorizontalSpacing(10)
+        summary_grid.setVerticalSpacing(8)
+        self.review_zero_label = QLabel("--")
+        self.review_exhalation_label = QLabel("--")
+        self.review_inhalation_label = QLabel("--")
+        self.review_overall_label = QLabel("--")
+        for row_index, (name, label) in enumerate(
+            [
+                ("Zero Check", self.review_zero_label),
+                ("Exhalation", self.review_exhalation_label),
+                ("Inhalation", self.review_inhalation_label),
+                ("Overall", self.review_overall_label),
+            ]
+        ):
+            summary_grid.addWidget(QLabel(name), row_index, 0)
+            summary_grid.addWidget(label, row_index, 1)
+        review_layout.addLayout(summary_grid)
+
+        self.review_rows_labels: dict[str, dict[str, QLabel]] = {}
+        review_table = QGridLayout()
+        review_table.setHorizontalSpacing(10)
+        review_table.setVerticalSpacing(6)
+        headers = ["Step", "Result", "Recovered", "Error %", "Peak flow", "Source"]
+        for column_index, header_text in enumerate(headers):
+            header_label = QLabel(header_text)
+            header_label.setObjectName("SectionTitle")
+            review_table.addWidget(header_label, 0, column_index)
+        for row_index, step in enumerate(FLOW_VERIFICATION_STEPS, start=1):
+            if step.kind != "stroke":
+                continue
+            review_table.addWidget(QLabel(step.title), row_index, 0)
+            result_value = QLabel("--")
+            recovered_value = QLabel("--")
+            error_value = QLabel("--")
+            peak_value = QLabel("--")
+            source_value = QLabel("--")
+            review_table.addWidget(result_value, row_index, 1)
+            review_table.addWidget(recovered_value, row_index, 2)
+            review_table.addWidget(error_value, row_index, 3)
+            review_table.addWidget(peak_value, row_index, 4)
+            review_table.addWidget(source_value, row_index, 5)
+            self.review_rows_labels[step.step_id] = {
+                "result": result_value,
+                "recovered": recovered_value,
+                "error": error_value,
+                "peak": peak_value,
+                "source": source_value,
+            }
+        review_layout.addLayout(review_table)
+
+        note_title = QLabel("Operator Note")
+        note_title.setObjectName("SectionTitle")
+        self.note_edit = QPlainTextEdit()
+        self.note_edit.setPlaceholderText("Optional note for this verification session")
+        self.note_edit.setMinimumHeight(110)
+        review_layout.addWidget(note_title)
+        review_layout.addWidget(self.note_edit)
+        layout.addWidget(self.review_card)
+
+        button_row = QHBoxLayout()
+        self.back_button = QPushButton("Back")
+        self.back_button.setObjectName("SecondaryButton")
+        self.retry_button = QPushButton("Retry")
+        self.retry_button.setObjectName("SecondaryButton")
+        self.continue_button = QPushButton("Accept and continue")
+        self.continue_button.setObjectName("PrimaryButton")
+        self.skip_button = QPushButton("Skip")
+        self.skip_button.setObjectName("SecondaryButton")
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setObjectName("SecondaryButton")
+        self.save_button = QPushButton("Save Verification")
+        self.save_button.setObjectName("PrimaryButton")
+        button_row.addWidget(self.back_button)
+        button_row.addWidget(self.retry_button)
+        button_row.addWidget(self.continue_button)
+        button_row.addWidget(self.skip_button)
+        button_row.addStretch(1)
+        button_row.addWidget(self.cancel_button)
+        button_row.addWidget(self.save_button)
+        layout.addLayout(button_row)
+
+        self.back_button.clicked.connect(self.controller.go_back)
+        self.retry_button.clicked.connect(self.controller.retry_step)
+        self.continue_button.clicked.connect(self.controller.continue_step)
+        self.skip_button.clicked.connect(self.controller.skip_step)
+        self.cancel_button.clicked.connect(self.reject)
+        self.save_button.clicked.connect(self._save_session)
+        self.controller.updated.connect(self._refresh)
+        self.controller.session_saved.connect(self._on_session_saved)
+        self._refresh()
+
+    def _save_session(self) -> None:
+        self.controller.set_operator_note(self.note_edit.toPlainText())
+        self.saved_session_path = self.controller.save_session(self.persistence)
+        self.accept()
+
+    def _on_session_saved(self, path: object) -> None:
+        if isinstance(path, Path):
+            self.saved_session_path = path
+
+    def _refresh(self) -> None:
+        snapshot = self.controller.snapshot()
+        step = snapshot["step"]
+        self.header_title.setText(step.title)
+        self.header_subtitle.setText(step.instruction)
+        self.progress_label.setText(f"Step {snapshot['step_index']} of {snapshot['step_total']}")
+        self.section_badge.setText(step.section)
+        self.instruction_label.setText(step.instruction)
+        self.message_label.setText(snapshot["message"])
+
+        self.capture_state_label.setText(str(snapshot["capture_state"]))
+        live_flow = snapshot["live_flow_lpm"]
+        self.live_flow_label.setText("--" if live_flow is None else f"{live_flow:+0.3f} L/min")
+        current_result = snapshot["current_result"]
+        integrated_volume = "--"
+        if isinstance(current_result, VerificationStrokeResult):
+            integrated_volume = f"{current_result.recovered_volume_l:0.3f} L"
+        self.live_volume_label.setText(integrated_volume)
+        self.live_source_label.setText(snapshot["live_selected_source"] or "--")
+        self.live_selected_dp_label.setText(
+            "--"
+            if snapshot["live_selected_dp_pa"] is None
+            else f"{snapshot['live_selected_dp_pa']:+0.3f} Pa"
+        )
+        self.live_sdp811_label.setText(
+            "--"
+            if snapshot["live_high_range_pa"] is None
+            else f"{snapshot['live_high_range_pa']:+0.3f} Pa"
+        )
+        self.live_sdp810_label.setText(
+            "--"
+            if snapshot["live_low_range_pa"] is None
+            else f"{snapshot['live_low_range_pa']:+0.3f} Pa"
+        )
+
+        self._refresh_result_card(current_result)
+        self._refresh_review(snapshot)
+
+        is_review = step.kind == "review"
+        is_overview = step.kind == "overview"
+        self.live_card.setVisible(not is_review and not is_overview)
+        self.result_card.setVisible(not is_review and not is_overview)
+        self.review_card.setVisible(is_review)
+        self.retry_button.setVisible(step.kind in {"zero", "stroke"})
+        self.skip_button.setVisible(step.kind in {"zero", "stroke"})
+        self.continue_button.setVisible(not is_review)
+        self.save_button.setVisible(is_review)
+
+        self.back_button.setEnabled(bool(snapshot["can_back"]))
+        self.retry_button.setEnabled(bool(snapshot["can_retry"]))
+        self.skip_button.setEnabled(bool(snapshot["can_skip"]))
+        self.continue_button.setEnabled(bool(snapshot["can_continue"]))
+        self.save_button.setEnabled(bool(snapshot["can_save"]))
+
+        if is_overview:
+            self.continue_button.setText("Start Verification")
+        else:
+            self.continue_button.setText("Accept and continue")
+
+    def _refresh_result_card(self, current_result: object) -> None:
+        if isinstance(current_result, ZeroCheckResult):
+            self.result_status_label.setText(current_result.status)
+            self.result_volume_label.setText(f"{current_result.mean_flow_lpm:+0.3f} L/min")
+            self.result_error_label.setText(
+                f"Peak abs flow: {current_result.peak_abs_flow_lpm:0.3f} L/min"
+            )
+            self.result_peak_label.setText(
+                "--"
+                if current_result.sdp811_mean_pa is None
+                else f"SDP811 mean: {current_result.sdp811_mean_pa:+0.3f} Pa"
+            )
+            self.result_duration_label.setText(
+                "--"
+                if current_result.sdp810_mean_pa is None
+                else f"SDP810 mean: {current_result.sdp810_mean_pa:+0.3f} Pa"
+            )
+            self.result_source_label.setText(
+                "--"
+                if current_result.selected_dp_mean_pa is None
+                else f"Selected mean: {current_result.selected_dp_mean_pa:+0.3f} Pa"
+            )
+            return
+
+        if isinstance(current_result, VerificationStrokeResult):
+            self.result_status_label.setText(current_result.result_status)
+            self.result_volume_label.setText(f"{current_result.recovered_volume_l:0.3f} L")
+            self.result_error_label.setText(f"{current_result.volume_error_percent:+0.2f} %")
+            self.result_peak_label.setText(f"{current_result.peak_flow_lps:0.3f} L/s")
+            self.result_duration_label.setText(f"{current_result.stroke_duration_s:0.2f} s")
+            self.result_source_label.setText(current_result.dominant_source or "--")
+            return
+
+        for label in (
+            self.result_status_label,
+            self.result_volume_label,
+            self.result_error_label,
+            self.result_peak_label,
+            self.result_duration_label,
+            self.result_source_label,
+        ):
+            label.setText("--")
+
+    def _refresh_review(self, snapshot: dict[str, object]) -> None:
+        zero_result = snapshot["zero_result"]
+        if isinstance(zero_result, ZeroCheckResult):
+            self.review_zero_label.setText(zero_result.status)
+        else:
+            self.review_zero_label.setText("--")
+        self.review_exhalation_label.setText(str(snapshot["exhalation_result"]))
+        self.review_inhalation_label.setText(str(snapshot["inhalation_result"]))
+        self.review_overall_label.setText(str(snapshot["overall_result"]))
+
+        for row in snapshot["review_rows"]:
+            labels = self.review_rows_labels.get(row["step_id"])
+            if labels is None:
+                continue
+            labels["result"].setText(row["status"] or "--")
+            labels["recovered"].setText(
+                "--" if row["recovered_volume_l"] is None else f"{row['recovered_volume_l']:0.3f} L"
+            )
+            labels["error"].setText(
+                "--" if row["error_percent"] is None else f"{row['error_percent']:+0.2f} %"
+            )
+            labels["peak"].setText(
+                "--" if row["peak_flow_lps"] is None else f"{row['peak_flow_lps']:0.3f} L/s"
+            )
+            labels["source"].setText(row["source"] or "--")

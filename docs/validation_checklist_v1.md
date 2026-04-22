@@ -53,6 +53,8 @@
 | `GUI-VAL-019` | Wired GUI session probe | offscreen GUI 経由で wired connect / recording / pump toggle / CSV finalize が継続する | `PASS` | `tools/gui_wired_session_probe.py --duration-s 18 --toggle-interval-s 3` で `1909` telemetry、CSV `1740` rows、non-unit gap `0` を確認 |
 | `GUI-VAL-020` | PyInstaller packaging smoke | PyInstaller spec から GUI bundle を生成できる | `PASS` | `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec` で GUI bundle を生成し、offscreen short launch が成立することを確認。version metadata scaffold、beta naming、icon asset 追加後も再通過 |
 | `GUI-VAL-021` | Windows packaged GUI smoke | Windows packaged app が起動し、基本操作が成立する | `PASS` | user による Windows 11 Pro 実機確認で packaging 成功、packaged app 起動成功、blocking issue なしを確認 |
+| `GUI-VAL-022` | Flow verification settings entry smoke | `Settings > Device` から guided verification 入口が見え、expected device 接続時に有効化される | `PASS` | offscreen `SettingsDialog` smoke で `flow_verification_button.isEnabled()` を確認 |
+| `GUI-VAL-023` | Flow verification controller/dialog smoke | guided verification controller と dialog skeleton が起動し、basic capture/save path が崩れない | `PASS` | offscreen smoke で controller-only capture path による JSON save と `FlowVerificationDialog` 起動を確認 |
 
 ## 5. Firmware Checklist
 

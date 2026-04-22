@@ -1107,6 +1107,8 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - v1 verification は soft advisory ベースとし、strict gate による workflow block は採用しない
 - `FlowVerificationController`, `VerificationSession`, `VerificationStrokeResult`, `ZeroCheckResult` を中核にする設計方針を採用する
 - 詳細設計は `flow_verification_plan_v1.md` を参照する
+- first implementation slice として、controller / dialog / JSON persistence / settings entry をコード化した
+- current slice では offscreen smoke により controller-driven capture path、settings entry、dialog skeleton を確認済みである
 - next step は hardware 完成後の low / medium / high flow sweep と、bidirectional calibration への移行準備、並行して guided verification implementation の具体化である
 
 完了条件:

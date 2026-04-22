@@ -526,6 +526,8 @@ else:
 - v1 は strict compliance gate ではなく soft advisory 中心とし、`Retry / Accept and continue / Skip` を許す
 - calibration ではなく verification を先行実装し、formal model calibration は後続フェーズに分離する
 - 詳細設計は `flow_verification_plan_v1.md` を参照する
+- first implementation slice として、`FlowVerificationController`, `FlowVerificationDialog`, JSON persistence, `Settings > Device` entry を追加した
+- offscreen smoke により controller-only capture path、settings entry、dialog skeleton の起動を確認した
 
 ## 9. まとめて実装すべき単位
 
