@@ -521,6 +521,11 @@ else:
   hardware 組み上げ中の raw channel 可視化導線は成立した
 - operator-facing hardening として、selected differential pressure の source (`SDP810` / `SDP811`) を
   GUI detail と CSV から追えるようにする
+- software planning として、`Flow Verification` は `Settings > Device` から起動する guided wizard として設計する
+- verification は `3 L syringe`, `low / medium / high`, `exhalation / inhalation` の両方向を含む
+- v1 は strict compliance gate ではなく soft advisory 中心とし、`Retry / Accept and continue / Skip` を許す
+- calibration ではなく verification を先行実装し、formal model calibration は後続フェーズに分離する
+- 詳細設計は `flow_verification_plan_v1.md` を参照する
 
 ## 9. まとめて実装すべき単位
 

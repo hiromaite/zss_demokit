@@ -1102,7 +1102,12 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - hardware bring-up 支援として、GUI の flow card detail に `SDP811` / `SDP810` raw value を live 表示できるようにした
 - selected differential pressure の source (`SDP810` / `SDP811`) を GUI detail と CSV から追えるよう更新した
 - signed flow placeholder を採用し、呼気/吸気の両方向を持つ前提で表示・記録する
-- next step は hardware 完成後の low / medium / high flow sweep と、bidirectional calibration への移行準備である
+- `Flow Verification` の実装方針として、`Settings > Device` から guided verification wizard を起動する設計を採用する
+- guided verification は `Zero Check`, `Exhalation Low/Medium/High`, `Inhalation Low/Medium/High`, `Review` の 9-step flow を想定する
+- v1 verification は soft advisory ベースとし、strict gate による workflow block は採用しない
+- `FlowVerificationController`, `VerificationSession`, `VerificationStrokeResult`, `ZeroCheckResult` を中核にする設計方針を採用する
+- 詳細設計は `flow_verification_plan_v1.md` を参照する
+- next step は hardware 完成後の low / medium / high flow sweep と、bidirectional calibration への移行準備、並行して guided verification implementation の具体化である
 
 完了条件:
 

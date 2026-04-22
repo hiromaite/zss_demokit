@@ -235,3 +235,16 @@ flow_rate_lpm =
 
 - `k_flow_gain` と `dp_offset_pa` は初期実装では placeholder のままでよい
 - dual-SDP 導入後は `selected_differential_pressure_pa` を core field とし、raw 2ch は diagnostic field として扱う
+
+## 22. Flow Verification Direction
+
+- flow path の operator-facing quality check は `Flow Verification` として実装する
+- v1 では `Flow Calibration` ではなく `guided verification` を先行させる
+- entry point は `Settings > Device > Flow Verification` とする
+- guided verification は `3 L syringe` を前提にし、`Zero Check`, `Exhalation Low/Medium/High`, `Inhalation Low/Medium/High`, `Review` の流れを採用する
+- v1 では exhalation / inhalation の両方向を確認対象に含める
+- exhalation は primary、inhalation は extended check として aggregate result に反映する
+- v1 は PoC / design validation 用の soft advisory workflow とし、step fail で operator の進行を hard block しない
+- `Retry`, `Accept and continue`, `Skip` を全 step の標準操作として許可する
+- dual-SDP 固有の挙動は `selected source`, `source switch count`, raw SDP values を diagnostics として見える化する
+- formal model calibration, coefficient fitting, strict compliance gate は後続フェーズへ分離する

@@ -40,6 +40,8 @@ directory、partial recovery detection、wired real transport まで反映済み
   - 旧 firmware / 旧 GUI と現行 firmware / 現行 GUI の機能比較表
 - `feature_extension_plan_v1.md`
   - parity restore と新規拡張機能の実装順、PoC、依存関係の計画
+- `flow_verification_plan_v1.md`
+  - ATS/ERS / ISO を踏まえた guided flow verification の導線、状態遷移、保存モデルの設計
 - `implementation_backlog_v1.md`
   - GUI / firmware / integration を含む実装バックログとマイルストーン
 - `firmware_implementation_plan_v1.md`
@@ -61,10 +63,11 @@ directory、partial recovery detection、wired real transport まで反映済み
 8. `recording_schema.md` で保存形式を確認する
 9. `legacy_current_feature_matrix.md` で旧資産との差分と未回収機能を確認する
 10. `feature_extension_plan_v1.md` で次フェーズの機能追加計画を確認する
-11. `firmware_implementation_plan_v1.md` で firmware の骨格を確認する
-12. `implementation_backlog_v1.md` で着手順と依存関係を確認する
-13. `validation_checklist_v1.md` で現段階の検証対象を確認する
-14. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
+11. `flow_verification_plan_v1.md` で guided verification の UX と state model を確認する
+12. `firmware_implementation_plan_v1.md` で firmware の骨格を確認する
+13. `implementation_backlog_v1.md` で着手順と依存関係を確認する
+14. `validation_checklist_v1.md` で現段階の検証対象を確認する
+15. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
 
 ## 運用メモ
 
