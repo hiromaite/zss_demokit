@@ -7,7 +7,7 @@ namespace zss::protocol {
 
 inline constexpr uint8_t kProtocolVersionMajor = 1;
 inline constexpr uint8_t kProtocolVersionMinor = 0;
-inline constexpr uint16_t kStatusFlagSchemaVersion = 1;
+inline constexpr uint16_t kStatusFlagSchemaVersion = 2;
 inline constexpr uint8_t kCapabilitySchemaVersion = 1;
 inline constexpr const char kFirmwareVersionString[] = "0.1.0-skeleton";
 inline constexpr const char kBleDeviceName[] = "M5STAMP-MONITOR";
@@ -40,6 +40,7 @@ enum class CommandId : uint8_t {
     GetStatus = 0x02,
     SetPumpState = 0x03,
     Ping = 0x04,
+    SetHeaterPowerState = 0x05,
 };
 
 enum class BleOpcode : uint8_t {
@@ -48,6 +49,8 @@ enum class BleOpcode : uint8_t {
     GetStatus = 0x30,
     GetCapabilities = 0x31,
     Ping = 0x32,
+    SetHeaterPowerOn = 0x33,
+    SetHeaterPowerOff = 0x34,
 };
 
 enum class WiredMessageType : uint8_t {
@@ -88,6 +91,7 @@ inline constexpr uint32_t kStatusFlagSamplingOverrunMask = 1u << 3;
 inline constexpr uint32_t kStatusFlagSensorFaultMask = 1u << 4;
 inline constexpr uint32_t kStatusFlagTelemetryRateWarningMask = 1u << 5;
 inline constexpr uint32_t kStatusFlagCommandErrorLatchedMask = 1u << 6;
+inline constexpr uint32_t kStatusFlagHeaterPowerOnMask = 1u << 7;
 
 inline constexpr uint32_t kDiagnosticBitBootCompleteMask = 1u << 0;
 inline constexpr uint32_t kDiagnosticBitMeasurementCoreReadyMask = 1u << 1;
@@ -102,7 +106,8 @@ inline constexpr uint16_t kSupportedCommandBits =
     (1u << 0) |
     (1u << 1) |
     (1u << 2) |
-    (1u << 3);
+    (1u << 3) |
+    (1u << 4);
 
 inline constexpr uint16_t kTelemetryFieldBits =
     (1u << 0) |

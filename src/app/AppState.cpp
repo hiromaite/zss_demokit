@@ -30,6 +30,10 @@ void AppState::setPumpOn(bool enabled) {
     assignStatusFlag(status_flags_, protocol::kStatusFlagPumpOnMask, enabled);
 }
 
+void AppState::setHeaterPowerOn(bool enabled) {
+    assignStatusFlag(status_flags_, protocol::kStatusFlagHeaterPowerOnMask, enabled);
+}
+
 void AppState::setStatusFlag(uint32_t mask, bool enabled) {
     assignStatusFlag(status_flags_, mask, enabled);
 }

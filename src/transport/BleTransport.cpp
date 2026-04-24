@@ -206,6 +206,16 @@ bool BleTransport::queueOpcode(uint8_t opcode) {
             request.command_id = protocol::CommandId::Ping;
             break;
 
+        case protocol::BleOpcode::SetHeaterPowerOn:
+            request.command_id = protocol::CommandId::SetHeaterPowerState;
+            request.arg0_u32 = 1u;
+            break;
+
+        case protocol::BleOpcode::SetHeaterPowerOff:
+            request.command_id = protocol::CommandId::SetHeaterPowerState;
+            request.arg0_u32 = 0u;
+            break;
+
         default:
             return false;
     }

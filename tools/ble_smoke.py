@@ -20,6 +20,8 @@ from ble_protocol import (  # noqa: E402
 from protocol_constants import (  # noqa: E402
     BLE_OPCODE_GET_STATUS,
     BLE_OPCODE_PING,
+    BLE_OPCODE_SET_HEATER_OFF,
+    BLE_OPCODE_SET_HEATER_ON,
     BLE_OPCODE_SET_PUMP_OFF,
     BLE_OPCODE_SET_PUMP_ON,
 )
@@ -143,6 +145,25 @@ async def read_status_directly_if_needed(client: BleakClient, collector: BleCycl
     print("status_read_direct")
 
 
+async def request_status_snapshot(client: BleakClient, collector: BleCycleCollector, *, label: str) -> dict[str, object]:
+    previous_count = len(collector.result.status_packets)
+    if collector.result.status_notify_available:
+        await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_GET_STATUS]), response=False)
+        deadline = time.monotonic() + 1.5
+        while time.monotonic() < deadline:
+            if len(collector.result.status_packets) > previous_count:
+                status = collector.result.status_packets[-1]
+                print(label, status)
+                return status
+            await asyncio.sleep(0.05)
+        raise AssertionError(f"{label}: timed out waiting for status notification")
+
+    await read_status_directly_if_needed(client, collector)
+    status = collector.result.status_packets[-1]
+    print(label, status)
+    return status
+
+
 async def run_cycle(
     *,
     target_identifier: str,
@@ -178,28 +199,62 @@ async def run_cycle(
         except Exception as exc:
             print(f"cycle_{cycle_index}_capabilities_degraded: {exc}")
 
-        if collector.result.status_notify_available:
-            await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_GET_STATUS]), response=False)
-            print(f"cycle_{cycle_index}_status_request_sent")
-        else:
-            await read_status_directly_if_needed(client, collector)
+        initial_status = await request_status_snapshot(
+            client,
+            collector,
+            label=f"cycle_{cycle_index}_initial_status",
+        )
+        print(f"cycle_{cycle_index}_status_request_sent", initial_status)
 
         await collector.wait_for_telemetry(telemetry_count, telemetry_timeout_s)
         await collector.extend_observation_window(observe_duration_s)
 
-        await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_SET_PUMP_ON]), response=False)
-        print(f"cycle_{cycle_index}_pump_on_sent")
-        await asyncio.sleep(0.35)
+        await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_SET_HEATER_ON]), response=False)
+        rejected_status = await request_status_snapshot(
+            client,
+            collector,
+            label=f"cycle_{cycle_index}_heater_on_rejected_status",
+        )
+        if bool(rejected_status.get("heater_power_on")):
+            raise AssertionError(f"cycle {cycle_index}: heater turned on while pump was OFF")
 
-        if collector.result.status_notify_available:
-            await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_GET_STATUS]), response=False)
-        else:
-            await read_status_directly_if_needed(client, collector)
-        await asyncio.sleep(0.35)
+        await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_SET_PUMP_ON]), response=False)
+        pump_on_status = await request_status_snapshot(
+            client,
+            collector,
+            label=f"cycle_{cycle_index}_pump_on_status",
+        )
+        if not bool(pump_on_status.get("pump_on")):
+            raise AssertionError(f"cycle {cycle_index}: pump ON command did not enable pump")
+
+        await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_SET_HEATER_ON]), response=False)
+        heater_on_status = await request_status_snapshot(
+            client,
+            collector,
+            label=f"cycle_{cycle_index}_heater_on_status",
+        )
+        if not bool(heater_on_status.get("heater_power_on")):
+            raise AssertionError(f"cycle {cycle_index}: heater ON command did not enable heater")
+
+        await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_SET_HEATER_OFF]), response=False)
+        heater_off_status = await request_status_snapshot(
+            client,
+            collector,
+            label=f"cycle_{cycle_index}_heater_off_status",
+        )
+        if bool(heater_off_status.get("heater_power_on")):
+            raise AssertionError(f"cycle {cycle_index}: heater OFF command did not disable heater")
 
         await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_SET_PUMP_OFF]), response=False)
-        print(f"cycle_{cycle_index}_pump_off_sent")
-        await asyncio.sleep(0.35)
+        pump_off_status = await request_status_snapshot(
+            client,
+            collector,
+            label=f"cycle_{cycle_index}_pump_off_status",
+        )
+        if bool(pump_off_status.get("pump_on")):
+            raise AssertionError(f"cycle {cycle_index}: pump OFF command did not disable pump")
+        if bool(pump_off_status.get("heater_power_on")):
+            raise AssertionError(f"cycle {cycle_index}: pump OFF did not force heater OFF")
 
         await client.write_gatt_char(CONTROL_CHARACTERISTIC_UUID, bytes([BLE_OPCODE_PING]), response=False)
         print(f"cycle_{cycle_index}_ping_sent")

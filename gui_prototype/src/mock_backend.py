@@ -21,18 +21,22 @@ from protocol_constants import (
     BLE_OPCODE_GET_CAPABILITIES,
     BLE_OPCODE_GET_STATUS,
     BLE_OPCODE_PING,
+    BLE_OPCODE_SET_HEATER_OFF,
+    BLE_OPCODE_SET_HEATER_ON,
     BLE_OPCODE_SET_PUMP_OFF,
     BLE_OPCODE_SET_PUMP_ON,
     DERIVED_METRIC_POLICY_ID,
     DEVICE_TYPE_ZIRCONIA_SENSOR,
     FIRMWARE_VERSION_PLACEHOLDER,
     PROTOCOL_VERSION_TEXT,
+    STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_TELEMETRY_RATE_WARNING,
     SUPPORTED_COMMANDS,
     TELEMETRY_FIELDS,
     WIRED_COMMAND_ID_GET_CAPABILITIES,
     WIRED_COMMAND_ID_GET_STATUS,
     WIRED_COMMAND_ID_PING,
+    WIRED_COMMAND_ID_SET_HEATER_POWER_STATE,
     WIRED_COMMAND_ID_SET_PUMP_STATE,
     WIRED_DEFAULT_BAUDRATE,
     WIRED_MODE,
@@ -108,6 +112,7 @@ class MockBackend(QObject):
         self._connected = False
         self._connected_name = ""
         self._pump_on = False
+        self._heater_power_on = False
         self._sequence = 0
         self._start_monotonic = time.monotonic()
         self._warning_latched = False
@@ -244,7 +249,33 @@ class MockBackend(QObject):
             return
 
         self._pump_on = on
+        if not on and self._heater_power_on:
+            self._heater_power_on = False
+            self.log_generated.emit("info", "Heater forced OFF because the pump was turned OFF.")
         self.log_generated.emit("info", f"Pump set to {'ON' if on else 'OFF'}.")
+        self.request_status()
+
+    def set_heater_power_state(self, on: bool) -> None:
+        if self._mode == WIRED_MODE:
+            state = "ON" if on else "OFF"
+            if self._send_wired_command(WIRED_COMMAND_ID_SET_HEATER_POWER_STATE, arg0_u32=1 if on else 0):
+                self.log_generated.emit("info", f"Heater command requested: {state}.")
+            return
+
+        if self._ble_session_kind == "live" and self._connected:
+            opcode = BLE_OPCODE_SET_HEATER_ON if on else BLE_OPCODE_SET_HEATER_OFF
+            if self._send_ble_opcode(opcode):
+                self.log_generated.emit("info", f"Heater command requested over BLE: {'ON' if on else 'OFF'}.")
+                self._schedule_ble_status_refresh()
+            return
+
+        if on and not self._pump_on:
+            self.log_generated.emit("warn", "Heater cannot be enabled while the pump is OFF.")
+            self.request_status()
+            return
+
+        self._heater_power_on = on
+        self.log_generated.emit("info", f"Heater set to {'ON' if on else 'OFF'}.")
         self.request_status()
 
     def request_status(self) -> None:
@@ -315,6 +346,7 @@ class MockBackend(QObject):
     def _reset_common_state(self) -> None:
         self._sequence = 0
         self._pump_on = False
+        self._heater_power_on = False
         self._warning_latched = False
         self._start_monotonic = time.monotonic()
         self._last_firmware_version = FIRMWARE_VERSION_PLACEHOLDER
@@ -364,7 +396,7 @@ class MockBackend(QObject):
             "transport_type": transport_type_for_mode(BLE_MODE),
             "firmware_version": self._last_firmware_version,
             "nominal_sample_period_ms": nominal_sample_period_ms_for_mode(BLE_MODE),
-            "supported_commands": ["get_status", "set_pump_state", "ping"],
+            "supported_commands": ["get_status", "set_pump_state", "ping", "set_heater_power_state"],
             "telemetry_fields": list(TELEMETRY_FIELDS),
             "derived_metric_policy": DERIVED_METRIC_POLICY_ID,
             "degraded_mode": True,
@@ -415,6 +447,7 @@ class MockBackend(QObject):
         self._connected_name = identifier
         self._start_monotonic = time.monotonic()
         self._sequence = 0
+        self._heater_power_on = False
         self._sample_timer.start()
         self.connection_changed.emit(True, identifier)
         self.log_generated.emit("info", f"Connected to {identifier} in mock BLE mode.")
@@ -618,6 +651,7 @@ class MockBackend(QObject):
             return
 
         self._pump_on = bool(payload["pump_on"])
+        self._heater_power_on = bool(payload.get("heater_power_on"))
         self._warning_latched = bool(int(payload["status_flags"]) & STATUS_FLAG_TELEMETRY_RATE_WARNING)
         self._last_protocol_version = str(payload["protocol_version"])
         point = TelemetryPoint(
@@ -645,11 +679,13 @@ class MockBackend(QObject):
             return
 
         self._pump_on = bool(payload["pump_on"])
+        self._heater_power_on = bool(payload.get("heater_power_on"))
         self._warning_latched = bool(int(payload["status_flags"]) & STATUS_FLAG_TELEMETRY_RATE_WARNING)
         self._last_protocol_version = str(payload["protocol_version"])
         self._ble_last_status_received_monotonic = time.monotonic()
         status = {
             "pump_state": "ON" if payload["pump_on"] else "OFF",
+            "heater_power_state": "ON" if payload.get("heater_power_on") else "OFF",
             "transport_state": "Connected" if self._connected else "Disconnected",
             "status_flags_hex": str(payload["status_flags_hex"]),
             "nominal_sample_period_ms": int(payload["nominal_sample_period_ms"]),
@@ -688,6 +724,7 @@ class MockBackend(QObject):
         self._connected_name = identifier
         self._sequence = 0
         self._pump_on = False
+        self._heater_power_on = False
         self._warning_latched = False
         self._start_monotonic = time.monotonic()
         self._wired_frame_buffer.clear()
@@ -768,6 +805,7 @@ class MockBackend(QObject):
     def _decode_wired_telemetry_point(self, frame: WiredFrame, received_at: datetime) -> TelemetryPoint:
         payload = decode_telemetry_sample(frame)
         self._pump_on = bool(payload["pump_on"])
+        self._heater_power_on = bool(payload.get("heater_power_on"))
         self._warning_latched = bool(payload["status_flags"] & STATUS_FLAG_TELEMETRY_RATE_WARNING)
         return TelemetryPoint(
             sequence=int(payload["sequence"]),
@@ -808,9 +846,11 @@ class MockBackend(QObject):
             payload = decode_status_snapshot(frame)
             self._wired_received_status = True
             self._pump_on = bool(payload["pump_on"])
+            self._heater_power_on = bool(payload.get("heater_power_on"))
             self._warning_latched = bool(payload["status_flags"] & STATUS_FLAG_TELEMETRY_RATE_WARNING)
             status = {
                 "pump_state": "ON" if payload["pump_on"] else "OFF",
+                "heater_power_state": "ON" if payload.get("heater_power_on") else "OFF",
                 "transport_state": "Connected" if self._connected else "Disconnected",
                 "status_flags_hex": format_status_flags(int(payload["status_flags"])),
                 "nominal_sample_period_ms": int(payload["nominal_sample_period_ms"]),
@@ -857,11 +897,13 @@ class MockBackend(QObject):
         status_flags = build_status_flags(
             pump_on=self._pump_on,
             transport_session_active=self._connected,
+            heater_power_on=self._heater_power_on,
             telemetry_rate_warning=self._warning_latched,
         )
         nominal = nominal_sample_period_ms_for_mode(self._mode)
         return {
             "pump_state": "ON" if self._pump_on else "OFF",
+            "heater_power_state": "ON" if self._heater_power_on else "OFF",
             "transport_state": "Connected" if self._connected else "Disconnected",
             "status_flags_hex": format_status_flags(status_flags),
             "nominal_sample_period_ms": nominal,
@@ -931,6 +973,7 @@ class MockBackend(QObject):
         status_flags = build_status_flags(
             pump_on=self._pump_on,
             transport_session_active=True,
+            heater_power_on=self._heater_power_on,
             telemetry_rate_warning=self._warning_latched,
         )
 

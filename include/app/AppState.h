@@ -17,6 +17,7 @@ class AppState {
     void setNominalSamplePeriodMs(uint16_t nominal_sample_period_ms);
     void setTransportSessionActive(bool active);
     void setPumpOn(bool enabled);
+    void setHeaterPowerOn(bool enabled);
     void setStatusFlag(uint32_t mask, bool enabled);
     void setDiagnosticBit(uint32_t mask, bool enabled);
     void setDifferentialPressureSelectedPa(float value);

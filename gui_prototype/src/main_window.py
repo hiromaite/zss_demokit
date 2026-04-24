@@ -44,6 +44,8 @@ from mock_backend import MockBackend, TelemetryPoint
 from mock_backend import PREFERRED_BLE_NAME_PREFIXES, PREFERRED_WIRED_PORT_TOKENS
 from protocol_constants import (
     BLE_MODE,
+    STATUS_FLAG_HEATER_POWER_ON,
+    STATUS_FLAG_PUMP_ON,
     WIRED_MODE,
     derive_o2_concentration_percent,
     infer_differential_pressure_selected_source,
@@ -429,6 +431,7 @@ class MainWindow(QMainWindow):
         grid.setVerticalSpacing(8)
 
         self.pump_state_value = QLabel("OFF")
+        self.heater_power_state_value = QLabel("OFF")
         self.transport_state_value = QLabel("Disconnected")
         self.status_flags_value = QLabel("0x00000000")
         self.sample_period_value = QLabel("--")
@@ -438,6 +441,7 @@ class MainWindow(QMainWindow):
 
         rows = [
             ("Pump State", self.pump_state_value),
+            ("Heater Power", self.heater_power_state_value),
             ("Transport", self.transport_state_value),
             ("Status Flags", self.status_flags_value),
             ("Sample Period", self.sample_period_value),
@@ -469,6 +473,11 @@ class MainWindow(QMainWindow):
         self.pump_toggle_button.setCheckable(True)
         self.pump_toggle_button.clicked.connect(self._toggle_pump_from_button)
         toggle_row.addWidget(self.pump_toggle_button)
+        self.heater_toggle_button = QPushButton("Enable Heater")
+        self.heater_toggle_button.setObjectName("ToggleButton")
+        self.heater_toggle_button.setCheckable(True)
+        self.heater_toggle_button.clicked.connect(self._toggle_heater_from_button)
+        toggle_row.addWidget(self.heater_toggle_button)
         toggle_row.addStretch(1)
         layout.addLayout(toggle_row)
         return frame
@@ -695,6 +704,7 @@ class MainWindow(QMainWindow):
         self._update_axis_labels()
         self._refresh_metric_cards()
         self._sync_pump_toggle()
+        self._sync_heater_toggle()
         self._sync_recording_controls()
         self._refresh_plots()
 
@@ -788,6 +798,7 @@ class MainWindow(QMainWindow):
         self.transport_state_value.setText("Connected" if connected else "Disconnected")
         self._sync_connection_controls()
         self._sync_pump_toggle()
+        self._sync_heater_toggle()
         for severity, message in self.telemetry_health_monitor.on_connection_changed(connected, identifier):
             self._append_log(severity, message)
         for severity, message in self.telemetry_session_stats.on_connection_changed(connected, identifier):
@@ -804,6 +815,7 @@ class MainWindow(QMainWindow):
 
     def _on_status_changed(self, payload: dict) -> None:
         self.pump_state_value.setText(str(payload["pump_state"]))
+        self.heater_power_state_value.setText(str(payload.get("heater_power_state", "OFF")))
         self.transport_state_value.setText(str(payload["transport_state"]))
         self.status_flags_value.setText(str(payload["status_flags_hex"]))
         self.sample_period_value.setText(f"{payload['nominal_sample_period_ms']} ms")
@@ -815,6 +827,7 @@ class MainWindow(QMainWindow):
         self.telemetry_health_monitor.update_nominal_sample_period(payload["nominal_sample_period_ms"])
         self.telemetry_session_stats.update_nominal_sample_period(payload["nominal_sample_period_ms"])
         self._sync_pump_toggle()
+        self._sync_heater_toggle()
 
     def _on_capabilities_changed(self, payload: dict) -> None:
         nominal = payload["nominal_sample_period_ms"]
@@ -852,6 +865,8 @@ class MainWindow(QMainWindow):
         if float(plot_update["elapsed_seconds"]) == 0.0:
             self._session_started = point.host_received_at
         self.telemetry_session_stats.on_telemetry(point)
+        self.pump_state_value.setText("ON" if (point.status_flags & STATUS_FLAG_PUMP_ON) != 0 else "OFF")
+        self.heater_power_state_value.setText("ON" if (point.status_flags & STATUS_FLAG_HEATER_POWER_ON) != 0 else "OFF")
         self.gap_value.setText(str(plot_update["sequence_gap_total"]))
         self._latest_low_range_differential_pressure_pa = point.differential_pressure_low_range_pa
         self._latest_high_range_differential_pressure_pa = point.differential_pressure_high_range_pa
@@ -874,6 +889,7 @@ class MainWindow(QMainWindow):
             mins, secs = divmod(elapsed_record, 60)
             self.elapsed_value.setText(f"{mins:02d}:{secs:02d}")
         self._sync_pump_toggle()
+        self._sync_heater_toggle()
 
     def _refresh_plots(self) -> None:
         render_data = self.plot_controller.render_data(self.time_span_combo.currentText())
@@ -1080,6 +1096,17 @@ class MainWindow(QMainWindow):
             return
         self.connection_controller.set_pump_state(checked)
 
+    def _toggle_heater_from_button(self, checked: bool) -> None:
+        if not self._has_expected_connected_device():
+            self._append_log("warn", "Connect to a device before controlling the heater.")
+            self._sync_heater_toggle()
+            return
+        if checked and self.pump_state_value.text() != "ON":
+            self._append_log("warn", "Heater can only be enabled while the pump is ON.")
+            self._sync_heater_toggle()
+            return
+        self.connection_controller.set_heater_power_state(checked)
+
     def _toggle_recording_from_button(self, checked: bool) -> None:
         if checked:
             self._start_recording()
@@ -1094,6 +1121,16 @@ class MainWindow(QMainWindow):
         self.pump_toggle_button.setChecked(is_on)
         self.pump_toggle_button.setText("Stop Pump" if is_on else "Start Pump")
         self.pump_toggle_button.blockSignals(False)
+
+    def _sync_heater_toggle(self) -> None:
+        connected = self._has_expected_connected_device()
+        pump_on = self.pump_state_value.text() == "ON"
+        heater_on = self.heater_power_state_value.text() == "ON"
+        self.heater_toggle_button.setEnabled(connected and (pump_on or heater_on))
+        self.heater_toggle_button.blockSignals(True)
+        self.heater_toggle_button.setChecked(heater_on)
+        self.heater_toggle_button.setText("Disable Heater" if heater_on else "Enable Heater")
+        self.heater_toggle_button.blockSignals(False)
 
     def _append_log(self, severity: str, message: str) -> None:
         entry = self.warning_controller.append(severity, message)
@@ -1190,6 +1227,7 @@ class MainWindow(QMainWindow):
         self.metric_flow.set_value("--")
         self.metric_flow.set_detail("")
         self._sync_pump_toggle()
+        self._sync_heater_toggle()
         self._sync_recording_controls()
         self._persist_current_settings()
         self._append_log("info", f"Mode switched to {new_mode}.")

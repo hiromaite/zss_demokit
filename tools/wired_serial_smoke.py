@@ -12,10 +12,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "gui_prototype" / "
 
 from protocol_constants import (  # noqa: E402
     EVENT_CODE_COMMAND_ERROR,
+    RESULT_CODE_INVALID_STATE,
     RESULT_CODE_OK,
     RESULT_CODE_UNSUPPORTED_COMMAND,
+    STATUS_FLAG_HEATER_POWER_ON,
     WIRED_COMMAND_ID_GET_CAPABILITIES,
     WIRED_COMMAND_ID_GET_STATUS,
+    WIRED_COMMAND_ID_SET_HEATER_POWER_STATE,
     WIRED_COMMAND_ID_SET_PUMP_STATE,
     WIRED_MESSAGE_TYPE_CAPABILITIES,
     WIRED_MESSAGE_TYPE_COMMAND_ACK,
@@ -177,30 +180,72 @@ def main() -> int:
         status = expect_status(session, request_id=2)
         print("Initial status:", status)
 
-        ser.write(build_command_frame(WIRED_COMMAND_ID_SET_PUMP_STATE, request_id=3, arg0_u32=1))
+        ser.write(build_command_frame(WIRED_COMMAND_ID_SET_PUMP_STATE, request_id=3, arg0_u32=0))
         expect_ack(session, request_id=3, command_id=WIRED_COMMAND_ID_SET_PUMP_STATE)
-        status_on = expect_status(session, request_id=3)
+        baseline_status = expect_status(session, request_id=3)
+        print("Baseline OFF status:", baseline_status)
+        if (int(baseline_status["status_flags"]) & 0x01) != 0:
+            raise AssertionError("Baseline reset did not clear pump status flag bit 0")
+        if (int(baseline_status["status_flags"]) & STATUS_FLAG_HEATER_POWER_ON) != 0:
+            raise AssertionError("Baseline reset did not clear heater status flag bit 7")
+
+        ser.write(build_command_frame(WIRED_COMMAND_ID_SET_HEATER_POWER_STATE, request_id=4, arg0_u32=1))
+        bad_heater_ack = expect_ack(
+            session,
+            request_id=4,
+            command_id=WIRED_COMMAND_ID_SET_HEATER_POWER_STATE,
+            expected_result_code=RESULT_CODE_INVALID_STATE,
+        )
+        print("Heater ON while pump OFF ACK:", bad_heater_ack)
+        heater_rejected_status = expect_status(session, request_id=4)
+        print("Heater rejected status:", heater_rejected_status)
+        if (int(heater_rejected_status["status_flags"]) & STATUS_FLAG_HEATER_POWER_ON) != 0:
+            raise AssertionError("Heater ON while pump OFF should not set the heater status flag")
+        heater_rejected_event = expect_event(
+            session,
+            timeout_s=4.0,
+            expected_event_code=EVENT_CODE_COMMAND_ERROR,
+        )
+        print("Heater rejected event:", heater_rejected_event)
+
+        ser.write(build_command_frame(WIRED_COMMAND_ID_SET_PUMP_STATE, request_id=5, arg0_u32=1))
+        expect_ack(session, request_id=5, command_id=WIRED_COMMAND_ID_SET_PUMP_STATE)
+        status_on = expect_status(session, request_id=5)
         print("Pump ON status:", status_on)
         if (int(status_on["status_flags"]) & 0x01) == 0:
             raise AssertionError("Pump ON did not set status flag bit 0")
 
+        ser.write(build_command_frame(WIRED_COMMAND_ID_SET_HEATER_POWER_STATE, request_id=6, arg0_u32=1))
+        expect_ack(session, request_id=6, command_id=WIRED_COMMAND_ID_SET_HEATER_POWER_STATE)
+        heater_on_status = expect_status(session, request_id=6)
+        print("Heater ON status:", heater_on_status)
+        if (int(heater_on_status["status_flags"]) & STATUS_FLAG_HEATER_POWER_ON) == 0:
+            raise AssertionError("Heater ON did not set status flag bit 7")
+
+        session._pending_frames.clear()
+        ser.reset_input_buffer()
+        time.sleep(0.05)
         telemetry = expect_telemetry(session, count=5)
         print("Telemetry samples:", telemetry)
         assert_monotonic_sequences(telemetry)
         if any(int(sample["nominal_sample_period_ms"]) != 10 for sample in telemetry):
             raise AssertionError("Telemetry did not report nominal_sample_period_ms=10")
+        if not any((int(sample["status_flags"]) & STATUS_FLAG_HEATER_POWER_ON) != 0 for sample in telemetry):
+            raise AssertionError("Telemetry did not report heater ON state after enabling the heater")
 
-        ser.write(build_command_frame(WIRED_COMMAND_ID_SET_PUMP_STATE, request_id=4, arg0_u32=0))
-        expect_ack(session, request_id=4, command_id=WIRED_COMMAND_ID_SET_PUMP_STATE)
-        status_off = expect_status(session, request_id=4)
+        ser.write(build_command_frame(WIRED_COMMAND_ID_SET_PUMP_STATE, request_id=7, arg0_u32=0))
+        expect_ack(session, request_id=7, command_id=WIRED_COMMAND_ID_SET_PUMP_STATE)
+        status_off = expect_status(session, request_id=7)
         print("Pump OFF status:", status_off)
         if (int(status_off["status_flags"]) & 0x01) != 0:
             raise AssertionError("Pump OFF did not clear status flag bit 0")
+        if (int(status_off["status_flags"]) & STATUS_FLAG_HEATER_POWER_ON) != 0:
+            raise AssertionError("Pump OFF did not clear heater status flag bit 7")
 
-        ser.write(build_command_frame(0x99, request_id=5))
+        ser.write(build_command_frame(0x99, request_id=8))
         bad_ack = expect_ack(
             session,
-            request_id=5,
+            request_id=8,
             command_id=0x99,
             expected_result_code=RESULT_CODE_UNSUPPORTED_COMMAND,
         )

@@ -10,6 +10,7 @@ from protocol_constants import (
     EVENT_CODE_COMMAND_ERROR,
     EVENT_CODE_WARNING_CLEARED,
     EVENT_CODE_WARNING_RAISED,
+    STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_PUMP_ON,
     SUPPORTED_COMMANDS,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE,
@@ -44,6 +45,7 @@ def decode_ble_telemetry_packet(data: bytes) -> dict[str, object]:
         "differential_pressure_selected_pa": differential_pressure_selected_pa,
         "diagnostic_bits": struct.unpack_from("<I", data, 28)[0],
         "pump_on": (struct.unpack_from("<I", data, 8)[0] & STATUS_FLAG_PUMP_ON) != 0,
+        "heater_power_on": (struct.unpack_from("<I", data, 8)[0] & STATUS_FLAG_HEATER_POWER_ON) != 0,
     }
 
 
@@ -70,6 +72,7 @@ def decode_ble_status_snapshot(data: bytes) -> dict[str, object]:
         "heater_rtd_resistance_ohm": struct.unpack_from("<f", data, 20)[0],
         "differential_pressure_selected_pa": differential_pressure_selected_pa,
         "pump_on": (status_flags & STATUS_FLAG_PUMP_ON) != 0,
+        "heater_power_on": (status_flags & STATUS_FLAG_HEATER_POWER_ON) != 0,
     }
 
 
@@ -91,6 +94,8 @@ def decode_ble_capabilities_packet(data: bytes) -> dict[str, object]:
         supported_commands.append(SUPPORTED_COMMANDS[2])
     if supported_command_bits & (1 << 3):
         supported_commands.append(SUPPORTED_COMMANDS[3])
+    if supported_command_bits & (1 << 4):
+        supported_commands.append(SUPPORTED_COMMANDS[4])
 
     telemetry_fields = []
     if telemetry_field_bits & (1 << 0):

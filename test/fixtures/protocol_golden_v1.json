@@ -45,7 +45,7 @@
     {
       "id": "ble_capabilities_ble",
       "kind": "ble_capabilities",
-      "raw_hex": "01000101010001000f00030050000100200000000f000000",
+      "raw_hex": "01000101010001001f00030050000200200000000f000000",
       "firmware_case": true,
       "expected": {
         "protocol_version": "1.0",
@@ -55,12 +55,13 @@
         "transport_type_code": 1,
         "transport_type": "ble",
         "firmware_version": "0.1.0",
-        "supported_command_bits": 15,
+        "supported_command_bits": 31,
         "supported_commands": [
           "get_capabilities",
           "get_status",
           "set_pump_state",
-          "ping"
+          "ping",
+          "set_heater_power_state"
         ],
         "telemetry_field_bits": 3,
         "telemetry_fields": [
@@ -68,7 +69,7 @@
           "heater_rtd_resistance_ohm"
         ],
         "nominal_sample_period_ms": 80,
-        "status_flag_schema_version": 1,
+        "status_flag_schema_version": 2,
         "max_payload_bytes": 32,
         "feature_bits": 15
       }
@@ -137,7 +138,7 @@
     {
       "id": "wired_capabilities_serial",
       "kind": "wired_capabilities",
-      "raw_hex": "a55a01000300140000000000080000000101020001000f0003000a00010040000f0000003783",
+      "raw_hex": "a55a01000300140000000000080000000101020001001f0003000a00020040000f000000b58d",
       "firmware_case": true,
       "expected_frame": {
         "version_major": 1,
@@ -154,12 +155,13 @@
         "transport_type_code": 2,
         "transport_type": "serial",
         "firmware_version": "0.1.0",
-        "supported_command_bits": 15,
+        "supported_command_bits": 31,
         "supported_commands": [
           "get_capabilities",
           "get_status",
           "set_pump_state",
-          "ping"
+          "ping",
+          "set_heater_power_state"
         ],
         "telemetry_field_bits": 3,
         "telemetry_fields": [
@@ -167,7 +169,7 @@
           "heater_rtd_resistance_ohm"
         ],
         "nominal_sample_period_ms": 10,
-        "status_flag_schema_version": 1,
+        "status_flag_schema_version": 2,
         "max_payload_bytes": 64,
         "feature_bits": 15
       }
@@ -296,6 +298,7 @@
         "10",
         "0x00000003",
         "1",
+        "0",
         "0.712500",
         "119.250000",
         "1.500000",

@@ -12,7 +12,7 @@ DEVICE_TYPE_ZIRCONIA_SENSOR = "zirconia_sensor"
 PROTOCOL_VERSION_MAJOR = 1
 PROTOCOL_VERSION_MINOR = 0
 PROTOCOL_VERSION_TEXT = f"{PROTOCOL_VERSION_MAJOR}.{PROTOCOL_VERSION_MINOR}"
-STATUS_FLAG_SCHEMA_VERSION = 1
+STATUS_FLAG_SCHEMA_VERSION = 2
 
 WIRED_DEFAULT_BAUDRATE = 115200
 WIRED_DEFAULT_LINE_SETTINGS = "8N1"
@@ -34,6 +34,7 @@ STATUS_FLAG_SAMPLING_OVERRUN = 1 << 3
 STATUS_FLAG_SENSOR_FAULT = 1 << 4
 STATUS_FLAG_TELEMETRY_RATE_WARNING = 1 << 5
 STATUS_FLAG_COMMAND_ERROR_LATCHED = 1 << 6
+STATUS_FLAG_HEATER_POWER_ON = 1 << 7
 
 DIAGNOSTIC_BIT_BOOT_COMPLETE = 1 << 0
 DIAGNOSTIC_BIT_MEASUREMENT_CORE_READY = 1 << 1
@@ -49,6 +50,7 @@ SUPPORTED_COMMANDS = (
     "get_status",
     "set_pump_state",
     "ping",
+    "set_heater_power_state",
 )
 TELEMETRY_FIELDS = (
     "zirconia_output_voltage_v",
@@ -58,7 +60,7 @@ TELEMETRY_FIELDS = (
     "differential_pressure_high_range_pa",
 )
 
-SUPPORTED_COMMAND_BITS = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3)
+SUPPORTED_COMMAND_BITS = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4)
 TELEMETRY_FIELD_BITS = (1 << 0) | (1 << 1)
 TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED = 1 << 3
 TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE = 1 << 4
@@ -69,6 +71,8 @@ BLE_OPCODE_SET_PUMP_OFF = 0xAA
 BLE_OPCODE_GET_STATUS = 0x30
 BLE_OPCODE_GET_CAPABILITIES = 0x31
 BLE_OPCODE_PING = 0x32
+BLE_OPCODE_SET_HEATER_ON = 0x33
+BLE_OPCODE_SET_HEATER_OFF = 0x34
 
 WIRED_MESSAGE_TYPE_TELEMETRY_SAMPLE = 0x01
 WIRED_MESSAGE_TYPE_STATUS_SNAPSHOT = 0x02
@@ -84,6 +88,7 @@ WIRED_COMMAND_ID_GET_CAPABILITIES = 0x01
 WIRED_COMMAND_ID_GET_STATUS = 0x02
 WIRED_COMMAND_ID_SET_PUMP_STATE = 0x03
 WIRED_COMMAND_ID_PING = 0x04
+WIRED_COMMAND_ID_SET_HEATER_POWER_STATE = 0x05
 WIRED_SOF0 = 0xA5
 WIRED_SOF1 = 0x5A
 WIRED_HEADER_SIZE = 16
@@ -121,6 +126,7 @@ def build_status_flags(
     *,
     pump_on: bool,
     transport_session_active: bool,
+    heater_power_on: bool = False,
     adc_fault: bool = False,
     sampling_overrun: bool = False,
     sensor_fault: bool = False,
@@ -132,6 +138,8 @@ def build_status_flags(
         status_flags |= STATUS_FLAG_PUMP_ON
     if transport_session_active:
         status_flags |= STATUS_FLAG_TRANSPORT_SESSION_ACTIVE
+    if heater_power_on:
+        status_flags |= STATUS_FLAG_HEATER_POWER_ON
     if adc_fault:
         status_flags |= STATUS_FLAG_ADC_FAULT
     if sampling_overrun:

@@ -13,6 +13,7 @@
 #include "protocol/PayloadBuilders.h"
 #include "services/Logger.h"
 #include "services/InputButtonController.h"
+#include "services/HeaterPowerController.h"
 #include "services/PumpController.h"
 #include "services/StatusLedController.h"
 #include "transport/BleTransport.h"
@@ -26,10 +27,14 @@ zss::measurement::MeasurementCore g_measurement_core(
     g_adc_frontend,
     g_differential_pressure_frontend);
 zss::services::PumpController g_pump_controller(zss::board::kPumpOutputPin);
+zss::services::HeaterPowerController g_heater_power_controller(zss::board::kHeaterPowerEnablePin);
 zss::services::InputButtonController g_pump_toggle_button(zss::board::kPumpToggleButtonPin);
 zss::services::StatusLedController g_status_led(zss::board::kStatusLedDataPin);
 zss::app::AppState g_app_state(zss::board::kDefaultNominalSamplePeriodMs);
-zss::app::CommandProcessor g_command_processor(g_app_state, g_pump_controller);
+zss::app::CommandProcessor g_command_processor(
+    g_app_state,
+    g_pump_controller,
+    g_heater_power_controller);
 zss::transport::BleTransport g_ble_transport;
 zss::transport::SerialTransport g_serial_transport;
 
@@ -309,6 +314,7 @@ void setup() {
         zss::protocol::kFirmwareVersionString);
 
     g_pump_controller.begin();
+    g_heater_power_controller.begin();
     g_status_led.begin();
     g_pump_toggle_button.begin(millis());
 
@@ -356,12 +362,13 @@ void setup() {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Boot",
-        "Board config: pump=%d pwm=%luHz/%ubit on=%u%% off=%u%% button=%d led=%d led_pwr_en=%d i2c=(%d,%d)",
+        "Board config: pump=%d pwm=%luHz/%ubit on=%u%% off=%u%% heater_en=%d button=%d led=%d led_pwr_en=%d i2c=(%d,%d)",
         zss::board::kPumpOutputPin,
         static_cast<unsigned long>(zss::board::kPumpPwmFrequencyHz),
         static_cast<unsigned>(zss::board::kPumpPwmResolutionBits),
         static_cast<unsigned>(zss::board::kPumpPwmDutyOnPercent),
         static_cast<unsigned>(zss::board::kPumpPwmDutyOffPercent),
+        zss::board::kHeaterPowerEnablePin,
         zss::board::kPumpToggleButtonPin,
         zss::board::kStatusLedDataPin,
         zss::board::kStatusLedPowerEnablePin,

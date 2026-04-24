@@ -14,6 +14,7 @@ from mock_backend import TelemetryPoint
 from protocol_constants import (
     BLE_MODE,
     DERIVED_METRIC_POLICY_ID,
+    STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_PUMP_ON,
     derive_flow_rate_lpm_from_selected_differential_pressure_pa,
     format_status_flags,
@@ -99,6 +100,9 @@ class ConnectionController(QObject):
 
     def set_pump_state(self, on: bool) -> None:
         self._backend.set_pump_state(on)
+
+    def set_heater_power_state(self, on: bool) -> None:
+        self._backend.set_heater_power_state(on)
 
     def request_status(self) -> None:
         self._backend.request_status()
@@ -595,6 +599,7 @@ class RecordingController:
             str(point.nominal_sample_period_ms),
             format_status_flags(point.status_flags),
             str(1 if (point.status_flags & STATUS_FLAG_PUMP_ON) != 0 else 0),
+            str(1 if (point.status_flags & STATUS_FLAG_HEATER_POWER_ON) != 0 else 0),
             f"{point.zirconia_output_voltage_v:.6f}",
             f"{point.heater_rtd_resistance_ohm:.6f}",
             (

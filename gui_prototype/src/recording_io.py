@@ -21,6 +21,7 @@ CSV_COLUMNS = [
     "nominal_sample_period_ms",
     "status_flags_hex",
     "pump_state",
+    "heater_power_state",
     "zirconia_output_voltage_v",
     "heater_rtd_resistance_ohm",
     "differential_pressure_selected_pa",

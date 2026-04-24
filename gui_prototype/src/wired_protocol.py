@@ -12,6 +12,7 @@ from protocol_constants import (
     EVENT_CODE_WARNING_CLEARED,
     EVENT_CODE_WARNING_RAISED,
     PROTOCOL_VERSION_TEXT,
+    STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_PUMP_ON,
     SUPPORTED_COMMANDS,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE,
@@ -25,6 +26,7 @@ from protocol_constants import (
     WIRED_COMMAND_ID_GET_CAPABILITIES,
     WIRED_COMMAND_ID_GET_STATUS,
     WIRED_COMMAND_ID_PING,
+    WIRED_COMMAND_ID_SET_HEATER_POWER_STATE,
     WIRED_COMMAND_ID_SET_PUMP_STATE,
     WIRED_HEADER_SIZE,
     WIRED_MAX_PAYLOAD_BYTES,
@@ -169,6 +171,8 @@ def decode_capabilities(frame: WiredFrame) -> dict[str, object]:
         supported_commands.append(SUPPORTED_COMMANDS[2])
     if supported_bits & (1 << 3):
         supported_commands.append(SUPPORTED_COMMANDS[3])
+    if supported_bits & (1 << 4):
+        supported_commands.append(SUPPORTED_COMMANDS[4])
 
     telemetry_fields = []
     telemetry_bits = int(values[7])
@@ -231,6 +235,7 @@ def decode_status_snapshot(frame: WiredFrame) -> dict[str, object]:
         "differential_pressure_low_range_pa": low_range_raw,
         "differential_pressure_high_range_pa": high_range_raw,
         "pump_on": (status_flags & STATUS_FLAG_PUMP_ON) != 0,
+        "heater_power_on": (status_flags & STATUS_FLAG_HEATER_POWER_ON) != 0,
     }
 
 
@@ -279,6 +284,7 @@ def command_name_from_id(command_id: int) -> str:
         WIRED_COMMAND_ID_GET_STATUS: "get_status",
         WIRED_COMMAND_ID_SET_PUMP_STATE: "set_pump_state",
         WIRED_COMMAND_ID_PING: "ping",
+        WIRED_COMMAND_ID_SET_HEATER_POWER_STATE: "set_heater_power_state",
     }
     return labels.get(command_id, f"unknown_{command_id}")
 

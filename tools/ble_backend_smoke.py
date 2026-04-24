@@ -17,8 +17,11 @@ from protocol_constants import (  # noqa: E402
     BLE_MODE,
     BLE_OPCODE_GET_STATUS,
     BLE_OPCODE_PING,
+    BLE_OPCODE_SET_HEATER_OFF,
+    BLE_OPCODE_SET_HEATER_ON,
     BLE_OPCODE_SET_PUMP_OFF,
     BLE_OPCODE_SET_PUMP_ON,
+    STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_PUMP_ON,
     STATUS_FLAG_TRANSPORT_SESSION_ACTIVE,
 )
@@ -35,6 +38,7 @@ EVENT_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10003"
 class FakePeripheralState:
     sequence: int = 0
     pump_on: bool = False
+    heater_power_on: bool = False
     nominal_sample_period_ms: int = 80
 
 
@@ -57,6 +61,8 @@ def _status_flags(state: FakePeripheralState) -> int:
     flags = STATUS_FLAG_TRANSPORT_SESSION_ACTIVE
     if state.pump_on:
         flags |= STATUS_FLAG_PUMP_ON
+    if state.heater_power_on:
+        flags |= STATUS_FLAG_HEATER_POWER_ON
     return flags
 
 
@@ -64,10 +70,10 @@ def build_capabilities_packet(state: FakePeripheralState) -> bytes:
     return b"".join(
         [
             bytes([1, 0, 1, 1, 1, 0, 1, 0]),
-            _write_u16le(0x000F),
+            _write_u16le(0x001F),
             _write_u16le(0x0007),
             _write_u16le(state.nominal_sample_period_ms),
-            _write_u16le(1),
+            _write_u16le(2),
             _write_u16le(32),
             _write_u32le(0x0000000F),
         ]
@@ -178,6 +184,14 @@ class FakeBleakClient:
             await self._emit_status()
         elif opcode == BLE_OPCODE_SET_PUMP_OFF:
             self._state.pump_on = False
+            self._state.heater_power_on = False
+            await self._emit_status()
+        elif opcode == BLE_OPCODE_SET_HEATER_ON:
+            if self._state.pump_on:
+                self._state.heater_power_on = True
+            await self._emit_status()
+        elif opcode == BLE_OPCODE_SET_HEATER_OFF:
+            self._state.heater_power_on = False
             await self._emit_status()
         elif opcode == BLE_OPCODE_GET_STATUS:
             await self._emit_status()
@@ -228,12 +242,14 @@ def main() -> int:
 
         QTimer.singleShot(0, lambda: backend.connect_device("M5STAMP-MONITOR"))
         QTimer.singleShot(500, lambda: backend.set_pump_state(True))
+        QTimer.singleShot(900, lambda: backend.set_heater_power_state(True))
         QTimer.singleShot(1700, backend.disconnect_device)
         QTimer.singleShot(2500, lambda: backend.connect_device("M5STAMP-MONITOR"))
-        QTimer.singleShot(3000, lambda: backend.set_pump_state(False))
-        QTimer.singleShot(3400, backend.ping)
-        QTimer.singleShot(4700, backend.disconnect_device)
-        QTimer.singleShot(5200, app.quit)
+        QTimer.singleShot(3000, lambda: backend.set_heater_power_state(False))
+        QTimer.singleShot(3400, lambda: backend.set_pump_state(False))
+        QTimer.singleShot(3900, backend.ping)
+        QTimer.singleShot(5200, backend.disconnect_device)
+        QTimer.singleShot(5700, app.quit)
         app.exec()
 
         if len([event for event in connection_events if event[0]]) < 2:
@@ -252,6 +268,10 @@ def main() -> int:
             raise AssertionError(f"expected at least one pump ON status update, got {status_events}")
         if not any(str(payload.get("pump_state")) == "OFF" for payload in status_events):
             raise AssertionError(f"expected at least one pump OFF status update, got {status_events}")
+        if not any(str(payload.get("heater_power_state")) == "ON" for payload in status_events):
+            raise AssertionError(f"expected at least one heater ON status update, got {status_events}")
+        if not any(str(payload.get("heater_power_state")) == "OFF" for payload in status_events):
+            raise AssertionError(f"expected at least one heater OFF status update, got {status_events}")
         if not any("BLE event" in message for _, message in logs):
             raise AssertionError(f"expected BLE event log entries, got {logs}")
         if any(severity == "error" for severity, _ in logs):

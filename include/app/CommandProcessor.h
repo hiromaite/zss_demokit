@@ -4,6 +4,7 @@
 
 #include "app/AppState.h"
 #include "protocol/ProtocolConstants.h"
+#include "services/HeaterPowerController.h"
 #include "services/PumpController.h"
 #include "transport/TransportTypes.h"
 
@@ -25,13 +26,17 @@ struct CommandResult {
 
 class CommandProcessor {
   public:
-    CommandProcessor(AppState& app_state, services::PumpController& pump_controller);
+    CommandProcessor(
+        AppState& app_state,
+        services::PumpController& pump_controller,
+        services::HeaterPowerController& heater_power_controller);
 
     CommandResult handle(const CommandRequest& request);
 
   private:
     AppState& app_state_;
     services::PumpController& pump_controller_;
+    services::HeaterPowerController& heater_power_controller_;
 };
 
 }  // namespace zss::app
