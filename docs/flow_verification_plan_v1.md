@@ -97,16 +97,17 @@ v1 の guided verification は以下の step を持つ。
 1. `Overview`
 2. `Zero Check`
 3. `Exhalation Low`
-4. `Exhalation Medium`
-5. `Exhalation High`
-6. `Inhalation Low`
-7. `Inhalation Medium`
+4. `Inhalation Low`
+5. `Exhalation Medium`
+6. `Inhalation Medium`
+7. `Exhalation High`
 8. `Inhalation High`
 9. `Review`
 
 補足:
 
 - exhalation / inhalation を両方入れる
+- operator の自然な操作順に合わせ、各 speed band で `吐く -> 吸う` を交互に進める
 - progress 上は `Step 1 of 9` 形式を想定する
 
 ## 7. 各 Step の operator 体験
