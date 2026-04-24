@@ -42,6 +42,12 @@ void StatusLedController::begin() {
         return;
     }
 
+    if (zss::board::kStatusLedPowerEnablePin >= 0) {
+        pinMode(zss::board::kStatusLedPowerEnablePin, OUTPUT);
+        digitalWrite(zss::board::kStatusLedPowerEnablePin, HIGH);
+        delay(5);
+    }
+
     FastLED.addLeds<WS2812B, zss::board::kStatusLedDataPin, GRB>(g_leds, kLedCount);
     FastLED.setBrightness(zss::board::kStatusLedBrightness);
     showSolidRgb(0, 0, 0);

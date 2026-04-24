@@ -12,12 +12,6 @@
 namespace zss::measurement {
 
 bool AdcFrontend::begin() {
-    if (zss::board::kSensorPowerEnablePin >= 0) {
-        pinMode(zss::board::kSensorPowerEnablePin, OUTPUT);
-        digitalWrite(zss::board::kSensorPowerEnablePin, HIGH);
-        delay(5);
-    }
-
     Wire.begin(zss::board::kI2cSdaPin, zss::board::kI2cSclPin);
     Wire.setClock(zss::board::kI2cClockHz);
     Wire.setTimeOut(zss::board::kI2cTimeoutMs);

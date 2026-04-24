@@ -356,7 +356,7 @@ void setup() {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Boot",
-        "Board config: pump=%d pwm=%luHz/%ubit on=%u%% off=%u%% button=%d led=%d i2c=(%d,%d) power_en=%d",
+        "Board config: pump=%d pwm=%luHz/%ubit on=%u%% off=%u%% button=%d led=%d led_pwr_en=%d i2c=(%d,%d)",
         zss::board::kPumpOutputPin,
         static_cast<unsigned long>(zss::board::kPumpPwmFrequencyHz),
         static_cast<unsigned>(zss::board::kPumpPwmResolutionBits),
@@ -364,9 +364,9 @@ void setup() {
         static_cast<unsigned>(zss::board::kPumpPwmDutyOffPercent),
         zss::board::kPumpToggleButtonPin,
         zss::board::kStatusLedDataPin,
+        zss::board::kStatusLedPowerEnablePin,
         zss::board::kI2cSdaPin,
-        zss::board::kI2cSclPin,
-        zss::board::kSensorPowerEnablePin);
+        zss::board::kI2cSclPin);
     g_app_state.setDiagnosticBit(zss::protocol::kDiagnosticBitBootCompleteMask, true);
     emitEvent(zss::protocol::EventCode::BootComplete, kEventSeverityInfo, g_app_state.diagnosticBits());
     updateStatusLedContext();

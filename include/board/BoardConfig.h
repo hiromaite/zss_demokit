@@ -8,12 +8,13 @@ namespace zss::board {
 inline constexpr int8_t kPumpOutputPin = 7;
 inline constexpr int8_t kStatusLedPin = -1;
 inline constexpr int8_t kStatusLedDataPin = 21;
+// Stamp-S3A-derived hardware gates the onboard RGB LED power on GPIO38.
+inline constexpr int8_t kStatusLedPowerEnablePin = 38;
 inline constexpr int8_t kPumpToggleButtonPin = 0;
 inline constexpr int8_t kLegacyInputAdcPin = 5;
 inline constexpr int8_t kZss2CellAdcPin = 3;
 inline constexpr int8_t kI2cSdaPin = 13;
 inline constexpr int8_t kI2cSclPin = 15;
-inline constexpr int8_t kSensorPowerEnablePin = 38;
 
 inline constexpr unsigned long kSerialMonitorBaudRate = 115200;
 inline constexpr uint16_t kBleNominalSamplePeriodMs = 80;
