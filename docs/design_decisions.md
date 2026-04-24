@@ -241,7 +241,7 @@ flow_rate_lpm =
 - flow path の operator-facing quality check は `Flow Verification` として実装する
 - v1 では `Flow Calibration` ではなく `guided verification` を先行させる
 - entry point は `Settings > Device > Flow Verification` とする
-- guided verification は `3 L syringe` を前提にし、`Zero Check`, `Exhalation Low/Medium/High`, `Inhalation Low/Medium/High`, `Review` の流れを採用する
+- guided verification は `3 L syringe` を前提にし、`Zero Check`, `Exhalation Low`, `Inhalation Low`, `Exhalation Medium`, `Inhalation Medium`, `Exhalation High`, `Inhalation High`, `Review` の流れを採用する
 - v1 では exhalation / inhalation の両方向を確認対象に含める
 - exhalation は primary、inhalation は extended check として aggregate result に反映する
 - v1 は PoC / design validation 用の soft advisory workflow とし、step fail で operator の進行を hard block しない
