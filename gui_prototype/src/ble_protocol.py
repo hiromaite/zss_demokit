@@ -16,6 +16,8 @@ from protocol_constants import (
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED,
+    TELEMETRY_FIELD_INTERNAL_VOLTAGE,
+    TELEMETRY_FIELD_ZIRCONIA_IP_VOLTAGE,
     TELEMETRY_FIELDS,
     TRANSPORT_BLE,
     TRANSPORT_TYPE_CODE_BLE,
@@ -108,6 +110,10 @@ def decode_ble_capabilities_packet(data: bytes) -> dict[str, object]:
         telemetry_fields.append(TELEMETRY_FIELDS[3])
     if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE:
         telemetry_fields.append(TELEMETRY_FIELDS[4])
+    if telemetry_field_bits & TELEMETRY_FIELD_ZIRCONIA_IP_VOLTAGE:
+        telemetry_fields.append(TELEMETRY_FIELDS[5])
+    if telemetry_field_bits & TELEMETRY_FIELD_INTERNAL_VOLTAGE:
+        telemetry_fields.append(TELEMETRY_FIELDS[6])
 
     device_type = "unknown"
     if device_type_code == DEVICE_TYPE_CODE_ZIRCONIA_SENSOR:

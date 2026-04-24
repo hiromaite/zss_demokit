@@ -222,6 +222,16 @@ def build_point(payload: dict[str, Any]) -> TelemetryPoint:
         status_flags=int(payload["status_flags"]),
         zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
         heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
+        zirconia_ip_voltage_v=(
+            float(payload["zirconia_ip_voltage_v"])
+            if payload.get("zirconia_ip_voltage_v") not in (None, "")
+            else None
+        ),
+        internal_voltage_v=(
+            float(payload["internal_voltage_v"])
+            if payload.get("internal_voltage_v") not in (None, "")
+            else None
+        ),
         differential_pressure_selected_pa=(
             float(payload["differential_pressure_selected_pa"])
             if payload.get("differential_pressure_selected_pa") not in (None, "")

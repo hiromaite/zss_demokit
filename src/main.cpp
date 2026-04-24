@@ -129,12 +129,16 @@ void logCapabilitiesPreview() {
         zss::transport::TransportKind::Ble,
         zss::board::kBleNominalSamplePeriodMs,
         g_measurement_core.differentialPressureAvailable(),
+        false,
+        false,
         false);
     const auto serial_capabilities = zss::app::CapabilityBuilder::build(
         zss::transport::TransportKind::Serial,
         zss::board::kWiredNominalSamplePeriodMs,
         g_measurement_core.differentialPressureAvailable(),
-        g_measurement_core.differentialPressureAvailable());
+        g_measurement_core.differentialPressureAvailable(),
+        true,
+        zss::board::kLegacyInputAdcPin >= 0);
 
     const auto ble_payload = zss::protocol::buildCapabilitiesPayload(ble_capabilities);
     const auto serial_payload = zss::protocol::buildCapabilitiesPayload(serial_capabilities);
@@ -275,9 +279,10 @@ void emitSummaryLog(uint32_t now_ms) {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Sample",
-        "seq=%lu Vip=%.3fV Vout=%.3fV RTD=%.1fOhm DpSel=%.2fPa Dp125=%.2fPa Dp500=%.2fPa DpLow=%u flags=0x%08lX diag=0x%08lX overruns=%lu",
+        "seq=%lu Vip=%.3fV Vin=%.3fV Vout=%.3fV RTD=%.1fOhm DpSel=%.2fPa Dp125=%.2fPa Dp500=%.2fPa DpLow=%u flags=0x%08lX diag=0x%08lX overruns=%lu",
         static_cast<unsigned long>(g_app_state.latestSequence()),
         measurements.zirconia_ip_voltage_v,
+        measurements.internal_voltage_v,
         measurements.zirconia_output_voltage_v,
         measurements.heater_rtd_resistance_ohm,
         measurements.differential_pressure_selected_pa,
@@ -340,6 +345,8 @@ void setup() {
         zss::transport::TransportKind::Ble,
         zss::board::kBleNominalSamplePeriodMs,
         g_measurement_core.differentialPressureAvailable(),
+        false,
+        false,
         false);
     g_ble_transport.publishCapabilities(
         zss::protocol::buildCapabilitiesPayload(ble_capabilities));
@@ -418,7 +425,10 @@ void loop() {
                             : g_app_state.nominalSamplePeriodMs(),
                         g_measurement_core.differentialPressureAvailable(),
                         transport_kind == zss::transport::TransportKind::Serial &&
-                            g_measurement_core.differentialPressureAvailable());
+                            g_measurement_core.differentialPressureAvailable(),
+                        transport_kind == zss::transport::TransportKind::Serial,
+                        transport_kind == zss::transport::TransportKind::Serial &&
+                            zss::board::kLegacyInputAdcPin >= 0);
                     if constexpr (std::is_same_v<std::decay_t<decltype(transport)>, zss::transport::SerialTransport>) {
                         transport.publishCapabilities(
                             zss::protocol::buildCapabilitiesPayload(capabilities),

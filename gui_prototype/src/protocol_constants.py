@@ -58,6 +58,8 @@ TELEMETRY_FIELDS = (
     "differential_pressure_selected_pa",
     "differential_pressure_low_range_pa",
     "differential_pressure_high_range_pa",
+    "zirconia_ip_voltage_v",
+    "internal_voltage_v",
 )
 
 SUPPORTED_COMMAND_BITS = (1 << 0) | (1 << 1) | (1 << 2) | (1 << 3) | (1 << 4)
@@ -65,6 +67,8 @@ TELEMETRY_FIELD_BITS = (1 << 0) | (1 << 1)
 TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED = 1 << 3
 TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE = 1 << 4
 TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE = 1 << 5
+TELEMETRY_FIELD_ZIRCONIA_IP_VOLTAGE = 1 << 6
+TELEMETRY_FIELD_INTERNAL_VOLTAGE = 1 << 7
 
 BLE_OPCODE_SET_PUMP_ON = 0x55
 BLE_OPCODE_SET_PUMP_OFF = 0xAA

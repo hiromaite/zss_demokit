@@ -312,6 +312,8 @@ class MainWindow(QMainWindow):
         self._pending_mode_switch_target: str | None = None
         self._latest_low_range_differential_pressure_pa: float | None = None
         self._latest_high_range_differential_pressure_pa: float | None = None
+        self._latest_zirconia_ip_voltage_v: float | None = None
+        self._latest_internal_voltage_v: float | None = None
 
         self._build_ui()
         self._bind_controllers()
@@ -438,6 +440,8 @@ class MainWindow(QMainWindow):
         self.firmware_value = QLabel("--")
         self.protocol_value = QLabel("--")
         self.gap_value = QLabel("0")
+        self.zirconia_ip_value = QLabel("--")
+        self.internal_voltage_value = QLabel("--")
 
         rows = [
             ("Pump State", self.pump_state_value),
@@ -448,6 +452,8 @@ class MainWindow(QMainWindow):
             ("Firmware", self.firmware_value),
             ("Protocol", self.protocol_value),
             ("Sequence Gaps", self.gap_value),
+            ("Zirconia Ip", self.zirconia_ip_value),
+            ("Internal Voltage", self.internal_voltage_value),
         ]
         for row_index, (name, value_label) in enumerate(rows):
             grid.addWidget(QLabel(name), row_index, 0)
@@ -807,6 +813,9 @@ class MainWindow(QMainWindow):
             self._stop_recording()
             self._latest_low_range_differential_pressure_pa = None
             self._latest_high_range_differential_pressure_pa = None
+            self._latest_zirconia_ip_voltage_v = None
+            self._latest_internal_voltage_v = None
+            self._update_service_visibility_labels()
             if self._pending_mode_switch_target is not None:
                 pending_target = self._pending_mode_switch_target
                 self._pending_mode_switch_target = None
@@ -826,6 +835,9 @@ class MainWindow(QMainWindow):
         self.ui_state.session_metadata.nominal_sample_period_ms = str(payload["nominal_sample_period_ms"])
         self.telemetry_health_monitor.update_nominal_sample_period(payload["nominal_sample_period_ms"])
         self.telemetry_session_stats.update_nominal_sample_period(payload["nominal_sample_period_ms"])
+        self._latest_zirconia_ip_voltage_v = payload.get("zirconia_ip_voltage_v")
+        self._latest_internal_voltage_v = payload.get("internal_voltage_v")
+        self._update_service_visibility_labels()
         self._sync_pump_toggle()
         self._sync_heater_toggle()
 
@@ -870,6 +882,9 @@ class MainWindow(QMainWindow):
         self.gap_value.setText(str(plot_update["sequence_gap_total"]))
         self._latest_low_range_differential_pressure_pa = point.differential_pressure_low_range_pa
         self._latest_high_range_differential_pressure_pa = point.differential_pressure_high_range_pa
+        self._latest_zirconia_ip_voltage_v = point.zirconia_ip_voltage_v
+        self._latest_internal_voltage_v = point.internal_voltage_v
+        self._update_service_visibility_labels()
         for severity, message in self.telemetry_health_monitor.on_telemetry(point):
             self._append_log(severity, message)
 
@@ -1301,6 +1316,9 @@ class MainWindow(QMainWindow):
         self._session_started = datetime.now()
         self._latest_low_range_differential_pressure_pa = None
         self._latest_high_range_differential_pressure_pa = None
+        self._latest_zirconia_ip_voltage_v = None
+        self._latest_internal_voltage_v = None
+        self._update_service_visibility_labels()
         for curve in self.plot_curves.values():
             curve.setData([], [])
         self.sensor_secondary_curve.setData([], [])
@@ -1388,6 +1406,16 @@ class MainWindow(QMainWindow):
             "info",
             f"O2 ambient-air calibration updated at {current_air_calibration_voltage_v:0.3f} V ({timestamp_text}).",
         )
+
+    def _update_service_visibility_labels(self) -> None:
+        self.zirconia_ip_value.setText(self._format_optional_voltage(self._latest_zirconia_ip_voltage_v))
+        self.internal_voltage_value.setText(self._format_optional_voltage(self._latest_internal_voltage_v))
+
+    @staticmethod
+    def _format_optional_voltage(value: float | None) -> str:
+        if value is None or not math.isfinite(value):
+            return "--"
+        return f"{value:0.3f} V"
 
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._stop_recording()

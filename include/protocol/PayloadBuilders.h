@@ -19,6 +19,8 @@ struct TelemetryPayloadV1 {
     float differential_pressure_selected_pa = 0.0f;
     float differential_pressure_low_range_pa = 0.0f;
     float differential_pressure_high_range_pa = 0.0f;
+    float zirconia_ip_voltage_v = 0.0f;
+    float internal_voltage_v = 0.0f;
     uint16_t nominal_sample_period_ms = 0;
     uint16_t telemetry_field_bits = kTelemetryFieldBits;
     uint32_t diagnostic_bits = 0;
@@ -38,6 +40,8 @@ struct StatusSnapshotPayloadV1 {
     float differential_pressure_selected_pa = 0.0f;
     float differential_pressure_low_range_pa = 0.0f;
     float differential_pressure_high_range_pa = 0.0f;
+    float zirconia_ip_voltage_v = 0.0f;
+    float internal_voltage_v = 0.0f;
 };
 
 struct CapabilitiesPayloadV1 {

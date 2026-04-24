@@ -56,6 +56,7 @@
 | `GUI-VAL-022` | Flow verification settings entry smoke | `Settings > Device` から guided verification 入口が見え、expected device 接続時に有効化される | `PASS` | offscreen `SettingsDialog` smoke で `flow_verification_button.isEnabled()` を確認 |
 | `GUI-VAL-023` | Flow verification controller/dialog smoke | guided verification controller と dialog skeleton が起動し、basic capture/save path が崩れない | `PASS` | offscreen smoke で controller-only capture path による JSON save と `FlowVerificationDialog` 起動を確認 |
 | `GUI-VAL-024` | Flow verification latest details smoke | latest saved verification session を `Settings > Device` から開いて review できる | `PASS` | offscreen smoke で saved JSON を読み込み、`Show Latest Details` button と `FlowVerificationDetailsDialog` 起動を確認 |
+| `GUI-VAL-025` | Service visibility GUI smoke | wired-first diagnostic fields が GUI `Device Status` と CSV に配線されても UI が破綻しない | `PASS` | `python3.12 -m compileall gui_prototype/src`、`tools/protocol_fixture_smoke.py`、`tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` により compile / fixture / offscreen GUI session が継続成立することを確認 |
 
 ## 5. Firmware Checklist
 
@@ -77,6 +78,7 @@
 | `FW-VAL-014` | Diagnostic payload wiring build smoke | diagnostic bits 追加後も firmware build と shared regression が壊れない | `PASS` | `pio run` と `tools/protocol_fixture_smoke.py` により AppState / payload builder の diagnostic wiring 後も build/regression が継続することを確認 |
 | `FW-VAL-015` | Bundle A regression smoke | physical button / ADS1115 ch0 / WS2812 parity 追加後も wired path が退行しない | `PASS` | `pio run`, upload, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` を実施し、capabilities / status / telemetry / `Pump ON/OFF` / command error event が継続動作することを確認 |
 | `FW-VAL-016` | Differential pressure telemetry publication | dual-SDP selected differential pressure が transport payload に反映される | `PASS` | `pio run`, upload, `tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 6`, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` により `telemetry_field_bits=15` と finite `differential_pressure_selected_pa` を確認 |
+| `FW-VAL-017` | Service visibility payload publication | wired capabilities / payload が `zirconia_ip_voltage_v` と optional `internal_voltage_v` を壊さず扱える | `PASS` | `pio run`, upload, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` により serial capabilities `telemetry_field_bits=67` を確認。current board config では `internal_voltage_v` unavailable のまま扱えることも確認 |
 
 ## 6. Integration Checklist
 
@@ -97,6 +99,7 @@
 | `INT-VAL-013` | GUI wired flow integration | GUI が selected differential pressure を含む wired session を継続処理できる | `PASS` | `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5` で `967` telemetry, warning/error `0`, CSV `799` rows, `gui_wired_session_probe_ok` を確認 |
 | `INT-VAL-014` | Wired flow probe baseline | wired transport 上で selected differential pressure と derived flow rate を集計できる | `PASS` | `tools/wired_flow_probe.py --port /dev/cu.usbmodem4101 --duration-s 4` で `telemetry_field_bits=63`, advertised differential pressure, finite `selected / SDP810 / SDP811` no-flow baseline を確認 |
 | `INT-VAL-015` | Wired flow operator sweep | low / medium / high flow で transport-level flow probe が handoff を観測できる | `TODO` | `tools/wired_flow_probe.py` を用いた user-operated flow sweep を次回実施 |
+| `INT-VAL-016` | Service visibility wired integration | wired 実機で service visibility wiring 後も command / recording / GUI session が退行しない | `PASS` | `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` と `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` を実施し、`wired_serial_smoke_ok` と `gui_wired_session_probe_ok` を確認 |
 | `GUI-VAL-022` | Flow card raw SDP visibility | wired differential pressure raw values が flow metric card に表示される | `PASS` | offscreen live connection で `flow_detail=SDP811: -0.05 Pa / SDP810: -0.05 Pa`, `detail_visible=True` を確認 |
 
 ## 7. 実施ログ
@@ -236,6 +239,14 @@
 - `python3.12 tools/protocol_fixture_smoke.py` を再実施し、CSV row fixture が `differential_pressure_selected_source=SDP810` を含んで通過することを確認した
 - `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` を実施し、selected-source 追加後も wired GUI session が継続し、`gui_wired_session_probe_ok` を確認した
 - `python3.12 tools/wired_flow_probe.py --port /dev/cu.usbmodem3101 --duration-s 6` を実施し、no-flow baseline として `telemetry_field_bits=15`, advertised differential pressure, `DpSel mean=-0.0591 Pa`, `Non-unit sequence gap total=0` を確認した
+
+### 2026-04-24
+
+- service visibility の first slice として、`zirconia_ip_voltage_v` / `internal_voltage_v` を wired-first optional diagnostic field として protocol / GUI / CSV へ配線した
+- `python3.12 -m compileall gui_prototype/src tools/protocol_fixture_smoke.py` と `python3.12 tools/protocol_fixture_smoke.py` を実施し、decoder / CSV row / firmware encoder の shared regression が継続成立することを確認した
+- `./.venv_pio/bin/pio run` と `./.venv_pio/bin/pio run -t upload --upload-port /dev/cu.usbmodem4101` を実施し、service visibility wiring 後も firmware build / upload が成立することを確認した
+- `python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` を実施し、serial capabilities が `telemetry_field_bits=67` を広告し、current board config では `zirconia_ip_voltage_v` / `internal_voltage_v` が unavailable のまま安全に扱えることを確認した
+- `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` を実施し、GUI wired session が `738` telemetry、warning/error `0`、CSV `600` rows、non-unit gap `0` で継続することを確認した
 
 ## 8. 更新ルール
 

@@ -18,6 +18,8 @@ from protocol_constants import (
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED,
+    TELEMETRY_FIELD_INTERNAL_VOLTAGE,
+    TELEMETRY_FIELD_ZIRCONIA_IP_VOLTAGE,
     TELEMETRY_FIELDS,
     TRANSPORT_BLE,
     TRANSPORT_SERIAL,
@@ -186,6 +188,10 @@ def decode_capabilities(frame: WiredFrame) -> dict[str, object]:
         telemetry_fields.append(TELEMETRY_FIELDS[3])
     if telemetry_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE:
         telemetry_fields.append(TELEMETRY_FIELDS[4])
+    if telemetry_bits & TELEMETRY_FIELD_ZIRCONIA_IP_VOLTAGE:
+        telemetry_fields.append(TELEMETRY_FIELDS[5])
+    if telemetry_bits & TELEMETRY_FIELD_INTERNAL_VOLTAGE:
+        telemetry_fields.append(TELEMETRY_FIELDS[6])
 
     return {
         "protocol_version": build_protocol_version_text(frame),
@@ -214,16 +220,41 @@ def decode_status_snapshot(frame: WiredFrame) -> dict[str, object]:
         )
         low_range_raw = None
         high_range_raw = None
+        zirconia_ip_voltage_v = None
+        internal_voltage_v = None
     elif len(frame.payload) == 28:
         status_flags, nominal_sample_period_ms, telemetry_field_bits, zirconia, heater, flow_raw, low_range_raw, high_range_raw = struct.unpack(
             "<IHHfffff",
             frame.payload,
         )
+        zirconia_ip_voltage_v = None
+        internal_voltage_v = None
+    elif len(frame.payload) == 36:
+        (
+            status_flags,
+            nominal_sample_period_ms,
+            telemetry_field_bits,
+            zirconia,
+            heater,
+            flow_raw,
+            low_range_raw,
+            high_range_raw,
+            zirconia_ip_voltage_v,
+            internal_voltage_v,
+        ) = struct.unpack("<IHHfffffff", frame.payload)
     else:
-        raise ValueError(f"Expected 20-byte or 28-byte wired status payload, got {len(frame.payload)} bytes")
+        raise ValueError(f"Expected 20-byte, 28-byte, or 36-byte wired status payload, got {len(frame.payload)} bytes")
     differential_pressure_selected_pa = None
     if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED:
         differential_pressure_selected_pa = flow_raw
+    if (telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE) == 0:
+        low_range_raw = None
+    if (telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE) == 0:
+        high_range_raw = None
+    if (telemetry_field_bits & TELEMETRY_FIELD_ZIRCONIA_IP_VOLTAGE) == 0:
+        zirconia_ip_voltage_v = None
+    if (telemetry_field_bits & TELEMETRY_FIELD_INTERNAL_VOLTAGE) == 0:
+        internal_voltage_v = None
     return {
         "protocol_version": build_protocol_version_text(frame),
         "status_flags": status_flags,
@@ -234,6 +265,8 @@ def decode_status_snapshot(frame: WiredFrame) -> dict[str, object]:
         "differential_pressure_selected_pa": differential_pressure_selected_pa,
         "differential_pressure_low_range_pa": low_range_raw,
         "differential_pressure_high_range_pa": high_range_raw,
+        "zirconia_ip_voltage_v": zirconia_ip_voltage_v,
+        "internal_voltage_v": internal_voltage_v,
         "pump_on": (status_flags & STATUS_FLAG_PUMP_ON) != 0,
         "heater_power_on": (status_flags & STATUS_FLAG_HEATER_POWER_ON) != 0,
     }

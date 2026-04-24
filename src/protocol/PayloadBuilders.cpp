@@ -11,6 +11,8 @@ TelemetryPayloadV1 buildTelemetryPayload(const app::AppState& app_state) {
     payload.status_flags = app_state.statusFlags();
     payload.zirconia_output_voltage_v = measurements.zirconia_output_voltage_v;
     payload.heater_rtd_resistance_ohm = measurements.heater_rtd_resistance_ohm;
+    payload.zirconia_ip_voltage_v = measurements.zirconia_ip_voltage_v;
+    payload.internal_voltage_v = measurements.internal_voltage_v;
     payload.telemetry_field_bits = kTelemetryFieldBits;
     payload.differential_pressure_selected_pa = measurements.differential_pressure_selected_pa;
     if (app_state.hasDifferentialPressureSelectedPa()) {
@@ -27,6 +29,12 @@ TelemetryPayloadV1 buildTelemetryPayload(const app::AppState& app_state) {
         payload.telemetry_field_bits |=
             kTelemetryFieldDifferentialPressureLowRangeMask |
             kTelemetryFieldDifferentialPressureHighRangeMask;
+    }
+    if (isfinite(measurements.zirconia_ip_voltage_v)) {
+        payload.telemetry_field_bits |= kTelemetryFieldZirconiaIpVoltageMask;
+    }
+    if (isfinite(measurements.internal_voltage_v)) {
+        payload.telemetry_field_bits |= kTelemetryFieldInternalVoltageMask;
     }
     payload.nominal_sample_period_ms = app_state.nominalSamplePeriodMs();
     payload.diagnostic_bits = app_state.diagnosticBits();
@@ -42,6 +50,8 @@ StatusSnapshotPayloadV1 buildStatusSnapshotPayload(const app::AppState& app_stat
     payload.nominal_sample_period_ms = app_state.nominalSamplePeriodMs();
     payload.zirconia_output_voltage_v = measurements.zirconia_output_voltage_v;
     payload.heater_rtd_resistance_ohm = measurements.heater_rtd_resistance_ohm;
+    payload.zirconia_ip_voltage_v = measurements.zirconia_ip_voltage_v;
+    payload.internal_voltage_v = measurements.internal_voltage_v;
     payload.telemetry_field_bits = kTelemetryFieldBits;
     payload.differential_pressure_selected_pa = measurements.differential_pressure_selected_pa;
     if (app_state.hasDifferentialPressureSelectedPa()) {
@@ -58,6 +68,12 @@ StatusSnapshotPayloadV1 buildStatusSnapshotPayload(const app::AppState& app_stat
         payload.telemetry_field_bits |=
             kTelemetryFieldDifferentialPressureLowRangeMask |
             kTelemetryFieldDifferentialPressureHighRangeMask;
+    }
+    if (isfinite(measurements.zirconia_ip_voltage_v)) {
+        payload.telemetry_field_bits |= kTelemetryFieldZirconiaIpVoltageMask;
+    }
+    if (isfinite(measurements.internal_voltage_v)) {
+        payload.telemetry_field_bits |= kTelemetryFieldInternalVoltageMask;
     }
     return payload;
 }

@@ -1101,6 +1101,8 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - final calibration / selector tuning は hardware 完成後に行う前提へ変更した
 - hardware bring-up 支援として、GUI の flow card detail に `SDP811` / `SDP810` raw value を live 表示できるようにした
 - selected differential pressure の source (`SDP810` / `SDP811`) を GUI detail と CSV から追えるよう更新した
+- service visibility の first slice として、wired-first diagnostics に `zirconia_ip_voltage_v` / `internal_voltage_v` の optional field を追加し、GUI `Device Status` と CSV へ配線した
+- current board config では `internal_voltage_v` path は disabled のため live value unavailable を想定し、GUI / CSV は空欄・`--` で扱う
 - signed flow placeholder を採用し、呼気/吸気の両方向を持つ前提で表示・記録する
 - `Flow Verification` の実装方針として、`Settings > Device` から guided verification wizard を起動する設計を採用する
 - guided verification は `Zero Check`, `Exhalation Low`, `Inhalation Low`, `Exhalation Medium`, `Inhalation Medium`, `Exhalation High`, `Inhalation High`, `Review` の 9-step flow を想定する

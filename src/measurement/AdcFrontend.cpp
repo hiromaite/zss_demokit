@@ -35,6 +35,7 @@ SensorMeasurements AdcFrontend::readMeasurements() {
         last_read_succeeded_ = false;
         return {
             .zirconia_ip_voltage_v = NAN,
+            .internal_voltage_v = NAN,
             .zirconia_output_voltage_v = NAN,
             .heater_rtd_resistance_ohm = NAN,
             .differential_pressure_selected_pa = NAN,
@@ -43,10 +44,26 @@ SensorMeasurements AdcFrontend::readMeasurements() {
 
     SensorMeasurements measurements{
         .zirconia_ip_voltage_v = NAN,
+        .internal_voltage_v = NAN,
         .zirconia_output_voltage_v = NAN,
         .heater_rtd_resistance_ohm = NAN,
         .differential_pressure_selected_pa = NAN,
     };
+
+    if (zss::board::kLegacyInputAdcPin >= 0) {
+        const uint32_t accumulator_limit =
+            static_cast<uint32_t>(zss::board::kInternalAdcOversamplingCount);
+        uint32_t millivolt_accumulator = 0u;
+        for (uint32_t index = 0; index < accumulator_limit; ++index) {
+            millivolt_accumulator += static_cast<uint32_t>(
+                analogReadMilliVolts(zss::board::kLegacyInputAdcPin));
+        }
+        const float averaged_millivolts =
+            static_cast<float>(millivolt_accumulator) /
+            static_cast<float>(accumulator_limit);
+        measurements.internal_voltage_v =
+            (averaged_millivolts / 1000.0f) * zss::board::kVoltageDividerRatio;
+    }
 
     if (!external_adc_available_) {
         const uint32_t now_ms = millis();

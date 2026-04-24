@@ -91,6 +91,8 @@ class TelemetryPoint:
     status_flags: int
     zirconia_output_voltage_v: float
     heater_rtd_resistance_ohm: float
+    zirconia_ip_voltage_v: float | None = None
+    internal_voltage_v: float | None = None
     differential_pressure_selected_pa: float | None = None
     differential_pressure_low_range_pa: float | None = None
     differential_pressure_high_range_pa: float | None = None
@@ -661,6 +663,8 @@ class MockBackend(QObject):
             status_flags=int(payload["status_flags"]),
             zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
             heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
+            zirconia_ip_voltage_v=None,
+            internal_voltage_v=None,
             differential_pressure_selected_pa=(
                 float(payload["differential_pressure_selected_pa"])
                 if payload.get("differential_pressure_selected_pa") is not None
@@ -814,6 +818,16 @@ class MockBackend(QObject):
             status_flags=int(payload["status_flags"]),
             zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
             heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
+            zirconia_ip_voltage_v=(
+                float(payload["zirconia_ip_voltage_v"])
+                if payload.get("zirconia_ip_voltage_v") is not None
+                else None
+            ),
+            internal_voltage_v=(
+                float(payload["internal_voltage_v"])
+                if payload.get("internal_voltage_v") is not None
+                else None
+            ),
             differential_pressure_selected_pa=(
                 float(payload["differential_pressure_selected_pa"])
                 if payload.get("differential_pressure_selected_pa") is not None
@@ -856,6 +870,8 @@ class MockBackend(QObject):
                 "nominal_sample_period_ms": int(payload["nominal_sample_period_ms"]),
                 "firmware_version": self._last_firmware_version,
                 "protocol_version": self._last_protocol_version,
+                "zirconia_ip_voltage_v": payload.get("zirconia_ip_voltage_v"),
+                "internal_voltage_v": payload.get("internal_voltage_v"),
             }
             self.status_changed.emit(status)
             return

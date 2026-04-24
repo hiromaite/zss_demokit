@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include <math.h>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -66,6 +67,8 @@ uint16_t computeCrcCcittFalse(const uint8_t* data, size_t length) {
 
 SensorMeasurements makeMeasurements(float zirconia, float heater, float selected_differential_pressure_pa) {
     SensorMeasurements measurements{};
+    measurements.zirconia_ip_voltage_v = NAN;
+    measurements.internal_voltage_v = NAN;
     measurements.zirconia_output_voltage_v = zirconia;
     measurements.heater_rtd_resistance_ohm = heater;
     measurements.differential_pressure_selected_pa = selected_differential_pressure_pa;
@@ -90,10 +93,16 @@ std::vector<uint8_t> encodeWiredTelemetryPayload(const TelemetryPayloadV1& paylo
         (payload.telemetry_field_bits &
          (zss::protocol::kTelemetryFieldDifferentialPressureLowRangeMask |
           zss::protocol::kTelemetryFieldDifferentialPressureHighRangeMask)) != 0u;
+    const bool has_service_visibility =
+        (payload.telemetry_field_bits &
+         (zss::protocol::kTelemetryFieldZirconiaIpVoltageMask |
+          zss::protocol::kTelemetryFieldInternalVoltageMask)) != 0u;
     const size_t payload_size =
-        has_raw_channels
-            ? zss::protocol::kWiredTelemetryPayloadExtendedSize
-            : zss::protocol::kWiredTelemetryPayloadSize;
+        has_service_visibility
+            ? zss::protocol::kWiredTelemetryPayloadDiagnosticSize
+            : (has_raw_channels
+                   ? zss::protocol::kWiredTelemetryPayloadExtendedSize
+                   : zss::protocol::kWiredTelemetryPayloadSize);
     std::vector<uint8_t> out(payload_size, 0);
     writeU32Le(out, 0, payload.status_flags);
     writeU16Le(out, 4, payload.nominal_sample_period_ms);
@@ -101,9 +110,13 @@ std::vector<uint8_t> encodeWiredTelemetryPayload(const TelemetryPayloadV1& paylo
     writeFloat32Le(out, 8, payload.zirconia_output_voltage_v);
     writeFloat32Le(out, 12, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(out, 16, payload.differential_pressure_selected_pa);
-    if (has_raw_channels) {
+    if (has_raw_channels || has_service_visibility) {
         writeFloat32Le(out, 20, payload.differential_pressure_low_range_pa);
         writeFloat32Le(out, 24, payload.differential_pressure_high_range_pa);
+    }
+    if (has_service_visibility) {
+        writeFloat32Le(out, 28, payload.zirconia_ip_voltage_v);
+        writeFloat32Le(out, 32, payload.internal_voltage_v);
     }
     return out;
 }
@@ -113,10 +126,16 @@ std::vector<uint8_t> encodeWiredStatusPayload(const StatusSnapshotPayloadV1& pay
         (payload.telemetry_field_bits &
          (zss::protocol::kTelemetryFieldDifferentialPressureLowRangeMask |
           zss::protocol::kTelemetryFieldDifferentialPressureHighRangeMask)) != 0u;
+    const bool has_service_visibility =
+        (payload.telemetry_field_bits &
+         (zss::protocol::kTelemetryFieldZirconiaIpVoltageMask |
+          zss::protocol::kTelemetryFieldInternalVoltageMask)) != 0u;
     const size_t payload_size =
-        has_raw_channels
-            ? zss::protocol::kWiredStatusSnapshotPayloadExtendedSize
-            : zss::protocol::kWiredStatusSnapshotPayloadSize;
+        has_service_visibility
+            ? zss::protocol::kWiredStatusSnapshotPayloadDiagnosticSize
+            : (has_raw_channels
+                   ? zss::protocol::kWiredStatusSnapshotPayloadExtendedSize
+                   : zss::protocol::kWiredStatusSnapshotPayloadSize);
     std::vector<uint8_t> out(payload_size, 0);
     writeU32Le(out, 0, payload.status_flags);
     writeU16Le(out, 4, payload.nominal_sample_period_ms);
@@ -124,9 +143,13 @@ std::vector<uint8_t> encodeWiredStatusPayload(const StatusSnapshotPayloadV1& pay
     writeFloat32Le(out, 8, payload.zirconia_output_voltage_v);
     writeFloat32Le(out, 12, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(out, 16, payload.differential_pressure_selected_pa);
-    if (has_raw_channels) {
+    if (has_raw_channels || has_service_visibility) {
         writeFloat32Le(out, 20, payload.differential_pressure_low_range_pa);
         writeFloat32Le(out, 24, payload.differential_pressure_high_range_pa);
+    }
+    if (has_service_visibility) {
+        writeFloat32Le(out, 28, payload.zirconia_ip_voltage_v);
+        writeFloat32Le(out, 32, payload.internal_voltage_v);
     }
     return out;
 }

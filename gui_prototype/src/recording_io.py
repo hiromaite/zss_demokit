@@ -24,6 +24,8 @@ CSV_COLUMNS = [
     "heater_power_state",
     "zirconia_output_voltage_v",
     "heater_rtd_resistance_ohm",
+    "zirconia_ip_voltage_v",
+    "internal_voltage_v",
     "differential_pressure_selected_pa",
     "differential_pressure_selected_source",
     "differential_pressure_low_range_pa",

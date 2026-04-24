@@ -519,6 +519,10 @@ else:
   `SDP810 low-range raw` と `SDP811 high-range raw` が no-flow baseline で finite に取得できた
 - GUI 側も offscreen live connection で `flow_detail=SDP811: ... Pa / SDP810: ... Pa` を確認し、
   hardware 組み上げ中の raw channel 可視化導線は成立した
+- service / engineering visibility の first slice として、wired-first diagnostics に
+  `zirconia_ip_voltage_v` と `internal_voltage_v` を追加し、`Device Status` と CSV へ配線する
+- `internal_voltage_v` は optional diagnostic field とし、current board config で internal ADC pin が
+  disabled の場合は unavailable のままでよい
 - operator-facing hardening として、selected differential pressure の source (`SDP810` / `SDP811`) を
   GUI detail と CSV から追えるようにする
 - software planning として、`Flow Verification` は `Settings > Device` から起動する guided wizard として設計する

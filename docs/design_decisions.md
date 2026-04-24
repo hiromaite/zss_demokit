@@ -119,6 +119,7 @@ v1 の解釈:
 - `Flow Rate` のような表示寄りの換算値は GUI 側計算を第一候補とする
 - transport では `selected_differential_pressure_pa` を canonical measurement として送る
 - raw `SDP810 / SDP811` 値は diagnostic field として扱い、transport ごとに availability が違ってよい
+- `zirconia_ip_voltage_v` と `internal_voltage_v` も service / engineering diagnostics として optional field 化し、transport / board config ごとに availability が違ってよい
 - v1 実装では `dummy_selected_dp_orifice_v1` を使い、`selected_differential_pressure_pa -> signed flow_rate_lpm` の placeholder を採用する
 
 placeholder formula:

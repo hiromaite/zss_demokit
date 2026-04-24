@@ -603,6 +603,16 @@ class RecordingController:
             f"{point.zirconia_output_voltage_v:.6f}",
             f"{point.heater_rtd_resistance_ohm:.6f}",
             (
+                f"{point.zirconia_ip_voltage_v:.6f}"
+                if point.zirconia_ip_voltage_v is not None
+                else ""
+            ),
+            (
+                f"{point.internal_voltage_v:.6f}"
+                if point.internal_voltage_v is not None
+                else ""
+            ),
+            (
                 f"{point.differential_pressure_selected_pa:.6f}"
                 if point.differential_pressure_selected_pa is not None
                 else ""
