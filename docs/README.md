@@ -1,18 +1,27 @@
-# New System Planning Docs
+# Documentation Index
 
-このディレクトリは、`zss_demokit` における新システムの要件定義と設計検討の
-初期ドラフトをまとめるための場所です。
+この README は、`docs/` に置かれた `zss_demokit` 関連文書の入口です。
+プロジェクト全体の概要、構成、使い方は repository root の `README.md` を参照してください。
 
-現時点の文書は、以下の既存資産を踏まえた「雛形」です。
+このディレクトリには、要求、設計、実装計画、検証結果、今後の追加機能実験に関する
+詳細文書を置いています。
+
+現在のプロジェクトは初期検討フェーズを越えており、top-level PlatformIO firmware、
+PySide6 GUI prototype、BLE / wired transport、CSV recording、Windows beta packaging、
+flow verification などを実装・修正・検証しながら育てている段階です。一部機能は
+beta 相当の smoke や operator validation を通過しており、文書は設計案だけでなく
+実装済み内容、検証ログ、残タスク、次の実験候補を追跡する役割を持ちます。
+
+文書は、以下の既存資産も参照しつつ更新しています。
 
 - `resource/old_firmware/`: BLE ベースの旧センサデバイス firmware
 - `resource/old_gui/`: 旧 Web GUI
 - `resource/example_gui/`: Python / PySide6 ベースの参考 GUI
 
-GUI レイアウト関連の文書は、`gui_prototype/` に置いた local PySide6 prototype の
-確認結果も反映して更新していく。
-現時点では、approved layout に加えて local settings persistence、configured recording
-directory、partial recovery detection、wired real transport まで反映済みである。
+GUI / firmware / integration 関連の文書は、`gui_prototype/` と top-level firmware の
+実装、local smoke、実機確認、beta packaging の結果を反映して更新します。古い文書には
+実装前の表現が残っている場合があるため、現在地を確認するときは `implementation_backlog_v1.md`、
+`validation_checklist_v1.md`、および実コードを優先して照合します。
 
 ## 文書一覧
 
@@ -46,6 +55,8 @@ directory、partial recovery detection、wired real transport まで反映済み
   - GUI / firmware / integration を含む実装バックログとマイルストーン
 - `firmware_implementation_plan_v1.md`
   - 新 firmware のモジュール分割案、ランタイムモデル、実装順
+- `firmware_worktree_plan_v1.md`
+  - この worktree で firmware 機能追加を進めるための branch 運用、baseline check、次候補
 - `validation_checklist_v1.md`
   - 現段階で実施可能な GUI / firmware / integration 検証項目
 - `windows_beta_smoke_checklist_v1.md`
@@ -66,14 +77,15 @@ directory、partial recovery detection、wired real transport まで反映済み
 11. `flow_verification_plan_v1.md` で guided verification の UX と state model を確認する
 12. `firmware_implementation_plan_v1.md` で firmware の骨格を確認する
 13. `implementation_backlog_v1.md` で着手順と依存関係を確認する
-14. `validation_checklist_v1.md` で現段階の検証対象を確認する
-15. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
+14. `firmware_worktree_plan_v1.md` でこの worktree での branch 運用と次候補を確認する
+15. `validation_checklist_v1.md` で現段階の検証対象を確認する
+16. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
 
 ## 運用メモ
 
-- まずは「新システムで何を満たすべきか」を先に固定する
+- 要求、設計、実装、検証結果は同じ粒度で更新し、文書だけが古く残らないようにする
 - 旧資産の実装詳細は参考にするが、そのまま踏襲する前提にはしない
-- 文書内の `TODO` / `TBD` / `Open Questions` は、以後の設計会話で順次確定する
-- GUI 関連文書は、top bar を持たない main layout、compact launcher、stable column width の prototype feedback を取り込んで更新する
-- GUI 関連文書は、controller layer と `QSettings` ベースの persistence 実装進捗も反映して更新する
+- 文書内の `TODO` / `TBD` / `Open Questions` は、実装・実機検証・operator feedback に応じて順次確定する
+- 古い `現状` セクションは、最新の backlog、validation checklist、実コードと照合して読む
+- GUI 関連文書は、layout、controller layer、`QSettings` persistence、packaging、operator feedback の進捗を反映して更新する
 - shared regression baseline は `test/fixtures/protocol_golden_v1.json` に置き、protocol / CSV 回帰は `tools/protocol_fixture_smoke.py` で確認する
