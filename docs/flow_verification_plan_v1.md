@@ -467,7 +467,7 @@ v1 は JSON ベースを推奨する。
 理由:
 
 - session / stroke / zero check の nested structure を持ちやすい
-- future history view と相性がよい
+- minimal history view と相性がよい
 - review summary をそのまま保持しやすい
 
 ## 16. Controller 責務
@@ -502,7 +502,7 @@ v1 は JSON ベースを推奨する。
 
 - verification session の保存
 - latest result summary の読み出し
-- future history view への拡張点を提供
+- recent session history summary の読み出し
 
 ## 17. 実装順
 
@@ -530,8 +530,7 @@ v1 は JSON ベースを推奨する。
 
 - `start / stop / settle` の初期閾値をどこから始めるか
 - verification result の local storage path をどうするか
-- latest result summary を settings にどう見せるか
-- future に `history` を同じ dialog に入れるか、別 dialog にするか
+- latest result / recent history を settings にどの粒度で見せるか
 
 ## 20. まとめ
 

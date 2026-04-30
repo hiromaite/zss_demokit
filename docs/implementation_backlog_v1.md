@@ -1111,7 +1111,8 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - 詳細設計は `flow_verification_plan_v1.md` を参照する
 - first implementation slice として、controller / dialog / JSON persistence / settings entry をコード化した
 - follow-up slice として、`Show Latest Details` button と latest saved session details dialog を追加し、saved JSON record の operator review 導線を実装した
-- current slice では offscreen smoke により controller-driven capture path、settings entry、dialog skeleton、latest details dialog を確認済みである
+- non-hardware polish slice として、`Show History` button、recent session preview、review guidance message を追加し、PoC session の比較と振り返りをしやすくした
+- current slice では offscreen smoke により controller-driven capture path、settings entry、dialog skeleton、latest details dialog、history dialog を確認済みである
 - next step は hardware 完成後の low / medium / high flow sweep と、bidirectional calibration への移行準備、並行して guided verification implementation の具体化である
 
 完了条件:

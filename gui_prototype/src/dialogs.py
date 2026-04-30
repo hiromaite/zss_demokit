@@ -155,6 +155,7 @@ class SettingsDialog(QDialog):
         connection_identifier: str,
         current_zirconia_voltage_v: float | None = None,
         flow_verification_summary: FlowVerificationLatestSummary | None = None,
+        flow_verification_recent_summaries: list[FlowVerificationLatestSummary] | None = None,
         flow_verification_available: bool = False,
         parent: QWidget | None = None,
     ) -> None:
@@ -164,9 +165,11 @@ class SettingsDialog(QDialog):
         self._connection_identifier = connection_identifier
         self._current_zirconia_voltage_v = current_zirconia_voltage_v
         self._flow_verification_summary = flow_verification_summary
+        self._flow_verification_recent_summaries = flow_verification_recent_summaries or []
         self._flow_verification_available = flow_verification_available
         self._open_flow_verification_requested = False
         self._show_flow_verification_details_requested = False
+        self._show_flow_verification_history_requested = False
         self._pending_o2_air_calibration_voltage_v = settings.o2.air_calibration_voltage_v
         self._pending_o2_calibrated_at_iso = settings.o2.calibrated_at_iso
         self.setWindowTitle("Settings")
@@ -262,6 +265,10 @@ class SettingsDialog(QDialog):
     @property
     def flow_verification_details_requested(self) -> bool:
         return self._show_flow_verification_details_requested
+
+    @property
+    def flow_verification_history_requested(self) -> bool:
+        return self._show_flow_verification_history_requested
 
     def _page_wrapper(self) -> tuple[QWidget, QVBoxLayout]:
         page = QWidget()
@@ -459,6 +466,11 @@ class SettingsDialog(QDialog):
         self.flow_verification_detail_label.setWordWrap(True)
         verification_layout.addWidget(self.flow_verification_detail_label)
 
+        self.flow_verification_history_label = QLabel("")
+        self.flow_verification_history_label.setObjectName("SectionHint")
+        self.flow_verification_history_label.setWordWrap(True)
+        verification_layout.addWidget(self.flow_verification_history_label)
+
         verification_row = QHBoxLayout()
         self.flow_verification_button = QPushButton("Open Guided Verification")
         self.flow_verification_button.setObjectName("PrimaryButton")
@@ -468,8 +480,13 @@ class SettingsDialog(QDialog):
         self.flow_verification_details_button.setObjectName("SecondaryButton")
         self.flow_verification_details_button.setEnabled(self._flow_verification_summary is not None)
         self.flow_verification_details_button.clicked.connect(self._request_flow_verification_details)
+        self.flow_verification_history_button = QPushButton("Show History")
+        self.flow_verification_history_button.setObjectName("SecondaryButton")
+        self.flow_verification_history_button.setEnabled(bool(self._flow_verification_recent_summaries))
+        self.flow_verification_history_button.clicked.connect(self._request_flow_verification_history)
         verification_row.addWidget(self.flow_verification_button)
         verification_row.addWidget(self.flow_verification_details_button)
+        verification_row.addWidget(self.flow_verification_history_button)
         verification_row.addStretch(1)
         verification_layout.addLayout(verification_row)
         layout.addWidget(verification_card)
@@ -569,6 +586,7 @@ class SettingsDialog(QDialog):
     def _refresh_flow_verification_state(self) -> None:
         self.flow_verification_button.setEnabled(self._flow_verification_available)
         self.flow_verification_details_button.setEnabled(self._flow_verification_summary is not None)
+        self.flow_verification_history_button.setEnabled(bool(self._flow_verification_recent_summaries))
         if self._flow_verification_summary is None:
             self.flow_verification_status_label.setText("Last result: not verified")
             if self._flow_verification_available:
@@ -579,6 +597,7 @@ class SettingsDialog(QDialog):
                 self.flow_verification_detail_label.setText(
                     "Connect an expected device to enable the guided workflow."
                 )
+            self.flow_verification_history_label.setText("Recent sessions: none")
             return
 
         summary = self._flow_verification_summary
@@ -590,6 +609,23 @@ class SettingsDialog(QDialog):
             f"Exhalation: {summary.exhalation_result or '--'} | "
             f"Inhalation: {summary.inhalation_result or '--'}"
         )
+        if not self._flow_verification_recent_summaries:
+            self.flow_verification_history_label.setText("Recent sessions: none")
+            return
+        preview_lines = []
+        for item in self._flow_verification_recent_summaries[:3]:
+            counts = []
+            if item.advisory_count:
+                counts.append(f"adv {item.advisory_count}")
+            if item.out_of_target_count:
+                counts.append(f"oot {item.out_of_target_count}")
+            if item.incomplete_count:
+                counts.append(f"inc {item.incomplete_count}")
+            suffix = "" if not counts else f" [{', '.join(counts)}]"
+            preview_lines.append(f"{item.completed_at_iso}: {item.result}{suffix}")
+        self.flow_verification_history_label.setText(
+            "Recent sessions:\n" + "\n".join(preview_lines)
+        )
 
     def _request_flow_verification(self) -> None:
         self._open_flow_verification_requested = True
@@ -597,6 +633,10 @@ class SettingsDialog(QDialog):
 
     def _request_flow_verification_details(self) -> None:
         self._show_flow_verification_details_requested = True
+        self.accept()
+
+    def _request_flow_verification_history(self) -> None:
+        self._show_flow_verification_history_requested = True
         self.accept()
 
 
@@ -710,6 +750,112 @@ class FlowVerificationDetailsDialog(QDialog):
         layout.addWidget(button_box)
 
 
+class FlowVerificationHistoryDialog(QDialog):
+    def __init__(
+        self,
+        summaries: list[FlowVerificationLatestSummary],
+        persistence: FlowVerificationPersistence,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._summaries = summaries
+        self._persistence = persistence
+        self.setWindowTitle("Flow Verification History")
+        self.resize(980, 720)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        layout.addWidget(
+            _dialog_header(
+                "Flow Verification History",
+                "Review recent verification sessions and reopen a saved session summary when you need to compare PoC runs.",
+            )
+        )
+
+        shell = QHBoxLayout()
+        shell.setSpacing(14)
+        layout.addLayout(shell, 1)
+
+        self.history_list = QListWidget()
+        shell.addWidget(self.history_list, 0)
+
+        detail_card = QFrame()
+        detail_card.setObjectName("SurfaceCard")
+        detail_layout = QVBoxLayout(detail_card)
+        self.history_summary_label = QLabel("Select a session to review its summary.")
+        self.history_summary_label.setObjectName("SectionHint")
+        self.history_summary_label.setWordWrap(True)
+        detail_layout.addWidget(self.history_summary_label)
+
+        self.history_note_label = QLabel("--")
+        self.history_note_label.setObjectName("SectionHint")
+        self.history_note_label.setWordWrap(True)
+        detail_layout.addWidget(self.history_note_label)
+
+        self.open_selected_button = QPushButton("Open Selected Details")
+        self.open_selected_button.setObjectName("PrimaryButton")
+        self.open_selected_button.setEnabled(False)
+        self.open_selected_button.clicked.connect(self._open_selected_details)
+        detail_layout.addWidget(self.open_selected_button, 0)
+        detail_layout.addStretch(1)
+        shell.addWidget(detail_card, 1)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        _style_dialog_buttons(button_box)
+        button_box.accepted.connect(self.accept)
+        layout.addWidget(button_box)
+
+        self.history_list.currentRowChanged.connect(self._refresh_selected_summary)
+        self._populate_history()
+
+    def _populate_history(self) -> None:
+        for summary in self._summaries:
+            counts = []
+            if summary.advisory_count:
+                counts.append(f"adv {summary.advisory_count}")
+            if summary.out_of_target_count:
+                counts.append(f"oot {summary.out_of_target_count}")
+            if summary.incomplete_count:
+                counts.append(f"inc {summary.incomplete_count}")
+            suffix = "" if not counts else f" [{', '.join(counts)}]"
+            self.history_list.addItem(f"{summary.completed_at_iso} | {summary.result}{suffix}")
+        if self.history_list.count() > 0:
+            self.history_list.setCurrentRow(0)
+
+    def _refresh_selected_summary(self, index: int) -> None:
+        if index < 0 or index >= len(self._summaries):
+            self.history_summary_label.setText("Select a session to review its summary.")
+            self.history_note_label.setText("--")
+            self.open_selected_button.setEnabled(False)
+            return
+        summary = self._summaries[index]
+        self.history_summary_label.setText(
+            f"Overall: {summary.result}\n"
+            f"Exhalation: {summary.exhalation_result or '--'}\n"
+            f"Inhalation: {summary.inhalation_result or '--'}\n"
+            f"Criterion: {summary.criterion_version or '--'}\n"
+            f"Path: {summary.path or '--'}"
+        )
+        self.history_note_label.setText(
+            "Note preview: " + (summary.note_preview or "--")
+        )
+        self.open_selected_button.setEnabled(True)
+
+    def _open_selected_details(self) -> None:
+        index = self.history_list.currentRow()
+        if index < 0 or index >= len(self._summaries):
+            return
+        summary = self._summaries[index]
+        path = Path(summary.path) if summary.path else None
+        session = self._persistence.load_session(path)
+        if session is None:
+            return
+        dialog = FlowVerificationDetailsDialog(session, session_path=path, parent=self)
+        dialog.exec()
+
+
 class FlowVerificationDialog(QDialog):
     def __init__(
         self,
@@ -799,6 +945,8 @@ class FlowVerificationDialog(QDialog):
         self.result_peak_label = QLabel("--")
         self.result_duration_label = QLabel("--")
         self.result_source_label = QLabel("--")
+        self.result_warning_label = QLabel("--")
+        self.result_warning_label.setWordWrap(True)
         result_rows = [
             ("Result", self.result_status_label),
             ("Recovered volume", self.result_volume_label),
@@ -806,6 +954,7 @@ class FlowVerificationDialog(QDialog):
             ("Peak flow", self.result_peak_label),
             ("Stroke duration", self.result_duration_label),
             ("Dominant source", self.result_source_label),
+            ("Warnings", self.result_warning_label),
         ]
         for row_index, (name, label) in enumerate(result_rows):
             result_layout.addWidget(QLabel(name), row_index, 0)
@@ -822,6 +971,9 @@ class FlowVerificationDialog(QDialog):
         self.review_exhalation_label = QLabel("--")
         self.review_inhalation_label = QLabel("--")
         self.review_overall_label = QLabel("--")
+        self.review_guidance_label = QLabel("--")
+        self.review_guidance_label.setObjectName("SectionHint")
+        self.review_guidance_label.setWordWrap(True)
         for row_index, (name, label) in enumerate(
             [
                 ("Zero Check", self.review_zero_label),
@@ -833,6 +985,7 @@ class FlowVerificationDialog(QDialog):
             summary_grid.addWidget(QLabel(name), row_index, 0)
             summary_grid.addWidget(label, row_index, 1)
         review_layout.addLayout(summary_grid)
+        review_layout.addWidget(self.review_guidance_label)
 
         self.review_rows_labels: dict[str, dict[str, QLabel]] = {}
         review_table = QGridLayout()
@@ -997,6 +1150,9 @@ class FlowVerificationDialog(QDialog):
                 if current_result.selected_dp_mean_pa is None
                 else f"Selected mean: {current_result.selected_dp_mean_pa:+0.3f} Pa"
             )
+            self.result_warning_label.setText(
+                "--" if not current_result.warning_flags else ", ".join(current_result.warning_flags)
+            )
             return
 
         if isinstance(current_result, VerificationStrokeResult):
@@ -1006,6 +1162,9 @@ class FlowVerificationDialog(QDialog):
             self.result_peak_label.setText(f"{current_result.peak_flow_lps:0.3f} L/s")
             self.result_duration_label.setText(f"{current_result.stroke_duration_s:0.2f} s")
             self.result_source_label.setText(current_result.dominant_source or "--")
+            self.result_warning_label.setText(
+                "--" if not current_result.warning_flags else ", ".join(current_result.warning_flags)
+            )
             return
 
         for label in (
@@ -1015,6 +1174,7 @@ class FlowVerificationDialog(QDialog):
             self.result_peak_label,
             self.result_duration_label,
             self.result_source_label,
+            self.result_warning_label,
         ):
             label.setText("--")
 
@@ -1027,6 +1187,7 @@ class FlowVerificationDialog(QDialog):
         self.review_exhalation_label.setText(str(snapshot["exhalation_result"]))
         self.review_inhalation_label.setText(str(snapshot["inhalation_result"]))
         self.review_overall_label.setText(str(snapshot["overall_result"]))
+        self.review_guidance_label.setText(str(snapshot["review_guidance"]))
 
         for row in snapshot["review_rows"]:
             labels = self.review_rows_labels.get(row["step_id"])

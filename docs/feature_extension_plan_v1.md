@@ -532,6 +532,7 @@ else:
 - 詳細設計は `flow_verification_plan_v1.md` を参照する
 - first implementation slice として、`FlowVerificationController`, `FlowVerificationDialog`, JSON persistence, `Settings > Device` entry を追加した
 - follow-up slice として、`Show Latest Details` 導線と latest saved session summary dialog を追加し、saved JSON を operator が見返せるようにした
+- non-hardware polish として、`Show History` 導線、recent verification summary preview、review guidance message を追加し、PoC セッションの比較と振り返りをしやすくした
 - offscreen smoke により controller-only capture path、settings entry、dialog skeleton、latest details dialog の起動を確認した
 
 ## 9. まとめて実装すべき単位

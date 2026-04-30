@@ -38,7 +38,13 @@ from controllers import (
     TelemetrySessionStats,
     WarningController,
 )
-from dialogs import FlowVerificationDetailsDialog, FlowVerificationDialog, ModeSwitchDialog, SettingsDialog
+from dialogs import (
+    FlowVerificationDetailsDialog,
+    FlowVerificationDialog,
+    FlowVerificationHistoryDialog,
+    ModeSwitchDialog,
+    SettingsDialog,
+)
 from flow_verification import FlowVerificationController, FlowVerificationPersistence
 from mock_backend import MockBackend, TelemetryPoint
 from mock_backend import PREFERRED_BLE_NAME_PREFIXES, PREFERRED_WIRED_PORT_TOKENS
@@ -1167,6 +1173,7 @@ class MainWindow(QMainWindow):
             connection_identifier=self.ui_state.connection.identifier,
             current_zirconia_voltage_v=current_zirconia_voltage_v,
             flow_verification_summary=self._latest_flow_verification_summary(),
+            flow_verification_recent_summaries=self._recent_flow_verification_summaries(),
             flow_verification_available=self._has_expected_connected_device(),
             parent=self,
         )
@@ -1177,8 +1184,12 @@ class MainWindow(QMainWindow):
         requested_mode = dialog.requested_mode
         flow_verification_requested = dialog.flow_verification_requested
         flow_verification_details_requested = dialog.flow_verification_details_requested
+        flow_verification_history_requested = dialog.flow_verification_history_requested
         previous_o2_air_calibration_voltage_v = self.app_settings.o2.air_calibration_voltage_v
         previous_o2_calibrated_at_iso = self.app_settings.o2.calibrated_at_iso
+        if flow_verification_history_requested:
+            self._open_flow_verification_history_dialog()
+            return
         if flow_verification_details_requested:
             self._open_flow_verification_details_dialog()
             return
@@ -1264,6 +1275,9 @@ class MainWindow(QMainWindow):
     def _latest_flow_verification_session(self):
         return self._flow_verification_persistence().load_latest_session()
 
+    def _recent_flow_verification_summaries(self):
+        return self._flow_verification_persistence().list_recent_summaries(limit=5)
+
     def _open_flow_verification_dialog(self) -> None:
         if not self._has_expected_connected_device():
             self._append_log("warn", "Connect to an expected device before starting flow verification.")
@@ -1308,6 +1322,15 @@ class MainWindow(QMainWindow):
         summary = self._latest_flow_verification_summary()
         session_path = Path(summary.path) if summary is not None and summary.path else None
         dialog = FlowVerificationDetailsDialog(session, session_path=session_path, parent=self)
+        dialog.exec()
+
+    def _open_flow_verification_history_dialog(self) -> None:
+        persistence = self._flow_verification_persistence()
+        summaries = persistence.list_recent_summaries(limit=12)
+        if not summaries:
+            self._append_log("warn", "No saved flow verification history is available yet.")
+            return
+        dialog = FlowVerificationHistoryDialog(summaries, persistence, parent=self)
         dialog.exec()
 
     def _clear_plot_buffers(self) -> None:

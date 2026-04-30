@@ -57,6 +57,7 @@
 | `GUI-VAL-023` | Flow verification controller/dialog smoke | guided verification controller と dialog skeleton が起動し、basic capture/save path が崩れない | `PASS` | offscreen smoke で controller-only capture path による JSON save と `FlowVerificationDialog` 起動を確認 |
 | `GUI-VAL-024` | Flow verification latest details smoke | latest saved verification session を `Settings > Device` から開いて review できる | `PASS` | offscreen smoke で saved JSON を読み込み、`Show Latest Details` button と `FlowVerificationDetailsDialog` 起動を確認 |
 | `GUI-VAL-025` | Service visibility GUI smoke | wired-first diagnostic fields が GUI `Device Status` と CSV に配線されても UI が破綻しない | `PASS` | `python3.12 -m compileall gui_prototype/src`、`tools/protocol_fixture_smoke.py`、`tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` により compile / fixture / offscreen GUI session が継続成立することを確認 |
+| `GUI-VAL-026` | Flow verification history/review polish smoke | recent session preview、history dialog、review guidance が起動し、saved JSON を比較できる | `PASS` | offscreen smoke で `FlowVerificationPersistence.list_recent_summaries()`、`SettingsDialog` の `Show History`、`FlowVerificationHistoryDialog`、`FlowVerificationDetailsDialog` を確認 |
 
 ## 5. Firmware Checklist
 
