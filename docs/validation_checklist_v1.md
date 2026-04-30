@@ -59,6 +59,9 @@
 | `GUI-VAL-025` | Service visibility GUI smoke | wired-first diagnostic fields が GUI `Device Status` と CSV に配線されても UI が破綻しない | `PASS` | `python3.12 -m compileall gui_prototype/src`、`tools/protocol_fixture_smoke.py`、`tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` により compile / fixture / offscreen GUI session が継続成立することを確認 |
 | `GUI-VAL-026` | Flow verification history/review polish smoke | recent session preview、history dialog、review guidance が起動し、saved JSON を比較できる | `PASS` | offscreen smoke で `FlowVerificationPersistence.list_recent_summaries()`、`SettingsDialog` の `Show History`、`FlowVerificationHistoryDialog`、`FlowVerificationDetailsDialog` を確認 |
 | `GUI-VAL-027` | Disconnect clears plot buffer | 明示的な device disconnect 後に古い plot data が残らず、再接続後の plot がクリーンに始まる | `PASS` | offscreen smoke で telemetry 受信後に `_on_connection_changed(False, ...)` を呼び、plot buffer と metric card が `--` / empty へ戻ることを確認 |
+| `GUI-VAL-028` | Cross-resolution layout smoke | Windows / low-resolution / narrow window で left/right scroll、plot height、log height、splitter が破綻しない | `TODO` | `system_usability_review_v1.md` の `P1-UX-003`。right column plot splitter は local macOS accept だが、別環境で再確認する |
+| `GUI-VAL-029` | Plot pause and series visibility smoke | acquisition / recording を止めずに plot freeze と series on/off ができる | `TODO` | `system_usability_review_v1.md` の `P1-UX-002`。実装後に offscreen と手動操作で確認する |
+| `GUI-VAL-030` | Engineering tools navigation smoke | Settings が肥大化せず、Flow Verification / Characterization / diagnostics へ迷わず到達できる | `TODO` | `system_usability_review_v1.md` の `P1-UX-001`。Operator settings と Engineering / Tools の分離後に確認する |
 
 ## 5. Firmware Checklist
 
@@ -81,6 +84,7 @@
 | `FW-VAL-015` | Bundle A regression smoke | physical button / ADS1115 ch0 / WS2812 parity 追加後も wired path が退行しない | `PASS` | `pio run`, upload, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` を実施し、capabilities / status / telemetry / `Pump ON/OFF` / command error event が継続動作することを確認 |
 | `FW-VAL-016` | Differential pressure telemetry publication | dual-SDP selected differential pressure が transport payload に反映される | `PASS` | `pio run`, upload, `tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 6`, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` により `telemetry_field_bits=15` と finite `differential_pressure_selected_pa` を確認 |
 | `FW-VAL-017` | Service visibility payload publication | wired capabilities / payload が `zirconia_ip_voltage_v` と optional `internal_voltage_v` を壊さず扱える | `PASS` | `pio run`, upload, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` により serial capabilities `telemetry_field_bits=67` を確認。current board config では `internal_voltage_v` unavailable のまま扱えることも確認 |
+| `FW-VAL-018` | Pump / heater safety interlock regression | pump OFF 時に heater が OFF へ落ち、pump OFF 中の heater ON 指令が拒否される | `TODO` | `CommandProcessor` 上の interlock 実装を今後の regression smoke として固定する |
 
 ## 6. Integration Checklist
 
@@ -102,8 +106,9 @@
 | `INT-VAL-014` | Wired flow probe baseline | wired transport 上で selected differential pressure と derived flow rate を集計できる | `PASS` | `tools/wired_flow_probe.py --port /dev/cu.usbmodem4101 --duration-s 4` で `telemetry_field_bits=63`, advertised differential pressure, finite `selected / SDP810 / SDP811` no-flow baseline を確認 |
 | `INT-VAL-015` | Wired flow operator sweep | low / medium / high flow で transport-level flow probe が handoff を観測できる | `TODO` | `tools/wired_flow_probe.py` を用いた user-operated flow sweep を次回実施 |
 | `INT-VAL-016` | Service visibility wired integration | wired 実機で service visibility wiring 後も command / recording / GUI session が退行しない | `PASS` | `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` と `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` を実施し、`wired_serial_smoke_ok` と `gui_wired_session_probe_ok` を確認 |
-| `GUI-VAL-022` | Flow card raw SDP visibility | wired differential pressure raw values が flow metric card に表示される | `PASS` | offscreen live connection で `flow_detail=SDP811: -0.05 Pa / SDP810: -0.05 Pa`, `detail_visible=True` を確認 |
-| `GUI-VAL-023` | Flow characterization PoC smoke | raw SDP810 / SDP811 capture wizard が設定画面から生成でき、JSON/CSV保存と解析summaryが動く | `PASS` | `flow_characterization_dialog_smoke_ok`、controller fake telemetry capture、`tools/flow_characterization_analyze.py` smoke を確認 |
+| `INT-VAL-017` | Flow card raw SDP visibility | wired differential pressure raw values が flow metric card に表示される | `PASS` | offscreen live connection で `flow_detail=SDP811: -0.05 Pa / SDP810: -0.05 Pa`, `detail_visible=True` を確認 |
+| `INT-VAL-018` | Flow characterization PoC smoke | raw SDP810 / SDP811 capture wizard が設定画面から生成でき、JSON/CSV保存と解析summaryが動く | `PASS` | `flow_characterization_dialog_smoke_ok`、controller fake telemetry capture、`tools/flow_characterization_analyze.py` smoke を確認 |
+| `INT-VAL-019` | Optional diagnostic availability UX | BLE / Wired で提供される diagnostic fields の差が GUI と CSV 上で誤解なく扱われる | `TODO` | wired-first diagnostics と BLE unavailable fields を operator-readable に表示する方針を確認する |
 
 ## 7. 実施ログ
 

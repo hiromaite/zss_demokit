@@ -249,3 +249,17 @@ flow_rate_lpm =
 - `Retry`, `Accept and continue`, `Skip` を全 step の標準操作として許可する
 - dual-SDP 固有の挙動は `selected source`, `source switch count`, raw SDP values を diagnostics として見える化する
 - formal model calibration, coefficient fitting, strict compliance gate は後続フェーズへ分離する
+
+## 23. Operator Surface and Engineering Tools
+
+- 通常測定で使う surface は、connection、pump、recording、metric cards、plot、warning summary に絞る
+- raw SDP values、diagnostic bits、service voltages、flow characterization、verification history などは `Engineering / Tools` 側に寄せる
+- engineering 情報は隠しすぎないが、通常操作の primary path を圧迫しない
+- BLE / Wired で availability が異なる optional diagnostics は、空欄や `--` だけでなく「その transport では未提供」と分かる表示へ近づける
+- Settings は単なる preference dialog として肥大化させず、calibration / verification / characterization は tool workflow として整理する
+
+理由:
+
+- beta2 相当までに機能が増え、Settings 内に operator action と engineering action が混在し始めている
+- 現場 operator は短い導線で測定したい一方、hardware bring-up では raw diagnostics と履歴比較が重要になる
+- 2 つの利用者像を同じ画面密度で扱うと、通常操作の迷いと diagnostic 情報の不足が同時に起きやすい
