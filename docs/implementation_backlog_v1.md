@@ -1113,7 +1113,11 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - follow-up slice として、`Show Latest Details` button と latest saved session details dialog を追加し、saved JSON record の operator review 導線を実装した
 - non-hardware polish slice として、`Show History` button、recent session preview、review guidance message を追加し、PoC session の比較と振り返りをしやすくした
 - current slice では offscreen smoke により controller-driven capture path、settings entry、dialog skeleton、latest details dialog、history dialog を確認済みである
-- next step は hardware 完成後の low / medium / high flow sweep と、bidirectional calibration への移行準備、並行して guided verification implementation の具体化である
+- hardware 完成後の low / medium / high flow sweep は、まず開発用 `Flow Characterization (PoC)` wizard で raw `SDP810 / SDP811 / selected` を保存し、
+  センサー極性と `SDP810` abs pressure の handoff review band (`90-110 Pa`) を判断する入力データを作る
+- `Flow Characterization (PoC)` は `Zero Baseline`, `Small Exhale`, `Small Inhale`, `Maximum Exhale`, `Maximum Inhale` を手動 capture し、
+  JSON metadata と sample-level CSV を保存する方針にする
+- next step は実機で characterization wizard を wired 優先で走らせ、得られた raw response から bidirectional calibration と selector tuning へ移行することである
 
 完了条件:
 

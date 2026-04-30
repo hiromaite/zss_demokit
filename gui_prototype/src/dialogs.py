@@ -28,6 +28,14 @@ from PySide6.QtWidgets import (
 
 from app_metadata import APP_NAME
 from app_state import AppSettings
+from flow_characterization import (
+    FLOW_CHARACTERIZATION_STEPS,
+    FlowCharacterizationAttempt,
+    FlowCharacterizationAttemptSummary,
+    FlowCharacterizationController,
+    FlowCharacterizationPersistence,
+    FlowCharacterizationSaveResult,
+)
 from flow_verification import (
     FLOW_VERIFICATION_STEPS,
     FlowVerificationController,
@@ -157,6 +165,7 @@ class SettingsDialog(QDialog):
         flow_verification_summary: FlowVerificationLatestSummary | None = None,
         flow_verification_recent_summaries: list[FlowVerificationLatestSummary] | None = None,
         flow_verification_available: bool = False,
+        flow_characterization_available: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -167,9 +176,11 @@ class SettingsDialog(QDialog):
         self._flow_verification_summary = flow_verification_summary
         self._flow_verification_recent_summaries = flow_verification_recent_summaries or []
         self._flow_verification_available = flow_verification_available
+        self._flow_characterization_available = flow_characterization_available
         self._open_flow_verification_requested = False
         self._show_flow_verification_details_requested = False
         self._show_flow_verification_history_requested = False
+        self._open_flow_characterization_requested = False
         self._pending_o2_air_calibration_voltage_v = settings.o2.air_calibration_voltage_v
         self._pending_o2_calibrated_at_iso = settings.o2.calibrated_at_iso
         self.setWindowTitle("Settings")
@@ -269,6 +280,10 @@ class SettingsDialog(QDialog):
     @property
     def flow_verification_history_requested(self) -> bool:
         return self._show_flow_verification_history_requested
+
+    @property
+    def flow_characterization_requested(self) -> bool:
+        return self._open_flow_characterization_requested
 
     def _page_wrapper(self) -> tuple[QWidget, QVBoxLayout]:
         page = QWidget()
@@ -491,7 +506,36 @@ class SettingsDialog(QDialog):
         verification_layout.addLayout(verification_row)
         layout.addWidget(verification_card)
 
+        characterization_card = QFrame()
+        characterization_card.setObjectName("SurfaceCard")
+        characterization_layout = QVBoxLayout(characterization_card)
+        characterization_title = QLabel("Flow Characterization (PoC)")
+        characterization_title.setObjectName("SectionTitle")
+        characterization_hint = QLabel(
+            "Development-only guided capture for raw SDP810 / SDP811 polarity and range handoff analysis."
+        )
+        characterization_hint.setObjectName("SectionHint")
+        characterization_hint.setWordWrap(True)
+        characterization_layout.addWidget(characterization_title)
+        characterization_layout.addWidget(characterization_hint)
+
+        self.flow_characterization_status_label = QLabel("")
+        self.flow_characterization_status_label.setObjectName("SectionHint")
+        self.flow_characterization_status_label.setWordWrap(True)
+        characterization_layout.addWidget(self.flow_characterization_status_label)
+
+        characterization_row = QHBoxLayout()
+        self.flow_characterization_button = QPushButton("Open Characterization PoC")
+        self.flow_characterization_button.setObjectName("PrimaryButton")
+        self.flow_characterization_button.setEnabled(self._flow_characterization_available)
+        self.flow_characterization_button.clicked.connect(self._request_flow_characterization)
+        characterization_row.addWidget(self.flow_characterization_button)
+        characterization_row.addStretch(1)
+        characterization_layout.addLayout(characterization_row)
+        layout.addWidget(characterization_card)
+
         self._refresh_flow_verification_state()
+        self._refresh_flow_characterization_state()
         layout.addStretch(1)
         return page
 
@@ -638,6 +682,348 @@ class SettingsDialog(QDialog):
     def _request_flow_verification_history(self) -> None:
         self._show_flow_verification_history_requested = True
         self.accept()
+
+    def _refresh_flow_characterization_state(self) -> None:
+        self.flow_characterization_button.setEnabled(self._flow_characterization_available)
+        if self._flow_characterization_available:
+            self.flow_characterization_status_label.setText(
+                "An expected connected device is available. Wired mode is recommended for raw dual-SDP capture."
+            )
+        else:
+            self.flow_characterization_status_label.setText(
+                "Connect an expected device to enable the characterization PoC."
+            )
+
+    def _request_flow_characterization(self) -> None:
+        self._open_flow_characterization_requested = True
+        self.accept()
+
+
+class FlowCharacterizationDialog(QDialog):
+    def __init__(
+        self,
+        controller: FlowCharacterizationController,
+        persistence: FlowCharacterizationPersistence,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self.controller = controller
+        self.persistence = persistence
+        self.saved_session_result: FlowCharacterizationSaveResult | None = None
+        self.setWindowTitle("Flow Characterization PoC")
+        self.resize(940, 780)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        self.header_title = QLabel("Flow Characterization PoC")
+        self.header_title.setObjectName("SectionTitle")
+        self.header_subtitle = QLabel("")
+        self.header_subtitle.setObjectName("SectionHint")
+        self.header_subtitle.setWordWrap(True)
+        self.progress_label = QLabel("")
+        self.progress_label.setObjectName("SectionHint")
+        self.section_badge = QLabel("")
+        self.section_badge.setObjectName("RecordingStateBadge")
+        header = QFrame()
+        header.setObjectName("AccentCard")
+        header_layout = QVBoxLayout(header)
+        badge_row = QHBoxLayout()
+        badge_row.addWidget(self.section_badge, 0)
+        badge_row.addStretch(1)
+        header_layout.addWidget(self.header_title)
+        header_layout.addWidget(self.header_subtitle)
+        header_layout.addWidget(self.progress_label)
+        header_layout.addLayout(badge_row)
+        layout.addWidget(header)
+
+        self.instruction_card = QFrame()
+        self.instruction_card.setObjectName("SurfaceCard")
+        instruction_layout = QVBoxLayout(self.instruction_card)
+        self.instruction_label = QLabel("")
+        self.instruction_label.setObjectName("SectionHint")
+        self.instruction_label.setWordWrap(True)
+        self.message_label = QLabel("")
+        self.message_label.setObjectName("SectionHint")
+        self.message_label.setWordWrap(True)
+        instruction_layout.addWidget(self.instruction_label)
+        instruction_layout.addWidget(self.message_label)
+        layout.addWidget(self.instruction_card)
+
+        self.live_card = QFrame()
+        self.live_card.setObjectName("SurfaceCard")
+        live_layout = QGridLayout(self.live_card)
+        live_layout.setHorizontalSpacing(10)
+        live_layout.setVerticalSpacing(8)
+        self.capture_state_label = QLabel("--")
+        self.live_sample_count_label = QLabel("--")
+        self.live_flow_label = QLabel("--")
+        self.live_source_label = QLabel("--")
+        self.live_selected_dp_label = QLabel("--")
+        self.live_sdp811_label = QLabel("--")
+        self.live_sdp810_label = QLabel("--")
+        live_rows = [
+            ("Capture state", self.capture_state_label),
+            ("Current samples", self.live_sample_count_label),
+            ("Derived flow", self.live_flow_label),
+            ("Selected source", self.live_source_label),
+            ("Selected DP", self.live_selected_dp_label),
+            ("SDP811", self.live_sdp811_label),
+            ("SDP810", self.live_sdp810_label),
+        ]
+        for row_index, (name, label) in enumerate(live_rows):
+            live_layout.addWidget(QLabel(name), row_index, 0)
+            live_layout.addWidget(label, row_index, 1)
+        layout.addWidget(self.live_card)
+
+        self.result_card = QFrame()
+        self.result_card.setObjectName("SurfaceCard")
+        result_layout = QGridLayout(self.result_card)
+        result_layout.setHorizontalSpacing(10)
+        result_layout.setVerticalSpacing(8)
+        self.result_status_label = QLabel("--")
+        self.result_duration_label = QLabel("--")
+        self.result_selected_label = QLabel("--")
+        self.result_sdp810_label = QLabel("--")
+        self.result_sdp811_label = QLabel("--")
+        self.result_polarity_label = QLabel("--")
+        self.result_sources_label = QLabel("--")
+        self.result_sources_label.setWordWrap(True)
+        result_rows = [
+            ("Attempt", self.result_status_label),
+            ("Duration", self.result_duration_label),
+            ("Selected peak abs", self.result_selected_label),
+            ("SDP810 peak abs", self.result_sdp810_label),
+            ("SDP811 peak abs", self.result_sdp811_label),
+            ("Polarity", self.result_polarity_label),
+            ("Selected source counts", self.result_sources_label),
+        ]
+        for row_index, (name, label) in enumerate(result_rows):
+            result_layout.addWidget(QLabel(name), row_index, 0)
+            result_layout.addWidget(label, row_index, 1)
+        layout.addWidget(self.result_card)
+
+        self.review_card = QFrame()
+        self.review_card.setObjectName("SurfaceCard")
+        review_layout = QVBoxLayout(self.review_card)
+        self.review_guidance_label = QLabel("--")
+        self.review_guidance_label.setObjectName("SectionHint")
+        self.review_guidance_label.setWordWrap(True)
+        review_layout.addWidget(self.review_guidance_label)
+
+        self.review_rows_labels: dict[str, dict[str, QLabel]] = {}
+        review_table = QGridLayout()
+        review_table.setHorizontalSpacing(10)
+        review_table.setVerticalSpacing(6)
+        headers = ["Step", "Status", "Samples", "Selected", "SDP810", "SDP811", "Polarity"]
+        for column_index, header_text in enumerate(headers):
+            header_label = QLabel(header_text)
+            header_label.setObjectName("SectionTitle")
+            review_table.addWidget(header_label, 0, column_index)
+        row_index = 1
+        for step in FLOW_CHARACTERIZATION_STEPS:
+            if step.kind != "capture":
+                continue
+            review_table.addWidget(QLabel(step.title), row_index, 0)
+            status_value = QLabel("--")
+            samples_value = QLabel("--")
+            selected_value = QLabel("--")
+            sdp810_value = QLabel("--")
+            sdp811_value = QLabel("--")
+            polarity_value = QLabel("--")
+            review_table.addWidget(status_value, row_index, 1)
+            review_table.addWidget(samples_value, row_index, 2)
+            review_table.addWidget(selected_value, row_index, 3)
+            review_table.addWidget(sdp810_value, row_index, 4)
+            review_table.addWidget(sdp811_value, row_index, 5)
+            review_table.addWidget(polarity_value, row_index, 6)
+            self.review_rows_labels[step.step_id] = {
+                "status": status_value,
+                "samples": samples_value,
+                "selected": selected_value,
+                "sdp810": sdp810_value,
+                "sdp811": sdp811_value,
+                "polarity": polarity_value,
+            }
+            row_index += 1
+        review_layout.addLayout(review_table)
+
+        note_title = QLabel("Operator Note")
+        note_title.setObjectName("SectionTitle")
+        self.note_edit = QPlainTextEdit()
+        self.note_edit.setPlaceholderText("Optional note for this characterization session")
+        self.note_edit.setMinimumHeight(90)
+        review_layout.addWidget(note_title)
+        review_layout.addWidget(self.note_edit)
+        layout.addWidget(self.review_card)
+
+        button_row = QHBoxLayout()
+        self.back_button = QPushButton("Back")
+        self.back_button.setObjectName("SecondaryButton")
+        self.start_button = QPushButton("Start Capture")
+        self.start_button.setObjectName("PrimaryButton")
+        self.finish_button = QPushButton("Finish Step")
+        self.finish_button.setObjectName("PrimaryButton")
+        self.retry_button = QPushButton("Retry")
+        self.retry_button.setObjectName("SecondaryButton")
+        self.continue_button = QPushButton("Accept and continue")
+        self.continue_button.setObjectName("PrimaryButton")
+        self.skip_button = QPushButton("Skip")
+        self.skip_button.setObjectName("SecondaryButton")
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setObjectName("SecondaryButton")
+        self.save_button = QPushButton("Save Characterization")
+        self.save_button.setObjectName("PrimaryButton")
+        button_row.addWidget(self.back_button)
+        button_row.addWidget(self.start_button)
+        button_row.addWidget(self.finish_button)
+        button_row.addWidget(self.retry_button)
+        button_row.addWidget(self.continue_button)
+        button_row.addWidget(self.skip_button)
+        button_row.addStretch(1)
+        button_row.addWidget(self.cancel_button)
+        button_row.addWidget(self.save_button)
+        layout.addLayout(button_row)
+
+        self.back_button.clicked.connect(self.controller.go_back)
+        self.start_button.clicked.connect(self.controller.start_capture)
+        self.finish_button.clicked.connect(self.controller.finish_capture)
+        self.retry_button.clicked.connect(self.controller.retry_step)
+        self.continue_button.clicked.connect(self.controller.continue_step)
+        self.skip_button.clicked.connect(self.controller.skip_step)
+        self.cancel_button.clicked.connect(self.reject)
+        self.save_button.clicked.connect(self._save_session)
+        self.controller.updated.connect(self._refresh)
+        self.controller.session_saved.connect(self._on_session_saved)
+        self._refresh()
+
+    def _save_session(self) -> None:
+        self.controller.set_operator_note(self.note_edit.toPlainText())
+        self.saved_session_result = self.controller.save_session(self.persistence)
+        self.accept()
+
+    def _on_session_saved(self, result: object) -> None:
+        if isinstance(result, FlowCharacterizationSaveResult):
+            self.saved_session_result = result
+
+    def _refresh(self) -> None:
+        snapshot = self.controller.snapshot()
+        step = snapshot["step"]
+        self.header_title.setText(step.title)
+        self.header_subtitle.setText(step.instruction)
+        self.progress_label.setText(f"Step {snapshot['step_index']} of {snapshot['step_total']}")
+        self.section_badge.setText(step.section)
+        self.instruction_label.setText(step.instruction)
+        self.message_label.setText(snapshot["message"])
+
+        self.capture_state_label.setText(str(snapshot["capture_state"]))
+        self.live_sample_count_label.setText(str(snapshot["capturing_sample_count"]))
+        live_flow = snapshot["live_flow_lpm"]
+        self.live_flow_label.setText("--" if live_flow is None else f"{live_flow:+0.3f} L/min")
+        self.live_source_label.setText(snapshot["live_selected_source"] or "--")
+        self.live_selected_dp_label.setText(
+            "--"
+            if snapshot["live_selected_dp_pa"] is None
+            else f"{snapshot['live_selected_dp_pa']:+0.3f} Pa"
+        )
+        self.live_sdp811_label.setText(
+            "--"
+            if snapshot["live_high_range_pa"] is None
+            else f"{snapshot['live_high_range_pa']:+0.3f} Pa"
+        )
+        self.live_sdp810_label.setText(
+            "--"
+            if snapshot["live_low_range_pa"] is None
+            else f"{snapshot['live_low_range_pa']:+0.3f} Pa"
+        )
+
+        self._refresh_result_card(snapshot["current_attempt"], snapshot["current_summary"])
+        self._refresh_review(snapshot)
+
+        is_review = step.kind == "review"
+        is_overview = step.kind == "overview"
+        is_capture = step.kind == "capture"
+        self.live_card.setVisible(is_capture)
+        self.result_card.setVisible(is_capture)
+        self.review_card.setVisible(is_review)
+        self.start_button.setVisible(is_capture)
+        self.finish_button.setVisible(is_capture)
+        self.retry_button.setVisible(is_capture)
+        self.skip_button.setVisible(is_capture)
+        self.continue_button.setVisible(not is_review)
+        self.save_button.setVisible(is_review)
+
+        self.back_button.setEnabled(bool(snapshot["can_back"]))
+        self.start_button.setEnabled(bool(snapshot["can_start"]))
+        self.finish_button.setEnabled(bool(snapshot["can_finish"]))
+        self.retry_button.setEnabled(bool(snapshot["can_retry"]))
+        self.skip_button.setEnabled(bool(snapshot["can_skip"]))
+        self.continue_button.setEnabled(bool(snapshot["can_continue"]))
+        self.save_button.setEnabled(bool(snapshot["can_save"]))
+
+        if is_overview:
+            self.continue_button.setText("Start Characterization")
+        else:
+            self.continue_button.setText("Accept and continue")
+
+    def _refresh_result_card(self, attempt: object, summary: object) -> None:
+        if not isinstance(attempt, FlowCharacterizationAttempt):
+            for label in (
+                self.result_status_label,
+                self.result_duration_label,
+                self.result_selected_label,
+                self.result_sdp810_label,
+                self.result_sdp811_label,
+                self.result_polarity_label,
+                self.result_sources_label,
+            ):
+                label.setText("--")
+            return
+
+        self.result_status_label.setText(
+            f"{attempt.operator_event} #{attempt.attempt_index} ({attempt.sample_count} samples)"
+        )
+        self.result_duration_label.setText(f"{attempt.duration_s:0.2f} s")
+        if not isinstance(summary, FlowCharacterizationAttemptSummary):
+            self.result_selected_label.setText("--")
+            self.result_sdp810_label.setText("--")
+            self.result_sdp811_label.setText("--")
+            self.result_polarity_label.setText("--")
+            self.result_sources_label.setText("--")
+            return
+        self.result_duration_label.setText(f"{summary.duration_s:0.2f} s")
+        self.result_selected_label.setText(_format_optional(summary.selected_peak_abs_pa, "{:0.3f} Pa"))
+        self.result_sdp810_label.setText(_format_optional(summary.sdp810_peak_abs_pa, "{:0.3f} Pa"))
+        self.result_sdp811_label.setText(_format_optional(summary.sdp811_peak_abs_pa, "{:0.3f} Pa"))
+        self.result_polarity_label.setText(
+            f"selected={summary.selected_polarity}, SDP810={summary.sdp810_polarity}, SDP811={summary.sdp811_polarity}"
+        )
+        if summary.source_counts:
+            self.result_sources_label.setText(
+                ", ".join(f"{source}:{count}" for source, count in summary.source_counts.items())
+            )
+        else:
+            self.result_sources_label.setText("--")
+
+    def _refresh_review(self, snapshot: dict[str, object]) -> None:
+        self.review_guidance_label.setText("\n".join(snapshot["analysis_lines"]))
+        for row in snapshot["review_rows"]:
+            labels = self.review_rows_labels.get(row["step_id"])
+            if labels is None:
+                continue
+            labels["status"].setText(row["status"] or "--")
+            labels["samples"].setText("--" if row["sample_count"] is None else str(row["sample_count"]))
+            labels["selected"].setText(
+                "--" if row["selected_peak_abs_pa"] is None else f"{row['selected_peak_abs_pa']:0.3f} Pa"
+            )
+            labels["sdp810"].setText(
+                "--" if row["sdp810_peak_abs_pa"] is None else f"{row['sdp810_peak_abs_pa']:0.3f} Pa"
+            )
+            labels["sdp811"].setText(
+                "--" if row["sdp811_peak_abs_pa"] is None else f"{row['sdp811_peak_abs_pa']:0.3f} Pa"
+            )
+            labels["polarity"].setText(row["polarity"] or "--")
 
 
 class FlowVerificationDetailsDialog(QDialog):

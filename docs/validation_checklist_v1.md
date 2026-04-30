@@ -103,6 +103,7 @@
 | `INT-VAL-015` | Wired flow operator sweep | low / medium / high flow で transport-level flow probe が handoff を観測できる | `TODO` | `tools/wired_flow_probe.py` を用いた user-operated flow sweep を次回実施 |
 | `INT-VAL-016` | Service visibility wired integration | wired 実機で service visibility wiring 後も command / recording / GUI session が退行しない | `PASS` | `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` と `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` を実施し、`wired_serial_smoke_ok` と `gui_wired_session_probe_ok` を確認 |
 | `GUI-VAL-022` | Flow card raw SDP visibility | wired differential pressure raw values が flow metric card に表示される | `PASS` | offscreen live connection で `flow_detail=SDP811: -0.05 Pa / SDP810: -0.05 Pa`, `detail_visible=True` を確認 |
+| `GUI-VAL-023` | Flow characterization PoC smoke | raw SDP810 / SDP811 capture wizard が設定画面から生成でき、JSON/CSV保存と解析summaryが動く | `PASS` | `flow_characterization_dialog_smoke_ok`、controller fake telemetry capture、`tools/flow_characterization_analyze.py` smoke を確認 |
 
 ## 7. 実施ログ
 

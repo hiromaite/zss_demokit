@@ -39,12 +39,14 @@ from controllers import (
     WarningController,
 )
 from dialogs import (
+    FlowCharacterizationDialog,
     FlowVerificationDetailsDialog,
     FlowVerificationDialog,
     FlowVerificationHistoryDialog,
     ModeSwitchDialog,
     SettingsDialog,
 )
+from flow_characterization import FlowCharacterizationController, FlowCharacterizationPersistence
 from flow_verification import FlowVerificationController, FlowVerificationPersistence
 from mock_backend import MockBackend, TelemetryPoint
 from mock_backend import PREFERRED_BLE_NAME_PREFIXES, PREFERRED_WIRED_PORT_TOKENS
@@ -1175,6 +1177,7 @@ class MainWindow(QMainWindow):
             flow_verification_summary=self._latest_flow_verification_summary(),
             flow_verification_recent_summaries=self._recent_flow_verification_summaries(),
             flow_verification_available=self._has_expected_connected_device(),
+            flow_characterization_available=self._has_expected_connected_device(),
             parent=self,
         )
         dialog.device_action_requested.connect(self._handle_settings_device_action)
@@ -1185,6 +1188,7 @@ class MainWindow(QMainWindow):
         flow_verification_requested = dialog.flow_verification_requested
         flow_verification_details_requested = dialog.flow_verification_details_requested
         flow_verification_history_requested = dialog.flow_verification_history_requested
+        flow_characterization_requested = dialog.flow_characterization_requested
         previous_o2_air_calibration_voltage_v = self.app_settings.o2.air_calibration_voltage_v
         previous_o2_calibrated_at_iso = self.app_settings.o2.calibrated_at_iso
         if flow_verification_history_requested:
@@ -1195,6 +1199,9 @@ class MainWindow(QMainWindow):
             return
         if flow_verification_requested:
             self._open_flow_verification_dialog()
+            return
+        if flow_characterization_requested:
+            self._open_flow_characterization_dialog()
             return
         self._apply_dialog_settings(dialog)
         if requested_mode == previous_mode:
@@ -1223,6 +1230,11 @@ class MainWindow(QMainWindow):
             self._append_log(
                 "info",
                 "Flow verification request was staged, but reconnect in the new mode before starting it.",
+            )
+        if flow_characterization_requested:
+            self._append_log(
+                "info",
+                "Flow characterization request was staged, but reconnect in the new mode before starting it.",
             )
         self._switch_mode(requested_mode)
 
@@ -1268,6 +1280,9 @@ class MainWindow(QMainWindow):
 
     def _flow_verification_persistence(self) -> FlowVerificationPersistence:
         return FlowVerificationPersistence(self._current_recording_directory())
+
+    def _flow_characterization_persistence(self) -> FlowCharacterizationPersistence:
+        return FlowCharacterizationPersistence(self._current_recording_directory())
 
     def _latest_flow_verification_summary(self):
         return self._flow_verification_persistence().load_latest_summary()
@@ -1332,6 +1347,46 @@ class MainWindow(QMainWindow):
             return
         dialog = FlowVerificationHistoryDialog(summaries, persistence, parent=self)
         dialog.exec()
+
+    def _open_flow_characterization_dialog(self) -> None:
+        if not self._has_expected_connected_device():
+            self._append_log("warn", "Connect to an expected device before starting flow characterization.")
+            return
+
+        controller = FlowCharacterizationController(
+            mode=self.mode,
+            transport_type=transport_type_for_mode(self.mode),
+            device_identifier=self.ui_state.connection.identifier,
+            firmware_version="" if self.firmware_value.text() == "--" else self.firmware_value.text(),
+            protocol_version="" if self.protocol_value.text() == "--" else self.protocol_value.text(),
+            parent=self,
+        )
+        persistence = self._flow_characterization_persistence()
+        controller.on_connection_changed(
+            self.connection_controller.is_connected(),
+            self.ui_state.connection.identifier,
+        )
+        self.connection_controller.telemetry_received.connect(controller.on_telemetry)
+        self.connection_controller.connection_changed.connect(controller.on_connection_changed)
+        try:
+            dialog = FlowCharacterizationDialog(controller, persistence, parent=self)
+            if self.mode == BLE_MODE:
+                self._append_log(
+                    "warn",
+                    "Flow characterization opened in BLE mode. Wired mode is recommended because raw SDP810 / SDP811 fields may be unavailable over BLE.",
+                )
+            if dialog.exec() == QDialog.DialogCode.Accepted and dialog.saved_session_result is not None:
+                self._append_log(
+                    "info",
+                    f"Flow characterization saved: {dialog.saved_session_result.json_path}",
+                )
+                self._append_log(
+                    "info",
+                    f"Flow characterization samples saved: {dialog.saved_session_result.csv_path}",
+                )
+        finally:
+            self.connection_controller.telemetry_received.disconnect(controller.on_telemetry)
+            self.connection_controller.connection_changed.disconnect(controller.on_connection_changed)
 
     def _clear_plot_buffers(self) -> None:
         self.plot_controller.clear()

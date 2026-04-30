@@ -533,6 +533,11 @@ else:
 - first implementation slice として、`FlowVerificationController`, `FlowVerificationDialog`, JSON persistence, `Settings > Device` entry を追加した
 - follow-up slice として、`Show Latest Details` 導線と latest saved session summary dialog を追加し、saved JSON を operator が見返せるようにした
 - non-hardware polish として、`Show History` 導線、recent verification summary preview、review guidance message を追加し、PoC セッションの比較と振り返りをしやすくした
+- hardware-complete 後の selector tuning へ進む前段として、開発用 `Flow Characterization (PoC)` wizard を追加する
+- characterization は `Zero Baseline`, `Small Exhale`, `Small Inhale`, `Maximum Exhale`, `Maximum Inhale` を operator button で手動 capture し、
+  raw `SDP810 / SDP811 / selected differential pressure` を JSON と CSV に保存する
+- 保存時には極性 hint、low/high sign consistency、`SDP810` の review handoff band (`90-110 Pa`) に対する到達状況を summary 化し、
+  センサー極性確認と high-range 切替閾値検討の入力データにする
 - offscreen smoke により controller-only capture path、settings entry、dialog skeleton、latest details dialog の起動を確認した
 
 ## 9. まとめて実装すべき単位
