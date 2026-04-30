@@ -805,6 +805,7 @@ class MainWindow(QMainWindow):
         self.connection_controller.connect_device(identifier)
 
     def _on_connection_changed(self, connected: bool, identifier: str) -> None:
+        had_plot_samples = bool(self.plot_controller.time_values)
         self.ui_state.connection.phase = "connected" if connected else "disconnected"
         self.ui_state.connection.identifier = identifier if connected else "Disconnected"
         self.transport_state_value.setText("Connected" if connected else "Disconnected")
@@ -817,11 +818,10 @@ class MainWindow(QMainWindow):
             self._append_log(severity, message)
         if not connected:
             self._stop_recording()
-            self._latest_low_range_differential_pressure_pa = None
-            self._latest_high_range_differential_pressure_pa = None
-            self._latest_zirconia_ip_voltage_v = None
-            self._latest_internal_voltage_v = None
-            self._update_service_visibility_labels()
+            self._clear_plot_buffers()
+            self._refresh_metric_cards({})
+            if had_plot_samples:
+                self._append_log("info", "Cleared plot data after disconnect.")
             if self._pending_mode_switch_target is not None:
                 pending_target = self._pending_mode_switch_target
                 self._pending_mode_switch_target = None
