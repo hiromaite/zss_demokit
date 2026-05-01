@@ -63,6 +63,10 @@ from settings_store import SettingsStore
 from theme import COLORS
 
 
+FLOW_DEFAULT_Y_RANGE_LPM = (-5.0, 5.0)
+O2_DEFAULT_Y_RANGE_PERCENT = (0.0, 25.0)
+
+
 def _panel(title: str, hint: str | None = None, object_name: str = "PanelCard") -> tuple[QFrame, QVBoxLayout]:
     frame = QFrame()
     frame.setObjectName(object_name)
@@ -316,6 +320,8 @@ class MainWindow(QMainWindow):
         self._csv_flush_timer.timeout.connect(self._flush_csv)
         self._ignore_manual_range_signal = False
         self._viewbox_to_plot_key: dict[object, str] = {}
+        self._secondary_y_views: dict[str, pg.ViewBox] = {}
+        self._last_plot_data_key: tuple[object, ...] | None = None
         self._active_plot_key = self._plot_key_from_label(self.app_settings.plot.selected_plot)
         self._pending_mode_switch_target: str | None = None
         self._latest_low_range_differential_pressure_pa: float | None = None
@@ -610,6 +616,7 @@ class MainWindow(QMainWindow):
                 self._session_start_time,
             ),
             "left": PlotInteractionAxisItem("left", "sensor", "y", self._handle_plot_user_interaction),
+            "right": PlotInteractionAxisItem("right", "sensor_o2", "y", self._handle_plot_user_interaction),
         }
         sensor_plot = pg.PlotWidget(viewBox=sensor_view_box, axisItems=sensor_axis_items)
         self._configure_plot_widget(sensor_plot)
@@ -633,6 +640,7 @@ class MainWindow(QMainWindow):
         self.sensor_secondary_curve = pg.PlotCurveItem(pen=pg.mkPen(color="#B5781A", width=2.0))
         self.sensor_secondary_curve.setSkipFiniteCheck(True)
         self.sensor_secondary_view.addItem(self.sensor_secondary_curve)
+        self._secondary_y_views["sensor_o2"] = self.sensor_secondary_view
         sensor_legend.addItem(self.sensor_secondary_curve, "O2")
         self.sensor_secondary_legend_item = sensor_legend.items[-1]
         sensor_plot.getPlotItem().vb.sigResized.connect(self._update_sensor_secondary_geometry)
@@ -655,6 +663,12 @@ class MainWindow(QMainWindow):
                 self._session_start_time,
             ),
             "left": PlotInteractionAxisItem("left", "heater", "y", self._handle_plot_user_interaction),
+            "right": PlotInteractionAxisItem(
+                "right",
+                "heater_zirconia",
+                "y",
+                self._handle_plot_user_interaction,
+            ),
         }
         heater_plot = pg.PlotWidget(viewBox=heater_view_box, axisItems=heater_axis_items)
         self._configure_plot_widget(heater_plot)
@@ -678,6 +692,7 @@ class MainWindow(QMainWindow):
         self.heater_secondary_curve = pg.PlotCurveItem(pen=pg.mkPen(color="#315C8C", width=2.0))
         self.heater_secondary_curve.setSkipFiniteCheck(True)
         self.heater_secondary_view.addItem(self.heater_secondary_curve)
+        self._secondary_y_views["heater_zirconia"] = self.heater_secondary_view
         heater_legend.addItem(self.heater_secondary_curve, "Zirconia")
         self.heater_secondary_legend_item = heater_legend.items[-1]
         heater_plot.getPlotItem().vb.sigResized.connect(self._update_heater_secondary_geometry)
@@ -687,6 +702,7 @@ class MainWindow(QMainWindow):
         self.plot_curves["heater"] = heater_curve
 
         self.plot_widgets["heater"].setXLink(self.plot_widgets["sensor"])
+        self._apply_default_plot_ranges()
         QTimer.singleShot(0, self._apply_plot_splitter_sizes)
 
         log_frame = CollapsiblePanel(
@@ -759,6 +775,10 @@ class MainWindow(QMainWindow):
                 plot = self.plot_widgets[plot_key]
                 plot.enableAutoRange(axis="y", enable=False)
                 plot.setYRange(y_range[0], y_range[1], padding=0.02)
+            elif plot_key in self._secondary_y_views:
+                view = self._secondary_y_views[plot_key]
+                view.enableAutoRange(axis="y", enable=False)
+                view.setYRange(y_range[0], y_range[1], padding=0.02)
         self._update_axis_labels()
         self._update_sensor_secondary_visibility()
 
@@ -915,7 +935,8 @@ class MainWindow(QMainWindow):
         self._sync_heater_toggle()
 
     def _refresh_plots(self) -> None:
-        render_data = self.plot_controller.render_data(self.time_span_combo.currentText())
+        time_span = self.time_span_combo.currentText()
+        render_data = self.plot_controller.render_data(time_span)
         x_values = render_data["x_values"]
         if not x_values:
             return
@@ -923,20 +944,29 @@ class MainWindow(QMainWindow):
         flow_values = render_data["series"]["flow"]
         zirconia_values = render_data["series"]["zirconia"]
         heater_values = render_data["series"]["heater"]
-        o2_values = self._build_o2_series(zirconia_values)
+        data_key = (
+            render_data["revision"],
+            time_span,
+            self.app_settings.o2.air_calibration_voltage_v,
+            self.app_settings.o2.zero_reference_voltage_v,
+            self.app_settings.o2.ambient_reference_percent,
+            self.app_settings.o2.invert_polarity,
+        )
+        if data_key != self._last_plot_data_key:
+            o2_values = self._build_o2_series(zirconia_values)
 
-        self.plot_curves["sensor"].setData(x_values, flow_values)
-        if o2_values is None:
-            self.sensor_secondary_curve.setData([], [])
-        else:
-            self.sensor_secondary_curve.setData(x_values, o2_values)
-        self._update_sensor_secondary_visibility()
+            self.plot_curves["sensor"].setData(x_values, flow_values)
+            if o2_values is None:
+                self.sensor_secondary_curve.setData([], [])
+            else:
+                self.sensor_secondary_curve.setData(x_values, o2_values)
+            self._update_sensor_secondary_visibility()
 
-        self.plot_curves["heater"].setData(x_values, render_data["series"]["heater"])
-        self.heater_secondary_curve.setData(x_values, zirconia_values)
+            self.plot_curves["heater"].setData(x_values, heater_values)
+            self.heater_secondary_curve.setData(x_values, zirconia_values)
+        self._last_plot_data_key = data_key
         if self.plot_controller.x_follow_enabled:
             self._set_plot_x_range(render_data["xmin"], render_data["xmax"])
-        self._update_axis_labels()
 
     def _update_axis_labels(self) -> None:
         label = "Elapsed time" if self._current_axis_mode() == "Relative" else "Clock time"
@@ -967,12 +997,12 @@ class MainWindow(QMainWindow):
 
     def _reset_plot_view(self) -> None:
         self.plot_controller.x_follow_enabled = True
-        self.plot_controller.manual_y_ranges.pop("sensor", None)
-        self.plot_controller.manual_y_ranges.pop("heater", None)
-        self.plot_widgets["sensor"].enableAutoRange(axis="y", enable=self.auto_scale_check.isChecked())
-        self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
+        for plot_key in ["sensor", "sensor_o2", "heater", "heater_zirconia"]:
+            self.plot_controller.manual_y_ranges.pop(plot_key, None)
+        self._apply_default_plot_ranges()
         self.plot_widgets["heater"].enableAutoRange(axis="y", enable=self.auto_scale_check.isChecked())
         self.heater_secondary_view.enableAutoRange(axis="y", enable=True)
+        self._last_plot_data_key = None
         self._refresh_plots()
         self._persist_current_settings()
 
@@ -981,7 +1011,7 @@ class MainWindow(QMainWindow):
             return
         self._ignore_manual_range_signal = True
         try:
-            self.plot_widgets["sensor"].setXRange(xmin, xmax, padding=0.02)
+            self.plot_widgets["sensor"].setXRange(xmin, xmax, padding=0.0)
         finally:
             self._ignore_manual_range_signal = False
 
@@ -1005,15 +1035,17 @@ class MainWindow(QMainWindow):
             self.plot_controller.x_follow_enabled = False
 
         if plot_key is not None:
-            self._active_plot_key = plot_key
+            self._active_plot_key = self._primary_plot_key(plot_key)
 
-        if y_changed and plot_key is not None and plot_key in self.plot_widgets:
+        if y_changed and plot_key is not None:
             if self.auto_scale_check.isChecked():
                 self.auto_scale_check.blockSignals(True)
                 self.auto_scale_check.setChecked(False)
                 self.auto_scale_check.blockSignals(False)
-            _, y_range = self.plot_widgets[plot_key].getViewBox().viewRange()
-            self.plot_controller.set_manual_y_range(plot_key, y_range[0], y_range[1])
+            view = self._y_range_view_for_plot_key(plot_key)
+            if view is not None:
+                _, y_range = view.viewRange()
+                self.plot_controller.set_manual_y_range(plot_key, y_range[0], y_range[1])
 
         self._persist_current_settings()
 
@@ -1401,6 +1433,7 @@ class MainWindow(QMainWindow):
             curve.setData([], [])
         self.sensor_secondary_curve.setData([], [])
         self.heater_secondary_curve.setData([], [])
+        self._last_plot_data_key = None
 
     def _refresh_metric_cards(self, metrics: dict[str, float] | None = None, point: TelemetryPoint | None = None) -> None:
         metrics = metrics or self.plot_controller.metric_snapshot()
@@ -1533,6 +1566,16 @@ class MainWindow(QMainWindow):
         plot.getPlotItem().getAxis("left").setPen(QColor(COLORS["muted"]))
         plot.getPlotItem().getAxis("bottom").setPen(QColor(COLORS["muted"]))
 
+    def _apply_default_plot_ranges(self) -> None:
+        if "sensor" in self.plot_widgets:
+            sensor_plot = self.plot_widgets["sensor"]
+            sensor_plot.enableAutoRange(axis="y", enable=False)
+            sensor_plot.setYRange(*FLOW_DEFAULT_Y_RANGE_LPM, padding=0.0)
+        if "sensor_o2" in self._secondary_y_views:
+            sensor_o2_view = self._secondary_y_views["sensor_o2"]
+            sensor_o2_view.enableAutoRange(axis="y", enable=False)
+            sensor_o2_view.setYRange(*O2_DEFAULT_Y_RANGE_PERCENT, padding=0.0)
+
     def _update_sensor_secondary_geometry(self) -> None:
         plot = self.plot_widgets.get("sensor")
         if plot is None:
@@ -1557,7 +1600,18 @@ class MainWindow(QMainWindow):
         return "heater" if label == "Zirconia / Heater" else "sensor"
 
     def _plot_label_for_key(self, plot_key: str) -> str:
-        return "Zirconia / Heater" if plot_key == "heater" else "Flow / O2"
+        return "Zirconia / Heater" if self._primary_plot_key(plot_key) == "heater" else "Flow / O2"
+
+    @staticmethod
+    def _primary_plot_key(plot_key: str) -> str:
+        if plot_key.startswith("heater"):
+            return "heater"
+        return "sensor"
+
+    def _y_range_view_for_plot_key(self, plot_key: str) -> pg.ViewBox | None:
+        if plot_key in self.plot_widgets:
+            return self.plot_widgets[plot_key].getViewBox()
+        return self._secondary_y_views.get(plot_key)
 
     def _is_expected_ble_identifier(self, identifier: str) -> bool:
         return any(identifier.startswith(prefix) for prefix in PREFERRED_BLE_NAME_PREFIXES)
