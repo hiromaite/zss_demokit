@@ -55,6 +55,8 @@ GUI / firmware / integration 関連の文書は、`gui_prototype/` と top-level
   - 現時点の GUI / firmware / system を usability と提供価値の観点で再確認した優先順位レビュー
 - `active_development_bundles_v1.md`
   - 2026-05-02 時点の課題群を bundle / branch 単位に分けた実装・検証計画
+- `sampling_architecture_v1.md`
+  - 100 Hz sampling、device-side timing、BLE batch 化へ進む前の task ownership / ring buffer / payload budget 設計
 - `implementation_backlog_v1.md`
   - GUI / firmware / integration を含む実装バックログとマイルストーン
 - `firmware_implementation_plan_v1.md`
@@ -81,11 +83,12 @@ GUI / firmware / integration 関連の文書は、`gui_prototype/` と top-level
 11. `flow_verification_plan_v1.md` で guided verification の UX と state model を確認する
 12. `system_usability_review_v1.md` で current system の UX / usability 優先順位を確認する
 13. `active_development_bundles_v1.md` で現在の bundle / branch 計画を確認する
-14. `firmware_implementation_plan_v1.md` で firmware の骨格を確認する
-15. `implementation_backlog_v1.md` で着手順と依存関係を確認する
-16. `firmware_worktree_plan_v1.md` でこの worktree での branch 運用と次候補を確認する
-17. `validation_checklist_v1.md` で現段階の検証対象を確認する
-18. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
+14. `sampling_architecture_v1.md` で sampling / BLE batch の次段設計を確認する
+15. `firmware_implementation_plan_v1.md` で firmware の骨格を確認する
+16. `implementation_backlog_v1.md` で着手順と依存関係を確認する
+17. `firmware_worktree_plan_v1.md` でこの worktree での branch 運用と次候補を確認する
+18. `validation_checklist_v1.md` で現段階の検証対象を確認する
+19. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
 
 ## 運用メモ
 
