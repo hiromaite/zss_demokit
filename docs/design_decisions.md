@@ -263,3 +263,17 @@ flow_rate_lpm =
 - beta2 相当までに機能が増え、Settings 内に operator action と engineering action が混在し始めている
 - 現場 operator は短い導線で測定したい一方、hardware bring-up では raw diagnostics と履歴比較が重要になる
 - 2 つの利用者像を同じ画面密度で扱うと、通常操作の迷いと diagnostic 情報の不足が同時に起きやすい
+
+## 24. No-Hardware Development Period
+
+- 実機操作ができない期間は、bundle ごとに branch を分け、実機不要の設計・静的検証・offscreen smoke・host-side probe logic を進める
+- 実機や Windows packaged app が必要な検証は `USER_TEST_REQUIRED` として文書化し、merge gate で明示的に扱う
+- serial 接続は `port open` と `protocol handshake` を別状態として扱う
+- sampling / jitter の議論では、host receive interval と device-side sample tick interval を分離して判断する
+- BLE high-rate 対応は v1 compatibility を壊さず、capability gated batch extension として検討する
+
+理由:
+
+- Windows serial、pump noise、sampling jitter、plot smoothness は、実機環境がないと最終判定できない
+- 一方で、接続状態管理、probe 強化、plot logic、architecture note はこの端末だけでも安全に前進できる
+- branch を分けることで、後から user 実機テスト結果に応じて bundle 単位で merge / retry / abandon を判断できる

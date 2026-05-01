@@ -1159,3 +1159,14 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - 2026-04-30 の system usability review では、現時点の blocking issue は見つかっていない
 - flow の最終 calibration / selector tuning は hardware completion 待ちであり、EXT-007 では UX と regression hardening を先行する
 - firmware の pump / heater safety interlock は実装済みだが、今後の regression protection として明示的に追跡する
+- 2026-05-02 の追加課題群は `active_development_bundles_v1.md` に bundle / branch 単位で整理し、実機確認ができない期間でも進められる作業から分岐開発する
+
+直近 bundle:
+
+| Bundle | Status | Notes |
+| :--- | :--- | :--- |
+| `A` Diagnostics | `PLANNED` | pump noise / timing jitter の観測基盤 |
+| `B` Windows serial handshake | `PLANNED` | COM open と protocol handshake を分離 |
+| `C` Connection UX | `PLANNED` | auto-connect, scan/connect state, device label |
+| `D` Plot / performance | `PLANNED` | fixed range, manual secondary axis, smooth follow, UI throttle |
+| `E` Sampling architecture | `PLANNED` | RTOS task split and BLE batch design / PoC |
