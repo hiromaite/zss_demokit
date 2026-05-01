@@ -30,7 +30,7 @@
 | Feature | Old Firmware | Current Firmware | Notes |
 | :--- | :--- | :--- | :--- |
 | Target board | Yes | Yes | どちらも M5StampS3 系を前提 |
-| BLE advertise name `M5STAMP-MONITOR` | Yes | Yes | 現行も同じ advertise name を維持 |
+| BLE advertise name | Yes | Alternative | 現行は operator-facing name `GasSensor-Proto` を優先し、移行期間は legacy `M5STAMP-MONITOR*` も host filter で受け入れる |
 | BLE legacy control service / pump characteristic UUID | Yes | Yes | 旧 UUID を維持 |
 | BLE legacy pump opcodes `0x55` / `0xAA` | Yes | Yes | 旧 GUI 系の最低限操作互換を維持 |
 | BLE monitoring characteristic for telemetry notify | Yes | Yes | characteristic は維持。ただし payload schema は別物 |

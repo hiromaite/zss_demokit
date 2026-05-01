@@ -201,7 +201,7 @@ DeviceAdapter
 - 低から中頻度の計測
 - 切断や再接続を考慮する必要がある
 - GATT service / characteristic ベース
-- 既存 BLE device name / UUID を可能な限り維持する
+- BLE UUID は維持し、BLE device name は `GasSensor-Proto` を優先する。移行期間は host 側で legacy `M5STAMP-MONITOR*` も受ける
 
 GUI で必要なこと:
 

@@ -122,7 +122,8 @@ class FakeBleakScanner:
                 self.address = address
 
         return [
-            _FakeDevice("M5STAMP-MONITOR", "FAKE-UUID-001"),
+            _FakeDevice("GasSensor-Proto", "FAKE-UUID-001"),
+            _FakeDevice("M5STAMP-MONITOR", "FAKE-UUID-LEGACY"),
             _FakeDevice("IGNORED-NODE", "FAKE-UUID-999"),
         ]
 
@@ -573,7 +574,7 @@ def _analyze_recording_csv(path: Path) -> tuple[int, int]:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run a GUI-level BLE continuity / reconnect probe.")
-    parser.add_argument("--device-prefix", default="M5STAMP-MONITOR", help="Preferred BLE device label prefix")
+    parser.add_argument("--device-prefix", default="GasSensor-Proto", help="Preferred BLE device label prefix")
     parser.add_argument("--device-label", default="", help="Optional exact BLE device label to connect")
     parser.add_argument("--scan-timeout-s", type=float, default=12.0, help="BLE scan timeout")
     parser.add_argument("--connect-timeout-s", type=float, default=12.0, help="Telemetry start timeout after connect")

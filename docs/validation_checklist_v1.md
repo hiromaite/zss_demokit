@@ -63,6 +63,7 @@
 | `GUI-VAL-029` | Plot pause and series visibility smoke | acquisition / recording を止めずに plot freeze と series on/off ができる | `TODO` | `system_usability_review_v1.md` の `P1-UX-002`。実装後に offscreen と手動操作で確認する |
 | `GUI-VAL-030` | Engineering tools navigation smoke | Settings が肥大化せず、Flow Verification / Characterization / diagnostics へ迷わず到達できる | `TODO` | `system_usability_review_v1.md` の `P1-UX-001`。Operator settings と Engineering / Tools の分離後に確認する |
 | `GUI-VAL-031` | Wired handshake phase smoke | wired COM / serial open 後、protocol handshake 中の状態表示、retry、成功後の制御有効化が成立する | `PASS` | Bundle B local smoke として macOS `/dev/cu.usbmodem4101` で `handshaking -> connected -> disconnected` と telemetry start を確認。Windows Python / packaged exe は user 環境で再確認する |
+| `GUI-VAL-032` | BLE auto-connect state smoke | preferred BLE device discovery 後に auto-connect し、scan / connect button state と preferred name が崩れない | `PASS` | mock BLE offscreen で `GasSensor-Proto` auto-connect、`tools/ble_backend_smoke.py`、fake-live `tools/gui_ble_session_probe.py` が通過 |
 
 ## 5. Firmware Checklist
 
@@ -265,6 +266,10 @@
 - `.venv_gui_prototype/bin/python -m compileall gui_prototype/src/mock_backend.py gui_prototype/src/controllers.py gui_prototype/src/main_window.py` を実施し、GUI connection phase 追加後も compile が成立することを確認した
 - macOS `/dev/cu.usbmodem4101` で offscreen wired handshake smoke を実施し、`handshaking -> connected -> disconnected`、telemetry `5` samples、error `0` を確認した
 - Windows Python run / packaged exe での wired handshake recovery は user 環境での後日確認項目として残す
+- Bundle C の connection UX slice として、BLE advertising name を `GasSensor-Proto` へ変更し、GUI / probe 側は legacy `M5STAMP-MONITOR*` も filter 対象として残した
+- BLE scan phase signal と auto-connect path を追加し、startup scan で preferred device が見つかった場合に自動接続するよう更新した
+- `./.venv_pio/bin/pio run` により firmware name 変更後も build が成立することを確認した
+- `tools/ble_backend_smoke.py` と fake-live `tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 8 --recording-duration-s 3 --reconnect-at-s 4 --min-observed-duration-s 4 --connect-timeout-s 5` を実施し、`GasSensor-Proto` discovery / connect / reconnect / recording path が継続成立することを確認した
 
 ## 8. 更新ルール
 

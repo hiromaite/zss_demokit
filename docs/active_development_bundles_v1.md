@@ -98,17 +98,25 @@ USER_TEST_REQUIRED:
 
 実装方針:
 
-- BLE / Wired ともに expected device が 1 件なら auto-connect する option を追加する
+- BLE は expected device が見つかったら auto-connect する。Wired は Windows COM reopen risk があるため、Bundle B 検証後に同じ方針を広げる
 - scan 中、port refresh 中、connect 中、disconnect 中の button label / enable state / color を明確化する
 - BLE scan timeout は短めの first scan と manual rescan を分ける
-- device label は GUI 表示上 `Gas Sensor Proto` を優先し、protocol / BLE filter は旧 `M5STAMP-MONITOR` と新候補名の両方を受ける
-- firmware の BLE advertising name 変更は compatibility risk があるため、C branch では候補実装または configurable constant として扱う
+- device label は GUI 表示上 `GasSensor-Proto` を優先し、protocol / BLE filter は旧 `M5STAMP-MONITOR*` と新候補名の両方を受ける
+- firmware の BLE advertising name は `GasSensor-Proto` へ変更し、UUID は維持する
+
+Bundle C current slice:
+
+- BLE scan phase signal を追加し、`Scan` button / selector / connect button を scanning state に同期させる
+- startup scan または manual scan で expected BLE device が見つかった場合、自動で connect を開始する
+- BLE live / mock connect は `connecting / connected / failed / disconnected` phase を GUI へ通知する
+- probe / smoke tool の default BLE name を `GasSensor-Proto` へ更新し、fake device は legacy name も残す
 
 この端末で可能な確認:
 
 - offscreen GUI state smoke
-- mock BLE / fake port list smoke
-- Python compile
+- mock BLE / fake port list smoke: startup auto-connect smoke passed with `GasSensor-Proto`
+- fake-live BLE GUI session probe: `gui_ble_session_probe_ok`
+- Python compile and firmware build: `compileall`, `pio run`
 
 USER_TEST_REQUIRED:
 

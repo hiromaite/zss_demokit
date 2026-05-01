@@ -111,7 +111,7 @@
 - 接続、切断、再接続が GUI から安定して行えること
 - センサデータ通知は 50 から 100 ms 程度を目標値として扱えること
 - `Pump ON/OFF` と `Get Status` をサポートすること
-- 可能な限り既存の BLE device name / UUID を維持すること
+- BLE UUID は維持し、BLE device name は操作時に識別しやすい `GasSensor-Proto` を優先すること。移行期間は legacy `M5STAMP-MONITOR*` も接続候補として扱うこと
 - BLE 通信のばらつきと切断を GUI 側で扱えること
 
 ### 5.4 wired デバイス向け要求

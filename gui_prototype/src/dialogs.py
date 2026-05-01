@@ -388,7 +388,7 @@ class SettingsDialog(QDialog):
         summary_form.addRow("Target device", QLabel(self._connection_identifier))
         summary_form.addRow("Protocol family", QLabel(f"v{PROTOCOL_VERSION_TEXT} prototype"))
         summary_form.addRow("Serial defaults", QLabel(f"{WIRED_DEFAULT_BAUDRATE} baud / {WIRED_DEFAULT_LINE_SETTINGS}"))
-        summary_form.addRow("BLE identity policy", QLabel("Keep existing device name and UUIDs"))
+        summary_form.addRow("BLE identity policy", QLabel("Prefer GasSensor-Proto; accept legacy names"))
         layout.addWidget(summary_card)
 
         action_card = QFrame()

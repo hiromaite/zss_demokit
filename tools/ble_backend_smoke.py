@@ -226,7 +226,7 @@ def main() -> int:
     try:
         app = QCoreApplication([])
         backend = MockBackend(BLE_MODE)
-        backend._ble_discovered_devices = {"M5STAMP-MONITOR": "FAKE-UUID-001"}
+        backend._ble_discovered_devices = {"GasSensor-Proto": "FAKE-UUID-001"}
 
         connection_events: list[tuple[bool, str]] = []
         capabilities_events: list[dict[str, object]] = []
@@ -240,11 +240,11 @@ def main() -> int:
         backend.telemetry_generated.connect(lambda point: telemetry_sequences.append(int(point.sequence)))
         backend.log_generated.connect(lambda severity, message: logs.append((severity, message)))
 
-        QTimer.singleShot(0, lambda: backend.connect_device("M5STAMP-MONITOR"))
+        QTimer.singleShot(0, lambda: backend.connect_device("GasSensor-Proto"))
         QTimer.singleShot(500, lambda: backend.set_pump_state(True))
         QTimer.singleShot(900, lambda: backend.set_heater_power_state(True))
         QTimer.singleShot(1700, backend.disconnect_device)
-        QTimer.singleShot(2500, lambda: backend.connect_device("M5STAMP-MONITOR"))
+        QTimer.singleShot(2500, lambda: backend.connect_device("GasSensor-Proto"))
         QTimer.singleShot(3000, lambda: backend.set_heater_power_state(False))
         QTimer.singleShot(3400, lambda: backend.set_pump_state(False))
         QTimer.singleShot(3900, backend.ping)

@@ -28,7 +28,7 @@
 
 ## 3. BLE 識別子
 
-- BLE の device name と既存 UUID は、可能な限り維持する
+- BLE UUID は維持し、advertising name は operator-facing な `GasSensor-Proto` を優先する。移行期間は GUI / probe 側で legacy `M5STAMP-MONITOR*` も受け入れる
 
 理由:
 

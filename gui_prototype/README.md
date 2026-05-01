@@ -49,8 +49,8 @@ python gui_prototype/main.py
 
 - wired end-to-end smoke: `python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem5101 --baudrate 115200`
 - wired GUI session probe: `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 18 --toggle-interval-s 3`
-- BLE live smoke: `python3.12 tools/ble_smoke.py --name M5STAMP-MONITOR --telemetry-count 20 --telemetry-timeout 10 --observe-duration 8 --reconnect-cycles 3`
-- BLE GUI session probe: `python3.12 tools/gui_ble_session_probe.py --device-prefix M5STAMP-MONITOR --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60`
+- BLE live smoke: `python3.12 tools/ble_smoke.py --name GasSensor-Proto --telemetry-count 20 --telemetry-timeout 10 --observe-duration 8 --reconnect-cycles 3`
+- BLE GUI session probe: `python3.12 tools/gui_ble_session_probe.py --device-prefix GasSensor-Proto --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60`
 - BLE GUI session probe logic smoke: `python3.12 tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6`
 - BLE backend reconnect smoke: `python3.12 tools/ble_backend_smoke.py`
 - shared protocol fixture smoke: `python3.12 tools/protocol_fixture_smoke.py`
