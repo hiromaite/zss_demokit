@@ -707,6 +707,7 @@ class MainWindow(QMainWindow):
 
     def _bind_controllers(self) -> None:
         self.connection_controller.connection_changed.connect(self._on_connection_changed)
+        self.connection_controller.connection_phase_changed.connect(self._on_connection_phase_changed)
         self.connection_controller.status_changed.connect(self._on_status_changed)
         self.connection_controller.capabilities_changed.connect(self._on_capabilities_changed)
         self.connection_controller.telemetry_received.connect(self._on_telemetry)
@@ -781,22 +782,32 @@ class MainWindow(QMainWindow):
         self.connection_stack.setCurrentIndex(0 if self.mode == BLE_MODE else 1)
 
     def _sync_connection_controls(self) -> None:
-        connected = self.connection_controller.is_connected()
-        connect_text = "Disconnect" if connected else "Connect"
+        phase = self.ui_state.connection.phase
+        connected = self.connection_controller.is_connected() and phase == "connected"
+        busy = phase in {"connecting", "handshaking", "disconnecting"}
+        if phase == "connecting":
+            connect_text = "Connecting..."
+        elif phase == "handshaking":
+            connect_text = "Handshake..."
+        elif phase == "disconnecting":
+            connect_text = "Disconnecting..."
+        else:
+            connect_text = "Disconnect" if connected else "Connect"
         ble_available = self._has_expected_ble_selection()
         wired_available = self._has_expected_wired_selection()
         self.ble_connect_button.setText(connect_text)
         self.wired_connect_button.setText(connect_text)
-        self.ble_connect_button.setEnabled(connected or ble_available)
-        self.wired_connect_button.setEnabled(connected or wired_available)
-        self.ble_device_selector.setEnabled((not connected) and ble_available)
-        self.ble_scan_button.setEnabled(not connected)
-        self.port_selector.setEnabled((not connected) and wired_available)
-        self.refresh_ports_button.setEnabled(not connected)
+        self.ble_connect_button.setEnabled((not busy) and (connected or ble_available))
+        self.wired_connect_button.setEnabled((not busy) and (connected or wired_available))
+        self.ble_device_selector.setEnabled((not busy) and (not connected) and ble_available)
+        self.ble_scan_button.setEnabled((not busy) and (not connected))
+        self.port_selector.setEnabled((not busy) and (not connected) and wired_available)
+        self.refresh_ports_button.setEnabled((not busy) and (not connected))
 
     def _toggle_connection(self) -> None:
         if self.connection_controller.is_connected():
             self.ui_state.connection.phase = "disconnecting"
+            self._sync_connection_controls()
             self.connection_controller.disconnect_device()
             return
         if self.mode == BLE_MODE:
@@ -804,13 +815,19 @@ class MainWindow(QMainWindow):
         else:
             identifier = self.port_selector.currentText() or "Prototype-Port"
         self.ui_state.connection.phase = "connecting"
+        self.transport_state_value.setText("Connecting")
+        self._sync_connection_controls()
         self.connection_controller.connect_device(identifier)
 
     def _on_connection_changed(self, connected: bool, identifier: str) -> None:
         had_plot_samples = bool(self.plot_controller.time_values)
-        self.ui_state.connection.phase = "connected" if connected else "disconnected"
+        if connected:
+            if self.mode != WIRED_MODE or self.ui_state.connection.phase not in {"connecting", "handshaking"}:
+                self.ui_state.connection.phase = "connected"
+        else:
+            self.ui_state.connection.phase = "disconnected"
         self.ui_state.connection.identifier = identifier if connected else "Disconnected"
-        self.transport_state_value.setText("Connected" if connected else "Disconnected")
+        self.transport_state_value.setText(self._connection_phase_label(self.ui_state.connection.phase))
         self._sync_connection_controls()
         self._sync_pump_toggle()
         self._sync_heater_toggle()
@@ -828,6 +845,18 @@ class MainWindow(QMainWindow):
                 pending_target = self._pending_mode_switch_target
                 self._pending_mode_switch_target = None
                 self._complete_mode_switch(pending_target)
+        self._sync_recording_controls()
+
+    def _on_connection_phase_changed(self, phase: str, identifier: str) -> None:
+        self.ui_state.connection.phase = phase
+        if phase == "disconnected":
+            self.ui_state.connection.identifier = "Disconnected"
+        elif identifier:
+            self.ui_state.connection.identifier = identifier
+        self.transport_state_value.setText(self._connection_phase_label(phase))
+        self._sync_connection_controls()
+        self._sync_pump_toggle()
+        self._sync_heater_toggle()
         self._sync_recording_controls()
 
     def _on_status_changed(self, payload: dict) -> None:
@@ -1580,10 +1609,26 @@ class MainWindow(QMainWindow):
         return self._is_expected_wired_identifier(self.port_selector.currentText().strip())
 
     def _has_expected_connected_device(self) -> bool:
-        return self.connection_controller.is_connected() and self._is_expected_identifier_for_mode(
-            self.mode,
-            self.ui_state.connection.identifier,
+        return (
+            self.connection_controller.is_connected()
+            and self.ui_state.connection.phase == "connected"
+            and self._is_expected_identifier_for_mode(
+                self.mode,
+                self.ui_state.connection.identifier,
+            )
         )
+
+    @staticmethod
+    def _connection_phase_label(phase: str) -> str:
+        labels = {
+            "connected": "Connected",
+            "connecting": "Connecting",
+            "handshaking": "Handshake",
+            "disconnecting": "Disconnecting",
+            "failed": "Connection failed",
+            "disconnected": "Disconnected",
+        }
+        return labels.get(phase, phase.title())
 
     def _build_o2_series(self, zirconia_values: list[float]) -> list[float] | None:
         if self.app_settings.o2.air_calibration_voltage_v is None:

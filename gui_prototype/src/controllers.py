@@ -52,6 +52,7 @@ class WarningController:
 
 class ConnectionController(QObject):
     connection_changed = Signal(bool, str)
+    connection_phase_changed = Signal(str, str)
     status_changed = Signal(object)
     capabilities_changed = Signal(object)
     telemetry_received = Signal(object)
@@ -70,6 +71,7 @@ class ConnectionController(QObject):
 
     def _bind_backend(self) -> None:
         self._backend.connection_changed.connect(self.connection_changed)
+        self._backend.connection_phase_changed.connect(self.connection_phase_changed)
         self._backend.status_changed.connect(self.status_changed)
         self._backend.capabilities_changed.connect(self.capabilities_changed)
         self._backend.telemetry_generated.connect(self.telemetry_received)
