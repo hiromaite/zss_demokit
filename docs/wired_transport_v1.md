@@ -250,7 +250,7 @@ Payload size: `8 bytes`
 ## 13. Timing Diagnostic Payload v1
 
 Timing diagnostic frames are wired-only engineering frames used to separate device sampling cadence from host receive jitter.
-GUI and tools must accept both the legacy `4-byte` payload and the extended `16-byte` payload.
+GUI and tools must accept the legacy `4-byte` payload, the extended `16-byte` payload, and the acquisition-breakdown `44-byte` payload.
 
 ### 13.1 Payload Layout
 
@@ -260,12 +260,20 @@ GUI and tools must accept both the legacy `4-byte` payload and the extended `16-
 | `4` | `4` | `uint32` | `acquisition_duration_us` | Measurement frontend acquisition time |
 | `8` | `4` | `uint32` | `telemetry_publish_duration_us` | BLE + wired telemetry publish call time, excluding this timing frame |
 | `12` | `4` | `uint32` | `scheduler_lateness_us` | Sample start lateness against the firmware deadline |
+| `16` | `4` | `uint32` | `adc_total_duration_us` | ADS1115 frontend read duration |
+| `20` | `4` | `uint32` | `differential_pressure_total_duration_us` | SDP differential-pressure frontend read duration |
+| `24` | `4` | `uint32` | `ads_ch0_duration_us` | ADS1115 channel 0 read duration |
+| `28` | `4` | `uint32` | `ads_ch1_duration_us` | ADS1115 channel 1 read duration |
+| `32` | `4` | `uint32` | `ads_ch2_duration_us` | ADS1115 channel 2 read duration |
+| `36` | `4` | `uint32` | `sdp_low_range_duration_us` | SDP810 low-range read duration |
+| `40` | `4` | `uint32` | `sdp_high_range_duration_us` | SDP811 high-range read duration |
 
-Payload size: `16 bytes`
+Payload size: `44 bytes`
 
 Compatibility:
 
 - Legacy payloads containing only `sample_tick_us` remain valid.
+- The `16-byte` payload containing total acquisition / publish / scheduler timing remains valid.
 - Timing diagnostic frames are not canonical measurements and do not change recording schema requirements.
 
 ## 14. Message Flow

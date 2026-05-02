@@ -1,5 +1,7 @@
 #include "measurement/DifferentialPressureFrontend.h"
 
+#include <Arduino.h>
+
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
@@ -40,6 +42,9 @@ bool DifferentialPressureFrontend::begin() {
 }
 
 DifferentialPressureMeasurements DifferentialPressureFrontend::readMeasurements() {
+    const uint32_t read_started_us = micros();
+    last_low_range_duration_us_ = 0;
+    last_high_range_duration_us_ = 0;
     DifferentialPressureMeasurements measurements{
         .low_range_differential_pressure_pa = NAN,
         .high_range_differential_pressure_pa = NAN,
@@ -50,13 +55,18 @@ DifferentialPressureMeasurements DifferentialPressureFrontend::readMeasurements(
 
     if (!initialized_) {
         setError("DifferentialPressureFrontend not initialized");
+        last_total_duration_us_ = micros() - read_started_us;
         return measurements;
     }
 
     Sdp8xxReading low_range_reading{};
     Sdp8xxReading high_range_reading{};
+    const uint32_t low_range_started_us = micros();
     const bool low_ok = low_range_sensor_.readSample(low_range_reading);
+    last_low_range_duration_us_ = micros() - low_range_started_us;
+    const uint32_t high_range_started_us = micros();
     const bool high_ok = high_range_sensor_.readSample(high_range_reading);
+    last_high_range_duration_us_ = micros() - high_range_started_us;
 
     measurements.low_range_valid = low_ok && low_range_reading.valid;
     measurements.high_range_valid = high_ok && high_range_reading.valid;
@@ -87,6 +97,7 @@ DifferentialPressureMeasurements DifferentialPressureFrontend::readMeasurements(
         measurements.selected_from_low_range = false;
     } else {
         setError("No valid SDP8xx differential pressure sample");
+        last_total_duration_us_ = micros() - read_started_us;
         return measurements;
     }
 
@@ -96,6 +107,7 @@ DifferentialPressureMeasurements DifferentialPressureFrontend::readMeasurements(
             : measurements.high_range_differential_pressure_pa;
 
     clearError();
+    last_total_duration_us_ = micros() - read_started_us;
     return measurements;
 }
 
@@ -121,6 +133,18 @@ const char* DifferentialPressureFrontend::lowRangeLastError() const {
 
 const char* DifferentialPressureFrontend::highRangeLastError() const {
     return high_range_sensor_.lastError();
+}
+
+uint32_t DifferentialPressureFrontend::lastTotalDurationUs() const {
+    return last_total_duration_us_;
+}
+
+uint32_t DifferentialPressureFrontend::lastLowRangeDurationUs() const {
+    return last_low_range_duration_us_;
+}
+
+uint32_t DifferentialPressureFrontend::lastHighRangeDurationUs() const {
+    return last_high_range_duration_us_;
 }
 
 void DifferentialPressureFrontend::updateSelectionPreference(

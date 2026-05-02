@@ -31,8 +31,10 @@ bool AdcFrontend::begin() {
 }
 
 SensorMeasurements AdcFrontend::readMeasurements() {
+    const uint32_t read_started_us = micros();
     if (!initialized_) {
         last_read_succeeded_ = false;
+        last_total_duration_us_ = micros() - read_started_us;
         return {
             .zirconia_ip_voltage_v = NAN,
             .internal_voltage_v = NAN,
@@ -40,6 +42,10 @@ SensorMeasurements AdcFrontend::readMeasurements() {
             .heater_rtd_resistance_ohm = NAN,
             .differential_pressure_selected_pa = NAN,
         };
+    }
+
+    for (uint32_t& duration_us : last_channel_duration_us_) {
+        duration_us = 0;
     }
 
     SensorMeasurements measurements{
@@ -82,6 +88,7 @@ SensorMeasurements AdcFrontend::readMeasurements() {
         isfinite(measurements.zirconia_ip_voltage_v) &&
         isfinite(measurements.zirconia_output_voltage_v) &&
         isfinite(measurements.heater_rtd_resistance_ohm);
+    last_total_duration_us_ = micros() - read_started_us;
     return measurements;
 }
 
@@ -99,6 +106,17 @@ bool AdcFrontend::externalAdcAvailable() const {
 
 const char* AdcFrontend::lastError() const {
     return last_error_;
+}
+
+uint32_t AdcFrontend::lastTotalDurationUs() const {
+    return last_total_duration_us_;
+}
+
+uint32_t AdcFrontend::lastChannelDurationUs(uint8_t channel) const {
+    if (channel >= 4) {
+        return 0;
+    }
+    return last_channel_duration_us_[channel];
 }
 
 bool AdcFrontend::initializeExternalAdc() {
@@ -126,9 +144,17 @@ bool AdcFrontend::initializeExternalAdc() {
 }
 
 bool AdcFrontend::tryReadAdsChannelVoltage(uint8_t channel, float& voltage_out) {
+    const uint32_t read_started_us = micros();
+    auto finish = [this, channel, read_started_us]() {
+        if (channel < 4) {
+            last_channel_duration_us_[channel] = micros() - read_started_us;
+        }
+    };
+
     if (!external_adc_available_) {
         setError("External ADC not initialized");
         voltage_out = NAN;
+        finish();
         return false;
     }
 
@@ -137,6 +163,7 @@ bool AdcFrontend::tryReadAdsChannelVoltage(uint8_t channel, float& voltage_out) 
         if (raw >= 0) {
             voltage_out = ads_.computeVolts(raw);
             clearError();
+            finish();
             return true;
         }
         delay(2);
@@ -144,6 +171,7 @@ bool AdcFrontend::tryReadAdsChannelVoltage(uint8_t channel, float& voltage_out) 
 
     setError("Failed to read ADS1115 channel");
     voltage_out = NAN;
+    finish();
     return false;
 }
 

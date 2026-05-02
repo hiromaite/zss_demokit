@@ -325,6 +325,27 @@ def decode_timing_diagnostic(frame: WiredFrame) -> dict[str, int]:
                 "scheduler_lateness_us": scheduler_lateness_us,
             }
         )
+    if len(frame.payload) >= 44:
+        (
+            adc_total_duration_us,
+            differential_pressure_total_duration_us,
+            ads_ch0_duration_us,
+            ads_ch1_duration_us,
+            ads_ch2_duration_us,
+            sdp_low_range_duration_us,
+            sdp_high_range_duration_us,
+        ) = struct.unpack("<IIIIIII", frame.payload[16:44])
+        values.update(
+            {
+                "adc_total_duration_us": adc_total_duration_us,
+                "differential_pressure_total_duration_us": differential_pressure_total_duration_us,
+                "ads_ch0_duration_us": ads_ch0_duration_us,
+                "ads_ch1_duration_us": ads_ch1_duration_us,
+                "ads_ch2_duration_us": ads_ch2_duration_us,
+                "sdp_low_range_duration_us": sdp_low_range_duration_us,
+                "sdp_high_range_duration_us": sdp_high_range_duration_us,
+            }
+        )
     return values
 
 

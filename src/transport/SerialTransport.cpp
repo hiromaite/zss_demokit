@@ -231,7 +231,8 @@ void SerialTransport::publishTimingDiagnostic(
     uint32_t sample_tick_us,
     uint32_t acquisition_duration_us,
     uint32_t telemetry_publish_duration_us,
-    uint32_t scheduler_lateness_us) {
+    uint32_t scheduler_lateness_us,
+    const measurement::AcquisitionTiming& acquisition_timing) {
     if (!session_active_) {
         return;
     }
@@ -241,6 +242,13 @@ void SerialTransport::publishTimingDiagnostic(
     writeU32Le(encoded_payload + 4, acquisition_duration_us);
     writeU32Le(encoded_payload + 8, telemetry_publish_duration_us);
     writeU32Le(encoded_payload + 12, scheduler_lateness_us);
+    writeU32Le(encoded_payload + 16, acquisition_timing.adc_total_duration_us);
+    writeU32Le(encoded_payload + 20, acquisition_timing.differential_pressure_total_duration_us);
+    writeU32Le(encoded_payload + 24, acquisition_timing.ads_ch0_duration_us);
+    writeU32Le(encoded_payload + 28, acquisition_timing.ads_ch1_duration_us);
+    writeU32Le(encoded_payload + 32, acquisition_timing.ads_ch2_duration_us);
+    writeU32Le(encoded_payload + 36, acquisition_timing.sdp_low_range_duration_us);
+    writeU32Le(encoded_payload + 40, acquisition_timing.sdp_high_range_duration_us);
 
     writeFrame(
         protocol::WiredMessageType::TimingDiagnostic,

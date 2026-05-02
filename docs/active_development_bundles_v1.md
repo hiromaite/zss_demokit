@@ -268,3 +268,36 @@ Branch: `codex/fw-sampling-cadence`
 - `micros()` deadline と USB CDC TX preflight により平均 cadence は大きく改善した
 - telemetry publish は支配要因ではない
 - 残る spike は acquisition duration と scheduler lateness に強く出ており、次は ADS1115 / SDP acquisition scheduling を優先する
+
+## 13. Active Follow-up: Acquisition Breakdown
+
+Branch: `codex/fw-acquisition-scheduler`
+
+目的:
+
+- `FW-VAL-020` の残スパイクが ADS1115 / SDP のどちらに由来するかを確定する
+- ADS1115 ch0/ch1/ch2、SDP810、SDP811 の read duration を wired timing diagnostic に追加する
+- `tools/wired_timing_probe.py` で slow acquisition sample を列挙し、取得方式変更前に根拠を作る
+
+次の判断:
+
+- ADS1115 が支配的なら、single-shot 3ch 同期読みをやめて continuous conversion / staggered channel / lower-rate diagnostic channel を検討する
+- SDP が支配的なら、SDP810 / SDP811 の交互読み、selected range 優先、raw diagnostic の低頻度化を検討する
+- 両方が安定しているのに scheduler lateness が残る場合は、SampleFrame ring buffer / FreeRTOS task 分離へ進む
+
+2026-05-02 実機結果:
+
+- final 1200-sample probe: sequence gap `0`, acquisition breakdown `1200/1200`
+- device interval: `mean=12.217 ms`, `p95=12.322 ms`
+- acquisition duration: `mean=11.685 ms`, `p95=11.776 ms`
+- ADC total: `mean=5.063 ms`
+- ADS ch0/ch1/ch2: roughly `1.7 ms` each
+- differential pressure total: `mean=6.600 ms`
+- SDP low-range: `mean=6.280 ms`
+- SDP high-range: `mean=0.310 ms`
+
+判断:
+
+- 残課題はランダムな spike ではなく、全センサー逐次取得が `10 ms` を恒常的に超える構造的問題
+- 次の実装は「毎サンプル全センサーを必ず読む」から「最新値キャッシュを 10 ms sample frame に載せる」へ切り替える
+- 最小実装では SDP low/high を同一 tick で両方読まず、交互または選択レンジ優先で read し、raw diagnostic は stale 値許容とする

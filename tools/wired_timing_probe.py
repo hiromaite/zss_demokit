@@ -154,6 +154,8 @@ def main() -> int:
     parser.add_argument("--baudrate", type=int, default=115200)
     parser.add_argument("--samples", type=int, default=1200)
     parser.add_argument("--warmup", type=int, default=20)
+    parser.add_argument("--slow-threshold-ms", type=float, default=12.0)
+    parser.add_argument("--slow-limit", type=int, default=12)
     args = parser.parse_args()
 
     with serial.Serial(args.port, args.baudrate, timeout=0.05) as ser:
@@ -175,6 +177,7 @@ def main() -> int:
         host_timestamps: list[float] = []
         sequences: list[int] = []
         status_flags: list[int] = []
+        status_by_sequence: dict[int, int] = {}
         timing_by_sequence: dict[int, dict[str, int]] = {}
 
         while len(sequences) < args.warmup + args.samples:
@@ -189,7 +192,9 @@ def main() -> int:
             host_timestamps.append(time.monotonic())
             sample = decode_telemetry_sample(frame)
             sequences.append(int(sample["sequence"]))
-            status_flags.append(int(sample["status_flags"]))
+            status_flag = int(sample["status_flags"])
+            status_flags.append(status_flag)
+            status_by_sequence[int(sample["sequence"])] = status_flag
 
         drain_deadline = time.monotonic() + 0.25
         while time.monotonic() < drain_deadline:
@@ -214,9 +219,18 @@ def main() -> int:
     acquisition_duration_ms: list[float] = []
     telemetry_publish_duration_ms: list[float] = []
     scheduler_lateness_ms: list[float] = []
+    adc_total_duration_ms: list[float] = []
+    differential_pressure_total_duration_ms: list[float] = []
+    ads_ch0_duration_ms: list[float] = []
+    ads_ch1_duration_ms: list[float] = []
+    ads_ch2_duration_ms: list[float] = []
+    sdp_low_range_duration_ms: list[float] = []
+    sdp_high_range_duration_ms: list[float] = []
     residual_or_wait_ms: list[float] = []
+    slow_samples: list[dict[str, float | int]] = []
     matched_device_ticks = 0
     matched_extended_timing = 0
+    matched_acquisition_breakdown = 0
     for sequence in sequences:
         timing = timing_by_sequence.get(sequence)
         if timing is None:
@@ -230,6 +244,47 @@ def main() -> int:
         acquisition_duration_ms.append(float(acquisition_us) / 1000.0)
         telemetry_publish_duration_ms.append(float(publish_us) / 1000.0)
         scheduler_lateness_ms.append(float(lateness_us) / 1000.0)
+        breakdown_keys = (
+            "adc_total_duration_us",
+            "differential_pressure_total_duration_us",
+            "ads_ch0_duration_us",
+            "ads_ch1_duration_us",
+            "ads_ch2_duration_us",
+            "sdp_low_range_duration_us",
+            "sdp_high_range_duration_us",
+        )
+        if all(timing.get(key) is not None for key in breakdown_keys):
+            matched_acquisition_breakdown += 1
+            adc_total_ms = float(timing["adc_total_duration_us"]) / 1000.0
+            dp_total_ms = float(timing["differential_pressure_total_duration_us"]) / 1000.0
+            ads_ch0_ms = float(timing["ads_ch0_duration_us"]) / 1000.0
+            ads_ch1_ms = float(timing["ads_ch1_duration_us"]) / 1000.0
+            ads_ch2_ms = float(timing["ads_ch2_duration_us"]) / 1000.0
+            sdp_low_ms = float(timing["sdp_low_range_duration_us"]) / 1000.0
+            sdp_high_ms = float(timing["sdp_high_range_duration_us"]) / 1000.0
+            adc_total_duration_ms.append(adc_total_ms)
+            differential_pressure_total_duration_ms.append(dp_total_ms)
+            ads_ch0_duration_ms.append(ads_ch0_ms)
+            ads_ch1_duration_ms.append(ads_ch1_ms)
+            ads_ch2_duration_ms.append(ads_ch2_ms)
+            sdp_low_range_duration_ms.append(sdp_low_ms)
+            sdp_high_range_duration_ms.append(sdp_high_ms)
+            if float(acquisition_us) / 1000.0 >= args.slow_threshold_ms:
+                slow_samples.append(
+                    {
+                        "sequence": sequence,
+                        "status_flags": status_by_sequence.get(sequence, 0),
+                        "acquisition_ms": float(acquisition_us) / 1000.0,
+                        "adc_ms": adc_total_ms,
+                        "dp_ms": dp_total_ms,
+                        "ads_ch0_ms": ads_ch0_ms,
+                        "ads_ch1_ms": ads_ch1_ms,
+                        "ads_ch2_ms": ads_ch2_ms,
+                        "sdp_low_ms": sdp_low_ms,
+                        "sdp_high_ms": sdp_high_ms,
+                        "lateness_ms": float(lateness_us) / 1000.0,
+                    }
+                )
 
     for previous_sequence, current_sequence in zip(sequences, sequences[1:]):
         previous_timing = timing_by_sequence.get(previous_sequence)
@@ -261,6 +316,13 @@ def main() -> int:
     acquisition_summary = summarize_intervals(acquisition_duration_ms)
     telemetry_publish_summary = summarize_intervals(telemetry_publish_duration_ms)
     scheduler_lateness_summary = summarize_intervals(scheduler_lateness_ms)
+    adc_total_summary = summarize_intervals(adc_total_duration_ms)
+    differential_pressure_total_summary = summarize_intervals(differential_pressure_total_duration_ms)
+    ads_ch0_summary = summarize_intervals(ads_ch0_duration_ms)
+    ads_ch1_summary = summarize_intervals(ads_ch1_duration_ms)
+    ads_ch2_summary = summarize_intervals(ads_ch2_duration_ms)
+    sdp_low_summary = summarize_intervals(sdp_low_range_duration_ms)
+    sdp_high_summary = summarize_intervals(sdp_high_range_duration_ms)
     residual_summary = summarize_intervals(residual_or_wait_ms)
 
     print("Capabilities:", capabilities)
@@ -271,13 +333,41 @@ def main() -> int:
     print(f"Observed status flags: {sorted(set(status_flags))}")
     print(f"Timing diagnostics matched: {matched_device_ticks}/{max(0, len(sequences) - 1)} interval(s)")
     print(f"Extended timing diagnostics matched: {matched_extended_timing}/{len(sequences)} sample(s)")
+    print(f"Acquisition breakdown diagnostics matched: {matched_acquisition_breakdown}/{len(sequences)} sample(s)")
     print(format_interval_summary("Host read/decode inter-arrival ms", host_summary))
     print(format_interval_summary("Device sample interval ms", device_summary))
     print(format_jitter_summary("Device sample jitter us", device_jitter_summary))
     print(format_interval_summary("Firmware acquisition duration ms", acquisition_summary))
     print(format_interval_summary("Firmware telemetry publish duration ms", telemetry_publish_summary))
     print(format_interval_summary("Firmware scheduler lateness ms", scheduler_lateness_summary))
+    print(format_interval_summary("Firmware ADC total duration ms", adc_total_summary))
+    print(format_interval_summary("Firmware differential pressure total duration ms", differential_pressure_total_summary))
+    print(format_interval_summary("Firmware ADS ch0 duration ms", ads_ch0_summary))
+    print(format_interval_summary("Firmware ADS ch1 duration ms", ads_ch1_summary))
+    print(format_interval_summary("Firmware ADS ch2 duration ms", ads_ch2_summary))
+    print(format_interval_summary("Firmware SDP low-range duration ms", sdp_low_summary))
+    print(format_interval_summary("Firmware SDP high-range duration ms", sdp_high_summary))
     print(format_interval_summary("Firmware residual/wait interval ms", residual_summary))
+    slow_samples.sort(key=lambda sample: float(sample["acquisition_ms"]), reverse=True)
+    print(
+        f"Slow acquisition samples >= {args.slow_threshold_ms:.3f} ms: "
+        f"{len(slow_samples)}"
+    )
+    for sample in slow_samples[: max(0, args.slow_limit)]:
+        print(
+            "  "
+            f"seq={sample['sequence']} "
+            f"flags=0x{int(sample['status_flags']):08X} "
+            f"acq={float(sample['acquisition_ms']):.3f}ms "
+            f"adc={float(sample['adc_ms']):.3f}ms "
+            f"dp={float(sample['dp_ms']):.3f}ms "
+            f"ads0={float(sample['ads_ch0_ms']):.3f}ms "
+            f"ads1={float(sample['ads_ch1_ms']):.3f}ms "
+            f"ads2={float(sample['ads_ch2_ms']):.3f}ms "
+            f"sdp_low={float(sample['sdp_low_ms']):.3f}ms "
+            f"sdp_high={float(sample['sdp_high_ms']):.3f}ms "
+            f"late={float(sample['lateness_ms']):.3f}ms"
+        )
     print("Note: host read/decode intervals include USB/OS buffering and probe loop batching; use device sample interval for firmware cadence.")
     print("wired_timing_probe_ok")
     return 0

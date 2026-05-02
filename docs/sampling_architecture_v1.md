@@ -92,6 +92,7 @@ Keep reporting these separately:
 
 - device sample interval: `sample_tick_us[n] - sample_tick_us[n-1]`
 - firmware acquisition duration: `acquisition_duration_us`
+- firmware acquisition breakdown: `adc_total_duration_us`, `ads_ch0_duration_us`, `ads_ch1_duration_us`, `ads_ch2_duration_us`, `differential_pressure_total_duration_us`, `sdp_low_range_duration_us`, `sdp_high_range_duration_us`
 - firmware telemetry publish duration: `telemetry_publish_duration_us`
 - firmware scheduler lateness: `scheduler_lateness_us`
 - transport sequence gap: `sequence[n] - sequence[n-1] - 1`

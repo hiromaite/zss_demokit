@@ -18,6 +18,7 @@ bool MeasurementCore::begin() {
 
 SensorMeasurements MeasurementCore::acquire() {
     if (!initialized_) {
+        latest_acquisition_timing_ = {};
         return {};
     }
 
@@ -33,7 +34,18 @@ SensorMeasurements MeasurementCore::acquire() {
         latest_differential_pressure_measurements_.high_range_temperature_c = NAN;
     }
 
-    return adc_frontend_.readMeasurements();
+    const auto measurements = adc_frontend_.readMeasurements();
+    latest_acquisition_timing_.adc_total_duration_us = adc_frontend_.lastTotalDurationUs();
+    latest_acquisition_timing_.differential_pressure_total_duration_us =
+        differential_pressure_available_ ? differential_pressure_frontend_.lastTotalDurationUs() : 0u;
+    latest_acquisition_timing_.ads_ch0_duration_us = adc_frontend_.lastChannelDurationUs(0);
+    latest_acquisition_timing_.ads_ch1_duration_us = adc_frontend_.lastChannelDurationUs(1);
+    latest_acquisition_timing_.ads_ch2_duration_us = adc_frontend_.lastChannelDurationUs(2);
+    latest_acquisition_timing_.sdp_low_range_duration_us =
+        differential_pressure_available_ ? differential_pressure_frontend_.lastLowRangeDurationUs() : 0u;
+    latest_acquisition_timing_.sdp_high_range_duration_us =
+        differential_pressure_available_ ? differential_pressure_frontend_.lastHighRangeDurationUs() : 0u;
+    return measurements;
 }
 
 bool MeasurementCore::isHealthy() const {
@@ -67,6 +79,10 @@ const char* MeasurementCore::differentialPressureLastError() const {
 
 const DifferentialPressureMeasurements& MeasurementCore::latestDifferentialPressureMeasurements() const {
     return latest_differential_pressure_measurements_;
+}
+
+const AcquisitionTiming& MeasurementCore::latestAcquisitionTiming() const {
+    return latest_acquisition_timing_;
 }
 
 }  // namespace zss::measurement

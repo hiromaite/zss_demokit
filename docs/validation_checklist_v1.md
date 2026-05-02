@@ -91,6 +91,7 @@
 | `FW-VAL-019` | Device-side timing diagnostic probe | `sample_tick_us` により host jitter と firmware sampling jitter を分離できる | `PASS` | Bundle A user test で `1200` samples、sequence gap `0`、timing diagnostics `1199/1199` を確認 |
 | `FW-VAL-020` | Device-side 10 ms cadence | device sample interval が nominal `10 ms` 近傍に維持される | `FAIL` | `codex/fw-sampling-cadence` 実機 test で mean は `10.293 ms` まで改善したが、`max=29.050 ms` の spike が残る。次は sensor acquisition 側を優先調査する |
 | `FW-VAL-021` | Extended cadence breakdown probe | acquisition / telemetry publish / scheduler lateness を firmware timing diagnostic で分離できる | `PASS` | `/dev/cu.usbmodem4101` へ upload 後、`tools/wired_timing_probe.py --samples 1200 --warmup 20` で extended timing `1200/1200`、sequence gap `0` を確認 |
+| `FW-VAL-022` | Acquisition source breakdown probe | ADS1115 ch0/ch1/ch2 と SDP810/SDP811 の取得時間を分離できる | `PASS` | `codex/fw-acquisition-scheduler` 実機 test で acquisition breakdown `1200/1200`、sequence gap `0` を確認。ADS total `5.063 ms`、SDP total `6.600 ms`、SDP low `6.280 ms` が支配的 |
 
 ## 6. Integration Checklist
 
@@ -290,6 +291,10 @@
 - `/dev/cu.usbmodem4101` へ `pio run -t upload --upload-port /dev/cu.usbmodem4101` を実施し、upload 成功を確認した
 - upload 直後の `tools/wired_timing_probe.py --port /dev/cu.usbmodem4101 --samples 1200 --warmup 20` では sequence gap `0`、device interval `mean=10.284 ms`, `p95=11.969 ms`, `max=29.034 ms`、acquisition duration `mean=7.001 ms`, `max=28.536 ms`、telemetry publish `mean=0.082 ms` を確認した
 - stale queued telemetry を避けるため probe の測定窓を capabilities 取得後に切り直すよう補正し、再測定で sequence gap `0`、device interval `mean=10.293 ms`, `p95=11.950 ms`, `max=29.050 ms`、acquisition duration `mean=6.994 ms`, `max=28.548 ms`、telemetry publish `mean=0.080 ms`、scheduler lateness `mean=1.654 ms`, `max=21.031 ms` を確認した
+- `codex/fw-acquisition-scheduler` で ADS1115 ch0/ch1/ch2 と SDP810/SDP811 の acquisition breakdown を timing diagnostic に追加し、`tools/wired_timing_probe.py` に slow acquisition sample summary を追加した
+- `/dev/cu.usbmodem4101` へ upload 後、`tools/wired_timing_probe.py --samples 1200 --warmup 20 --slow-threshold-ms 12 --slow-limit 12` を実施し、sequence gap `0`、acquisition breakdown `1200/1200` を確認した
+- 同 test では device interval `mean=12.217 ms`, `p95=12.322 ms`、acquisition `mean=11.685 ms`、ADC total `mean=5.063 ms`、differential pressure total `mean=6.600 ms`、ADS ch0/ch1/ch2 はそれぞれ約 `1.7 ms`、SDP low-range `mean=6.280 ms`、SDP high-range `mean=0.310 ms` を確認した
+- 再測定 `--samples 600 --slow-threshold-ms 10` でも同傾向で、全 `600` samples が `10 ms` を超える acquisition となったため、残課題はランダムスパイクではなく逐次センサー取得時間そのものと判断した
 
 ## 8. 更新ルール
 

@@ -5,6 +5,7 @@
 
 #include "app/CommandProcessor.h"
 #include "board/BoardConfig.h"
+#include "measurement/SensorData.h"
 #include "protocol/PayloadBuilders.h"
 
 namespace zss::transport {
@@ -25,7 +26,8 @@ class SerialTransport {
         uint32_t sample_tick_us,
         uint32_t acquisition_duration_us,
         uint32_t telemetry_publish_duration_us,
-        uint32_t scheduler_lateness_us);
+        uint32_t scheduler_lateness_us,
+        const measurement::AcquisitionTiming& acquisition_timing);
 
   private:
     using PendingCommand = app::CommandRequest;

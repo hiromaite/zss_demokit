@@ -24,6 +24,16 @@ struct DifferentialPressureMeasurements {
     bool selected_from_low_range = false;
 };
 
+struct AcquisitionTiming {
+    uint32_t adc_total_duration_us = 0;
+    uint32_t differential_pressure_total_duration_us = 0;
+    uint32_t ads_ch0_duration_us = 0;
+    uint32_t ads_ch1_duration_us = 0;
+    uint32_t ads_ch2_duration_us = 0;
+    uint32_t sdp_low_range_duration_us = 0;
+    uint32_t sdp_high_range_duration_us = 0;
+};
+
 struct SampleSnapshot {
     uint32_t sequence = 0;
     uint32_t status_flags = 0;

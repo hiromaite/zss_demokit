@@ -280,7 +280,8 @@ void runSamplingStep(uint32_t now_us) {
         sample_started_us,
         acquisition_duration_us,
         telemetry_publish_duration_us,
-        scheduler_lateness_us);
+        scheduler_lateness_us,
+        g_measurement_core.latestAcquisitionTiming());
 }
 
 void emitSummaryLog(uint32_t now_ms) {
