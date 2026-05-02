@@ -81,6 +81,9 @@ BLE_EVENT_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10003"
 PREFERRED_BLE_NAME_PREFIXES = ("M5STAMP-MONITOR",)
 PREFERRED_WIRED_PORT_TOKENS = ("usbmodem", "usbserial", "tty.usb", "cu.usb")
 BLE_SCAN_TIMEOUT_S = 2.5
+WIRED_HANDSHAKE_INITIAL_DELAY_MS = 1200
+WIRED_HANDSHAKE_RETRY_INTERVAL_MS = 500
+WIRED_HANDSHAKE_TIMEOUT_S = 8.0
 
 
 @dataclass
@@ -102,6 +105,7 @@ class TelemetryPoint:
 class MockBackend(QObject):
     telemetry_generated = Signal(object)
     connection_changed = Signal(bool, str)
+    connection_phase_changed = Signal(str, str)
     status_changed = Signal(object)
     capabilities_changed = Signal(object)
     log_generated = Signal(str, str)
@@ -127,12 +131,17 @@ class MockBackend(QObject):
         self._wired_poll_timer = QTimer(self)
         self._wired_poll_timer.setInterval(5)
         self._wired_poll_timer.timeout.connect(self._poll_wired_serial)
+        self._wired_handshake_timer = QTimer(self)
+        self._wired_handshake_timer.setInterval(WIRED_HANDSHAKE_RETRY_INTERVAL_MS)
+        self._wired_handshake_timer.timeout.connect(self._retry_wired_handshake)
         self._wired_serial = None
         self._wired_frame_buffer = WiredFrameBuffer()
         self._next_request_id = 1
         self._pending_requests: dict[int, str] = {}
         self._wired_received_capabilities = False
         self._wired_received_status = False
+        self._wired_handshake_started_monotonic = 0.0
+        self._wired_handshake_ready = False
         self._pending_wired_timing_diag: dict[int, int] = {}
 
         self._ble_discovered_devices: dict[str, str | None] = {}
@@ -221,10 +230,12 @@ class MockBackend(QObject):
         self._connected_name = ""
         self._sample_timer.stop()
         self._wired_poll_timer.stop()
+        self._wired_handshake_timer.stop()
         self._pending_requests.clear()
         self._wired_frame_buffer.clear()
         self._wired_received_capabilities = False
         self._wired_received_status = False
+        self._wired_handshake_ready = False
 
         if self._wired_serial is not None:
             try:
@@ -234,6 +245,7 @@ class MockBackend(QObject):
             self._wired_serial = None
 
         self.connection_changed.emit(False, identifier)
+        self.connection_phase_changed.emit("disconnected", identifier)
         self.log_generated.emit("warn", f"Disconnected from {identifier}.")
 
     def set_pump_state(self, on: bool) -> None:
@@ -716,10 +728,25 @@ class MockBackend(QObject):
             return
 
         try:
-            self._wired_serial = serial.Serial(identifier, WIRED_DEFAULT_BAUDRATE, timeout=0, write_timeout=0.25)
+            wired_serial = serial.Serial()
+            wired_serial.port = identifier
+            wired_serial.baudrate = WIRED_DEFAULT_BAUDRATE
+            wired_serial.timeout = 0
+            wired_serial.write_timeout = 0.25
+            wired_serial.dtr = False
+            wired_serial.rts = False
+            wired_serial.open()
+            wired_serial.dtr = False
+            wired_serial.rts = False
+            self._wired_serial = wired_serial
             self._wired_serial.reset_input_buffer()
             self._wired_serial.reset_output_buffer()
         except Exception as exc:
+            if self._wired_serial is not None:
+                try:
+                    self._wired_serial.close()
+                except Exception:
+                    pass
             self._wired_serial = None
             self.log_generated.emit("error", f"Could not open {identifier}: {exc}")
             return
@@ -736,20 +763,69 @@ class MockBackend(QObject):
         self._next_request_id = 1
         self._wired_received_capabilities = False
         self._wired_received_status = False
+        self._wired_handshake_started_monotonic = time.monotonic()
+        self._wired_handshake_ready = False
         self._pending_wired_timing_diag.clear()
         self._wired_poll_timer.start()
+        self._wired_handshake_timer.start()
         self.connection_changed.emit(True, identifier)
-        self.log_generated.emit("info", f"Connected to {identifier} using wired serial transport.")
-        QTimer.singleShot(300, self._bootstrap_wired_session)
-        QTimer.singleShot(700, self._bootstrap_wired_session)
+        self.connection_phase_changed.emit("handshaking", identifier)
+        self.log_generated.emit(
+            "info",
+            f"Opened {identifier}; waiting for wired protocol handshake.",
+        )
+        QTimer.singleShot(WIRED_HANDSHAKE_INITIAL_DELAY_MS, self._bootstrap_wired_session)
+        QTimer.singleShot(
+            WIRED_HANDSHAKE_INITIAL_DELAY_MS + WIRED_HANDSHAKE_RETRY_INTERVAL_MS,
+            self._bootstrap_wired_session,
+        )
 
     def _bootstrap_wired_session(self) -> None:
-        if not self._connected or self._mode != WIRED_MODE or self._wired_serial is None:
+        if (
+            not self._connected
+            or self._mode != WIRED_MODE
+            or self._wired_serial is None
+            or self._wired_handshake_ready
+        ):
             return
         if not self._wired_received_capabilities:
             self.request_capabilities()
         if not self._wired_received_status:
             self.request_status()
+
+    def _retry_wired_handshake(self) -> None:
+        if not self._connected or self._mode != WIRED_MODE or self._wired_serial is None:
+            self._wired_handshake_timer.stop()
+            return
+        if self._wired_handshake_ready:
+            self._wired_handshake_timer.stop()
+            return
+        if self._wired_received_capabilities or self._wired_received_status:
+            self._mark_wired_handshake_ready("status/capabilities")
+            return
+
+        elapsed_s = time.monotonic() - self._wired_handshake_started_monotonic
+        if elapsed_s * 1000.0 < WIRED_HANDSHAKE_INITIAL_DELAY_MS:
+            return
+        if elapsed_s >= WIRED_HANDSHAKE_TIMEOUT_S:
+            identifier = self._connected_name
+            self.log_generated.emit(
+                "error",
+                f"Wired protocol handshake timed out after {elapsed_s:0.1f} s on {identifier}.",
+            )
+            self.connection_phase_changed.emit("failed", identifier)
+            self.disconnect_device()
+            return
+
+        self._bootstrap_wired_session()
+
+    def _mark_wired_handshake_ready(self, reason: str) -> None:
+        if self._wired_handshake_ready or not self._connected or self._mode != WIRED_MODE:
+            return
+        self._wired_handshake_ready = True
+        self._wired_handshake_timer.stop()
+        self.connection_phase_changed.emit("connected", self._connected_name)
+        self.log_generated.emit("info", f"Wired protocol handshake established via {reason}.")
 
     def _send_wired_command(self, command_id: int, arg0_u32: int = 0) -> bool:
         if self._mode != WIRED_MODE or not self._connected or self._wired_serial is None:
@@ -801,6 +877,7 @@ class MockBackend(QObject):
             self._handle_wired_frame(frame)
 
         for point in pending_points:
+            self._mark_wired_handshake_ready("telemetry")
             device_sample_tick_us = self._pending_wired_timing_diag.pop(point.sequence, None)
             if device_sample_tick_us is not None:
                 point.device_sample_tick_us = device_sample_tick_us
@@ -850,6 +927,7 @@ class MockBackend(QObject):
 
         if frame.message_type == 0x01:
             point = self._decode_wired_telemetry_point(frame, datetime.now())
+            self._mark_wired_handshake_ready("telemetry")
             device_sample_tick_us = self._pending_wired_timing_diag.pop(point.sequence, None)
             if device_sample_tick_us is not None:
                 point.device_sample_tick_us = device_sample_tick_us
@@ -859,6 +937,7 @@ class MockBackend(QObject):
         if frame.message_type == 0x02:
             payload = decode_status_snapshot(frame)
             self._wired_received_status = True
+            self._mark_wired_handshake_ready("status")
             self._pump_on = bool(payload["pump_on"])
             self._heater_power_on = bool(payload.get("heater_power_on"))
             self._warning_latched = bool(payload["status_flags"] & STATUS_FLAG_TELEMETRY_RATE_WARNING)
@@ -879,6 +958,7 @@ class MockBackend(QObject):
         if frame.message_type == 0x03:
             payload = decode_capabilities(frame)
             self._wired_received_capabilities = True
+            self._mark_wired_handshake_ready("capabilities")
             self._last_firmware_version = str(payload["firmware_version"])
             self._last_protocol_version = str(payload["protocol_version"])
             payload["derived_metric_policy"] = DERIVED_METRIC_POLICY_ID

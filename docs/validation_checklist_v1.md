@@ -62,6 +62,7 @@
 | `GUI-VAL-028` | Cross-resolution layout smoke | Windows / low-resolution / narrow window で left/right scroll、plot height、log height、splitter が破綻しない | `TODO` | `system_usability_review_v1.md` の `P1-UX-003`。right column plot splitter は local macOS accept だが、別環境で再確認する |
 | `GUI-VAL-029` | Plot pause and series visibility smoke | acquisition / recording を止めずに plot freeze と series on/off ができる | `TODO` | `system_usability_review_v1.md` の `P1-UX-002`。実装後に offscreen と手動操作で確認する |
 | `GUI-VAL-030` | Engineering tools navigation smoke | Settings が肥大化せず、Flow Verification / Characterization / diagnostics へ迷わず到達できる | `TODO` | `system_usability_review_v1.md` の `P1-UX-001`。Operator settings と Engineering / Tools の分離後に確認する |
+| `GUI-VAL-031` | Wired handshake phase smoke | wired COM / serial open 後、protocol handshake 中の状態表示、retry、成功後の制御有効化が成立する | `PASS` | Bundle B local smoke として macOS `/dev/cu.usbmodem4101` で `handshaking -> connected -> disconnected` と telemetry start を確認。Windows Python / packaged exe は user 環境で再確認する |
 
 ## 5. Firmware Checklist
 
@@ -257,6 +258,17 @@
 - `./.venv_pio/bin/pio run` と `./.venv_pio/bin/pio run -t upload --upload-port /dev/cu.usbmodem4101` を実施し、service visibility wiring 後も firmware build / upload が成立することを確認した
 - `python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` を実施し、serial capabilities が `telemetry_field_bits=67` を広告し、current board config では `zirconia_ip_voltage_v` / `internal_voltage_v` が unavailable のまま安全に扱えることを確認した
 - `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` を実施し、GUI wired session が `738` telemetry、warning/error `0`、CSV `600` rows、non-unit gap `0` で継続することを確認した
+
+### 2026-05-02
+
+- Bundle B の Windows serial failure 仮説に対し、GUI wired path の「port open」と「protocol handshake」を別 phase として扱うよう更新した
+- GUI wired connect は `DTR=False` / `RTS=False` を明示し、初期 handshake を少し待ってから開始し、`capabilities / status / telemetry` が届くまで retry する構成へ変更した
+- handshake 中は connection button / selector / pump / recording の操作を抑止し、成功後にのみ expected connected device として扱うようにした
+- `.venv_gui_prototype/bin/python -m compileall gui_prototype/src/mock_backend.py gui_prototype/src/controllers.py gui_prototype/src/main_window.py` を実施し、GUI connection phase 追加後も compile が成立することを確認した
+- macOS `/dev/cu.usbmodem4101` で offscreen wired handshake smoke を実施し、`handshaking -> connected -> disconnected`、telemetry `5` samples、error `0` を確認した
+- Windows `COMx` 形式の port name が expected wired selection として扱われず、Connect button が実質無効になる regression を修正した
+- offscreen helper smoke で `COM3` selection 時に `_has_expected_wired_selection=True`、wired connect button enabled になることを確認した
+- Windows Python run / packaged exe での wired handshake recovery は user 環境での後日確認項目として残す
 
 ## 8. 更新ルール
 
