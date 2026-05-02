@@ -203,11 +203,29 @@ USER_TEST_REQUIRED:
 - firmware 変更は `pio run` を通過する
 - 実機が必要な項目は `USER_TEST_REQUIRED` として明示し、未実施のまま merge しないか、risk accepted として記録する
 
-## 10. 現時点の推奨着手順
+## 10. User Test Outcome
 
-1. Planning commit を作る
-2. `A` を進め、device / host timing を分離できるようにする
-3. `B` を進め、Windows serial handshake と UI state を堅牢化する
-4. `D` を進め、実機不要の plot logic と UI throttle を実装する
-5. `C` を `B` と整合させながら進める
-6. `E` は architecture note と payload PoC から開始する
+2026-05-02 の user test 結果:
+
+| Bundle | Result | Merge / Next Action |
+| :--- | :--- | :--- |
+| `A` | Diagnostics passed; device-side cadence issue detected | 診断強化は merge 候補。`10 ms` cadence 未達は Bundle E 後続の firmware scheduling task として扱う |
+| `B` | Passed after Windows `COMx` selection fix | merge 候補 |
+| `C` | Passed | B の修正を含む integration branch 上で merge 候補 |
+| `D` | Passed after O2 right-axis interaction fix | merge 候補 |
+| `E` | Batch budget PoC passed | design / PoC baseline として merge 候補 |
+
+Bundle A の重要な観測:
+
+- `tools/wired_timing_probe.py --samples 1200 --warmup 20`
+- sequence gap: `0`
+- timing diagnostics matched: `1199/1199`
+- device sample interval: `mean=13.268 ms`, `p95=12.899 ms`, `max=34.816 ms`
+- nominal `10 ms` を維持できていないため、次は measurement scheduling / ADS1115・SDP read timing / ring buffer 化の検討に進む
+
+## 11. 現時点の推奨着手順
+
+1. `codex/validated-bundles-integration` で A/B/C/D/E の validated changes をまとめる
+2. integration branch で compile / fixture / firmware build を再確認する
+3. merge 後の次タスクとして、`FW-VAL-020` device-side `10 ms` cadence failure を解消する firmware scheduling slice に進む
+4. その後、Bundle E の設計に沿って ring buffer / BLE batch を段階実装する

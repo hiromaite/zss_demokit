@@ -62,8 +62,9 @@
 | `GUI-VAL-028` | Cross-resolution layout smoke | Windows / low-resolution / narrow window で left/right scroll、plot height、log height、splitter が破綻しない | `TODO` | `system_usability_review_v1.md` の `P1-UX-003`。right column plot splitter は local macOS accept だが、別環境で再確認する |
 | `GUI-VAL-029` | Plot pause and series visibility smoke | acquisition / recording を止めずに plot freeze と series on/off ができる | `TODO` | `system_usability_review_v1.md` の `P1-UX-002`。実装後に offscreen と手動操作で確認する |
 | `GUI-VAL-030` | Engineering tools navigation smoke | Settings が肥大化せず、Flow Verification / Characterization / diagnostics へ迷わず到達できる | `TODO` | `system_usability_review_v1.md` の `P1-UX-001`。Operator settings と Engineering / Tools の分離後に確認する |
-| `GUI-VAL-031` | Wired handshake phase smoke | wired COM / serial open 後、protocol handshake 中の状態表示、retry、成功後の制御有効化が成立する | `PASS` | Bundle B local smoke として macOS `/dev/cu.usbmodem4101` で `handshaking -> connected -> disconnected` と telemetry start を確認。Windows Python / packaged exe は user 環境で再確認する |
-| `GUI-VAL-032` | BLE auto-connect state smoke | preferred BLE device discovery 後に auto-connect し、scan / connect button state と preferred name が崩れない | `PASS` | mock BLE offscreen で `GasSensor-Proto` auto-connect、`tools/ble_backend_smoke.py`、fake-live `tools/gui_ble_session_probe.py` が通過 |
+| `GUI-VAL-031` | Wired handshake phase smoke | wired COM / serial open 後、protocol handshake 中の状態表示、retry、成功後の制御有効化が成立する | `PASS` | Bundle B local smoke と Windows user test で確認。`COMx` selection regression 修正後、Windows で serial 接続確立と動作確認が成立 |
+| `GUI-VAL-032` | BLE auto-connect state smoke | preferred BLE device discovery 後に auto-connect し、scan / connect button state と preferred name が崩れない | `PASS` | mock BLE offscreen と user test で確認。`GasSensor-Proto` auto-connect、`tools/ble_backend_smoke.py`、fake-live `tools/gui_ble_session_probe.py` が通過 |
+| `GUI-VAL-033` | Plot axis and follow behavior smoke | Flow fixed Y range、fixed X span、O2 right-axis manual interaction が成立する | `PASS` | Bundle D user test で O2 right-axis mouse operation を確認。Flow / X follow の他改善も問題なし |
 
 ## 5. Firmware Checklist
 
@@ -87,7 +88,8 @@
 | `FW-VAL-016` | Differential pressure telemetry publication | dual-SDP selected differential pressure が transport payload に反映される | `PASS` | `pio run`, upload, `tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 6`, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` により `telemetry_field_bits=15` と finite `differential_pressure_selected_pa` を確認 |
 | `FW-VAL-017` | Service visibility payload publication | wired capabilities / payload が `zirconia_ip_voltage_v` と optional `internal_voltage_v` を壊さず扱える | `PASS` | `pio run`, upload, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` により serial capabilities `telemetry_field_bits=67` を確認。current board config では `internal_voltage_v` unavailable のまま扱えることも確認 |
 | `FW-VAL-018` | Pump / heater safety interlock regression | pump OFF 時に heater が OFF へ落ち、pump OFF 中の heater ON 指令が拒否される | `TODO` | `CommandProcessor` 上の interlock 実装を今後の regression smoke として固定する |
-| `FW-VAL-019` | Device-side timing diagnostic probe | `sample_tick_us` により host jitter と firmware sampling jitter を分離できる | `TODO` | `tools/wired_timing_probe.py` で device sample interval / jitter summary を確認する |
+| `FW-VAL-019` | Device-side timing diagnostic probe | `sample_tick_us` により host jitter と firmware sampling jitter を分離できる | `PASS` | Bundle A user test で `1200` samples、sequence gap `0`、timing diagnostics `1199/1199` を確認 |
+| `FW-VAL-020` | Device-side 10 ms cadence | device sample interval が nominal `10 ms` 近傍に維持される | `FAIL` | Bundle A user test で device interval `mean=13.268 ms`, `p95=12.899 ms`, `max=34.816 ms`。sampling architecture / sensor read scheduling の次タスクへ移す |
 
 ## 6. Integration Checklist
 
@@ -113,6 +115,7 @@
 | `INT-VAL-018` | Flow characterization PoC smoke | raw SDP810 / SDP811 capture wizard が設定画面から生成でき、JSON/CSV保存と解析summaryが動く | `PASS` | `flow_characterization_dialog_smoke_ok`、controller fake telemetry capture、`tools/flow_characterization_analyze.py` smoke を確認 |
 | `INT-VAL-019` | Optional diagnostic availability UX | BLE / Wired で提供される diagnostic fields の差が GUI と CSV 上で誤解なく扱われる | `TODO` | wired-first diagnostics と BLE unavailable fields を operator-readable に表示する方針を確認する |
 | `INT-VAL-020` | Pump noise isolation matrix | pump OFF / ON / separate supply / pneumatic isolation 条件で zirconia noise の相関を比較できる | `TODO` | `USER_TEST_REQUIRED`: pump 操作、電源条件変更、必要なら oscilloscope 観測が必要 |
+| `INT-VAL-021` | Bundle validation integration | A/B/C/D/E branches の user test 結果を統合判断に反映できる | `PASS` | B/C/D/E は user test OK。A は diagnostics OK だが 10 ms cadence failure を検出したため、merge 可能な診断成果と次期 firmware task に分離 |
 
 ## 7. 実施ログ
 
@@ -274,6 +277,12 @@
 - BLE scan phase signal と auto-connect path を追加し、startup scan で preferred device が見つかった場合に自動接続するよう更新した
 - `./.venv_pio/bin/pio run` により firmware name 変更後も build が成立することを確認した
 - `tools/ble_backend_smoke.py` と fake-live `tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 8 --recording-duration-s 3 --reconnect-at-s 4 --min-observed-duration-s 4 --connect-timeout-s 5` を実施し、`GasSensor-Proto` discovery / connect / reconnect / recording path が継続成立することを確認した
+- Bundle A user test で `tools/wired_timing_probe.py --port /dev/cu.usbmodem4101 --samples 1200 --warmup 20` を実施し、`1200` samples、sequence gap `0`、timing diagnostics `1199/1199` を確認した
+- 同 timing probe により、host read/decode interval ではなく device-side sample interval として `mean=13.268 ms`, `stdev=2.763 ms`, `max=34.816 ms` を観測した。nominal `10 ms` から外れているため、sampling architecture / sensor read scheduling の次期修正対象とする
+- Bundle B user test で Windows `COMx` selection regression 修正後に serial 接続と動作が成立した
+- Bundle C user test で BLE scan / auto-connect が意図どおり動作した
+- Bundle D user test で Flow fixed range / X follow 改善に加え、secondary `ViewBox` の Y-axis mouse interaction 有効化後に O2 right-axis が操作可能であることを確認した
+- Bundle E user test で `tools/sampling_batch_budget.py --mtu-bytes 185 --notify-interval-ms 50 --sample-period-ms 10` が `Payload margin bytes: 74`, `Verdict: fit` となることを確認した
 
 ## 8. 更新ルール
 
