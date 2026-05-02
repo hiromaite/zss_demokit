@@ -253,3 +253,18 @@ Branch: `codex/fw-sampling-cadence`
 - acquisition が支配的: ADS1115 continuous conversion / SDP read staggering / frontend scheduling を優先
 - telemetry publish が支配的: SampleFrame ring buffer / transport task / diagnostic gating を優先
 - scheduler lateness が支配的: FreeRTOS task affinity と priority 分離を優先
+
+2026-05-02 実機結果:
+
+- upload: `/dev/cu.usbmodem4101` へ成功
+- final probe: sequence gap `0`, extended timing `1200/1200`
+- device interval: `mean=10.293 ms`, `p95=11.950 ms`, `max=29.050 ms`
+- acquisition duration: `mean=6.994 ms`, `p95=6.668 ms`, `max=28.548 ms`
+- telemetry publish duration: `mean=0.080 ms`, `p95=0.090 ms`, `max=0.104 ms`
+- scheduler lateness: `mean=1.654 ms`, `p95=2.474 ms`, `max=21.031 ms`
+
+判断:
+
+- `micros()` deadline と USB CDC TX preflight により平均 cadence は大きく改善した
+- telemetry publish は支配要因ではない
+- 残る spike は acquisition duration と scheduler lateness に強く出ており、次は ADS1115 / SDP acquisition scheduling を優先する

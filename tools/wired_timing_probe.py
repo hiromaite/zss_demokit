@@ -79,6 +79,10 @@ class SerialProtocolSession:
 
         raise TimeoutError("Timed out waiting for next wired frame")
 
+    def clear_pending_frames(self) -> None:
+        self._pending_frames.clear()
+        self._frame_buffer = WiredFrameBuffer()
+
 
 def summarize_intervals(intervals_ms: list[float]) -> dict[str, float]:
     if not intervals_ms:
@@ -165,6 +169,8 @@ def main() -> int:
             timeout_s=4.0,
         )
         capabilities = decode_capabilities(capabilities_frame)
+        session.clear_pending_frames()
+        ser.reset_input_buffer()
 
         host_timestamps: list[float] = []
         sequences: list[int] = []
