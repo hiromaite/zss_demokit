@@ -126,15 +126,20 @@ class PlotController:
         self.flow_rate_values: deque[float] = deque()
         self.last_sequence: int | None = None
         self.plot_sequence_origin: int | None = None
+        self.latest_elapsed_seconds: float | None = None
+        self.latest_host_received_at: datetime | None = None
         self.sequence_gap_total = 0
         self.x_follow_enabled = True
         self.manual_y_ranges: dict[str, tuple[float, float]] = {}
+        self.render_revision = 0
 
     def append_sample(self, point: TelemetryPoint) -> dict[str, object]:
         if self.plot_sequence_origin is None:
             self.plot_sequence_origin = point.sequence
 
         elapsed = ((point.sequence - self.plot_sequence_origin) * point.nominal_sample_period_ms) / 1000.0
+        self.latest_elapsed_seconds = elapsed
+        self.latest_host_received_at = point.host_received_at
         differential_pressure_selected_pa = point.differential_pressure_selected_pa
         flow_rate = derive_flow_rate_lpm_from_selected_differential_pressure_pa(
             differential_pressure_selected_pa,
@@ -154,6 +159,7 @@ class PlotController:
             sequence_gap = max(0, point.sequence - self.last_sequence - 1)
             self.sequence_gap_total += sequence_gap
         self.last_sequence = point.sequence
+        self.render_revision += 1
 
         return {
             "elapsed_seconds": elapsed,
@@ -170,8 +176,11 @@ class PlotController:
         self.flow_rate_values.clear()
         self.last_sequence = None
         self.plot_sequence_origin = None
+        self.latest_elapsed_seconds = None
+        self.latest_host_received_at = None
         self.sequence_gap_total = 0
         self.x_follow_enabled = True
+        self.render_revision += 1
 
     def history_duration_s(self) -> float:
         if len(self.time_values) < 2:
@@ -194,6 +203,7 @@ class PlotController:
                 "series": {"zirconia": [], "heater": [], "flow": []},
                 "xmin": 0.0,
                 "xmax": 0.0,
+                "revision": self.render_revision,
             }
 
         span_map = {"30 s": 30.0, "2 min": 120.0, "10 min": 600.0}
@@ -205,8 +215,9 @@ class PlotController:
             xmax = x_latest
             x_values, zirconia_values, heater_values, flow_values = self._extract_visible_series()
         else:
-            xmax = x_latest
-            xmin = max(0.0, xmax - span)
+            follow_elapsed = max(x_latest, self._current_follow_elapsed())
+            xmax = max(span, follow_elapsed)
+            xmin = xmax - span
             x_values, zirconia_values, heater_values, flow_values = self._extract_visible_series(cutoff=xmin)
 
         x_values, zirconia_values, heater_values, flow_values = self._downsample_series(
@@ -226,6 +237,7 @@ class PlotController:
             },
             "xmin": xmin,
             "xmax": xmax,
+            "revision": self.render_revision,
         }
 
     def set_manual_y_range(self, plot_key: str, y_min: float, y_max: float) -> None:
@@ -233,6 +245,12 @@ class PlotController:
 
     def manual_y_range_for(self, plot_key: str) -> tuple[float, float] | None:
         return self.manual_y_ranges.get(plot_key)
+
+    def _current_follow_elapsed(self) -> float:
+        if self.latest_elapsed_seconds is None or self.latest_host_received_at is None:
+            return self.time_values[-1]
+        elapsed_since_sample = max(0.0, (datetime.now() - self.latest_host_received_at).total_seconds())
+        return self.latest_elapsed_seconds + elapsed_since_sample
 
     def _trim_history(self, latest_elapsed: float) -> None:
         cutoff = latest_elapsed - self.history_window_s

@@ -131,11 +131,20 @@ USER_TEST_REQUIRED:
 - `setData()` は新規 sample がある時だけ、`setXRange()` は timer で軽く動かす
 - metric cards / status labels / service visibility 更新は telemetry 全サンプルではなく UI refresh rate に throttle する
 
+Bundle D current slice:
+
+- Flow / O2 plot の primary Y-axis は reset / startup 時に `-5.0..+5.0 L/min` の fixed default range を使う
+- O2 secondary Y-axis は `sensor_o2` の manual range state として保存できるようにする
+- selected span が `2 min` 等の場合、測定開始直後でも X-axis 幅を固定し、経過後は wall-clock follow で滑らかに動かす
+- plot data `setData()` は render revision / selected span / O2 calibration key が変わった時だけ更新し、follow 中の timer tick は主に X range 更新に使う
+- User test で O2 right axis の実操作が効かないことを確認したため、secondary `ViewBox` の Y-axis mouse interaction を有効化した
+
 この端末で可能な確認:
 
-- offscreen plot controller smoke
-- Python compile
-- render data helper smoke
+- offscreen plot controller smoke: `plot_bundle_d_smoke_ok`
+- Python compile: `gui_prototype/src/controllers.py`, `gui_prototype/src/main_window.py`
+- render data helper smoke: `plot_follow_bounds_smoke_ok`
+- secondary axis helper smoke: `secondary_axis_mouse_enabled_smoke_ok`
 
 USER_TEST_REQUIRED:
 
