@@ -1592,8 +1592,12 @@ class MainWindow(QMainWindow):
         return any(identifier.startswith(prefix) for prefix in PREFERRED_BLE_NAME_PREFIXES)
 
     def _is_expected_wired_identifier(self, identifier: str) -> bool:
-        haystack = identifier.lower()
-        return any(token in haystack for token in PREFERRED_WIRED_PORT_TOKENS)
+        normalized = identifier.strip()
+        haystack = normalized.lower()
+        if any(token in haystack for token in PREFERRED_WIRED_PORT_TOKENS):
+            return True
+        uppercase = normalized.upper()
+        return uppercase.startswith("COM") and uppercase[3:].isdigit()
 
     def _is_expected_identifier_for_mode(self, mode: str, identifier: str) -> bool:
         if not identifier or identifier == "Disconnected":

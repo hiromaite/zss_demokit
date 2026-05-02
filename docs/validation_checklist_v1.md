@@ -264,6 +264,8 @@
 - handshake 中は connection button / selector / pump / recording の操作を抑止し、成功後にのみ expected connected device として扱うようにした
 - `.venv_gui_prototype/bin/python -m compileall gui_prototype/src/mock_backend.py gui_prototype/src/controllers.py gui_prototype/src/main_window.py` を実施し、GUI connection phase 追加後も compile が成立することを確認した
 - macOS `/dev/cu.usbmodem4101` で offscreen wired handshake smoke を実施し、`handshaking -> connected -> disconnected`、telemetry `5` samples、error `0` を確認した
+- Windows `COMx` 形式の port name が expected wired selection として扱われず、Connect button が実質無効になる regression を修正した
+- offscreen helper smoke で `COM3` selection 時に `_has_expected_wired_selection=True`、wired connect button enabled になることを確認した
 - Windows Python run / packaged exe での wired handshake recovery は user 環境での後日確認項目として残す
 
 ## 8. 更新ルール
