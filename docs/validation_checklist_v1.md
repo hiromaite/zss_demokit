@@ -85,6 +85,7 @@
 | `FW-VAL-016` | Differential pressure telemetry publication | dual-SDP selected differential pressure が transport payload に反映される | `PASS` | `pio run`, upload, `tools/sdp_serial_probe.py --port /dev/cu.usbmodem3101 --duration-s 6`, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` により `telemetry_field_bits=15` と finite `differential_pressure_selected_pa` を確認 |
 | `FW-VAL-017` | Service visibility payload publication | wired capabilities / payload が `zirconia_ip_voltage_v` と optional `internal_voltage_v` を壊さず扱える | `PASS` | `pio run`, upload, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` により serial capabilities `telemetry_field_bits=67` を確認。current board config では `internal_voltage_v` unavailable のまま扱えることも確認 |
 | `FW-VAL-018` | Pump / heater safety interlock regression | pump OFF 時に heater が OFF へ落ち、pump OFF 中の heater ON 指令が拒否される | `TODO` | `CommandProcessor` 上の interlock 実装を今後の regression smoke として固定する |
+| `FW-VAL-019` | Device-side timing diagnostic probe | `sample_tick_us` により host jitter と firmware sampling jitter を分離できる | `TODO` | `tools/wired_timing_probe.py` で device sample interval / jitter summary を確認する |
 
 ## 6. Integration Checklist
 
@@ -109,6 +110,7 @@
 | `INT-VAL-017` | Flow card raw SDP visibility | wired differential pressure raw values が flow metric card に表示される | `PASS` | offscreen live connection で `flow_detail=SDP811: -0.05 Pa / SDP810: -0.05 Pa`, `detail_visible=True` を確認 |
 | `INT-VAL-018` | Flow characterization PoC smoke | raw SDP810 / SDP811 capture wizard が設定画面から生成でき、JSON/CSV保存と解析summaryが動く | `PASS` | `flow_characterization_dialog_smoke_ok`、controller fake telemetry capture、`tools/flow_characterization_analyze.py` smoke を確認 |
 | `INT-VAL-019` | Optional diagnostic availability UX | BLE / Wired で提供される diagnostic fields の差が GUI と CSV 上で誤解なく扱われる | `TODO` | wired-first diagnostics と BLE unavailable fields を operator-readable に表示する方針を確認する |
+| `INT-VAL-020` | Pump noise isolation matrix | pump OFF / ON / separate supply / pneumatic isolation 条件で zirconia noise の相関を比較できる | `TODO` | `USER_TEST_REQUIRED`: pump 操作、電源条件変更、必要なら oscilloscope 観測が必要 |
 
 ## 7. 実施ログ
 
