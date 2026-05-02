@@ -229,3 +229,27 @@ Bundle A の重要な観測:
 2. integration branch で compile / fixture / firmware build を再確認する
 3. merge 後の次タスクとして、`FW-VAL-020` device-side `10 ms` cadence failure を解消する firmware scheduling slice に進む
 4. その後、Bundle E の設計に沿って ring buffer / BLE batch を段階実装する
+
+## 12. Active Follow-up: Firmware Sampling Cadence
+
+Branch: `codex/fw-sampling-cadence`
+
+目的:
+
+- Bundle A の live timing probe で見えた `FW-VAL-020` を、次の ring buffer / RTOS 化へ進む前に分解する
+- `device sample interval` だけでなく、firmware 内の `acquisition duration`, `telemetry publish duration`, `scheduler lateness` を同時に見る
+- まず cooperative scheduler の範囲で `micros()` deadline と USB CDC TX preflight を入れ、どこまで改善するか確認する
+
+実機テストで見るポイント:
+
+- `Device sample interval ms` が `10 ms` に近づくか
+- `Firmware acquisition duration ms` が支配的か
+- `Firmware telemetry publish duration ms` が支配的か
+- `Firmware scheduler lateness ms` が積み上がっているか
+- sequence gap が出ないか
+
+この結果で次の実装を選ぶ:
+
+- acquisition が支配的: ADS1115 continuous conversion / SDP read staggering / frontend scheduling を優先
+- telemetry publish が支配的: SampleFrame ring buffer / transport task / diagnostic gating を優先
+- scheduler lateness が支配的: FreeRTOS task affinity と priority 分離を優先

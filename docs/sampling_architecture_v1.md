@@ -17,6 +17,7 @@ Primary goals:
 
 The current system already records approximately `10 ms` mean sample cadence over wired transport, but host-side CSV intervals can look jittery because they include USB buffering, GUI event-loop scheduling, decode time, and disk flush timing.
 Bundle A separated host inter-arrival from device-side `sample_tick_us`, which is the right diagnostic direction.
+The follow-up cadence diagnostics slice extends the wired timing frame with acquisition duration, telemetry publish duration, and scheduler lateness so the next live test can identify whether the remaining error is sensor acquisition, transport blocking, or scheduling overhead.
 
 The remaining architectural risk is that measurement, transport, BLE stack work, command handling, LED updates, and logs still share too much timing fate.
 The next substantial firmware change should therefore separate sampling ownership before changing calibration-sensitive behavior.
@@ -90,6 +91,9 @@ The GUI decoder should accept both:
 Keep reporting these separately:
 
 - device sample interval: `sample_tick_us[n] - sample_tick_us[n-1]`
+- firmware acquisition duration: `acquisition_duration_us`
+- firmware telemetry publish duration: `telemetry_publish_duration_us`
+- firmware scheduler lateness: `scheduler_lateness_us`
 - transport sequence gap: `sequence[n] - sequence[n-1] - 1`
 - host receive interval: `host_received_at[n] - host_received_at[n-1]`
 - CSV write interval: optional, only for GUI performance diagnostics
@@ -105,6 +109,13 @@ Host receive and CSV intervals are still useful, but they should not be mistaken
 4. Add capability-gated BLE batch encoder / GUI decoder behind a feature bit.
 5. Validate fake batch fixtures and recording schema compatibility.
 6. Only after that, consider task affinity / priority tuning and ADS1115 continuous-conversion mode.
+
+Short diagnostic slice before step 1:
+
+- use `micros()` for the current cooperative scheduler deadline instead of `millis()`
+- enlarge the USB CDC TX ring and avoid blocking on full TX capacity
+- extend wired timing diagnostics while keeping the legacy `sample_tick_us` decoder path valid
+- use the resulting timing breakdown to choose the next implementation target
 
 ## 8. Local PoC
 

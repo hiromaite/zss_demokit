@@ -108,13 +108,14 @@ void SerialTransport::publishTelemetry(const protocol::TelemetryPayloadV1& paylo
         writeFloat32Le(encoded_payload + 32, payload.internal_voltage_v);
     }
 
-    writeFrame(
+    if (writeFrame(
         protocol::WiredMessageType::TelemetrySample,
         payload.sequence,
         0,
         encoded_payload,
-        payload_size);
-    published_telemetry_count_ += 1u;
+        payload_size)) {
+        published_telemetry_count_ += 1u;
+    }
 }
 
 void SerialTransport::publishStatusSnapshot(const protocol::StatusSnapshotPayloadV1& payload, uint32_t request_id) {
@@ -225,13 +226,21 @@ void SerialTransport::publishCommandAck(const protocol::CommandAckPayloadV1& pay
         sizeof(encoded_payload));
 }
 
-void SerialTransport::publishTimingDiagnostic(uint32_t sequence, uint32_t sample_tick_us) {
+void SerialTransport::publishTimingDiagnostic(
+    uint32_t sequence,
+    uint32_t sample_tick_us,
+    uint32_t acquisition_duration_us,
+    uint32_t telemetry_publish_duration_us,
+    uint32_t scheduler_lateness_us) {
     if (!session_active_) {
         return;
     }
 
     uint8_t encoded_payload[protocol::kWiredTimingDiagnosticPayloadSize]{};
     writeU32Le(encoded_payload + 0, sample_tick_us);
+    writeU32Le(encoded_payload + 4, acquisition_duration_us);
+    writeU32Le(encoded_payload + 8, telemetry_publish_duration_us);
+    writeU32Le(encoded_payload + 12, scheduler_lateness_us);
 
     writeFrame(
         protocol::WiredMessageType::TimingDiagnostic,
@@ -335,7 +344,7 @@ void SerialTransport::markSessionActive() {
     silenceTextLoggerIfNeeded();
 }
 
-void SerialTransport::writeFrame(
+bool SerialTransport::writeFrame(
     protocol::WiredMessageType message_type,
     uint32_t sequence,
     uint32_t request_id,
@@ -361,7 +370,18 @@ void SerialTransport::writeFrame(
     writeU16Le(frame + protocol::kWiredHeaderSize + payload_length, crc);
 
     const size_t total_frame_size = protocol::kWiredHeaderSize + payload_length + 2;
-    Serial.write(frame, total_frame_size);
+    const int available = Serial.availableForWrite();
+    if (available >= 0 && static_cast<size_t>(available) < total_frame_size) {
+        dropped_tx_frame_count_ += 1u;
+        return false;
+    }
+
+    const size_t written = Serial.write(frame, total_frame_size);
+    if (written != total_frame_size) {
+        dropped_tx_frame_count_ += 1u;
+        return false;
+    }
+    return true;
 }
 
 uint16_t SerialTransport::computeCrcCcittFalse(const uint8_t* data, size_t length) {

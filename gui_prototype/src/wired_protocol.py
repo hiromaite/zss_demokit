@@ -304,11 +304,28 @@ def decode_event(frame: WiredFrame) -> dict[str, int | str]:
 
 
 def decode_timing_diagnostic(frame: WiredFrame) -> dict[str, int]:
-    (sample_tick_us,) = struct.unpack("<I", frame.payload)
-    return {
+    if len(frame.payload) < 4:
+        raise ValueError(f"Timing diagnostic payload too short: {len(frame.payload)}")
+
+    (sample_tick_us,) = struct.unpack("<I", frame.payload[:4])
+    values = {
         "sequence": frame.sequence,
         "sample_tick_us": sample_tick_us,
     }
+    if len(frame.payload) >= 16:
+        (
+            acquisition_duration_us,
+            telemetry_publish_duration_us,
+            scheduler_lateness_us,
+        ) = struct.unpack("<III", frame.payload[4:16])
+        values.update(
+            {
+                "acquisition_duration_us": acquisition_duration_us,
+                "telemetry_publish_duration_us": telemetry_publish_duration_us,
+                "scheduler_lateness_us": scheduler_lateness_us,
+            }
+        )
+    return values
 
 
 def command_name_from_id(command_id: int) -> str:

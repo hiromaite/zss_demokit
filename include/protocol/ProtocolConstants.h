@@ -146,7 +146,7 @@ inline constexpr size_t kWiredErrorPayloadSize = 8;
 inline constexpr size_t kWiredCommandRequestPayloadSize = 16;
 inline constexpr size_t kWiredCapabilitiesPayloadSize = 20;
 inline constexpr size_t kWiredCommandAckPayloadSize = 8;
-inline constexpr size_t kWiredTimingDiagnosticPayloadSize = 4;
+inline constexpr size_t kWiredTimingDiagnosticPayloadSize = 16;
 
 inline constexpr float kDummyFlowRateGain = 1.0f;
 inline constexpr float kDummyFlowRateOffset = 0.0f;

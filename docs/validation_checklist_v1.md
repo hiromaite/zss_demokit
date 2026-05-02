@@ -90,6 +90,7 @@
 | `FW-VAL-018` | Pump / heater safety interlock regression | pump OFF 時に heater が OFF へ落ち、pump OFF 中の heater ON 指令が拒否される | `TODO` | `CommandProcessor` 上の interlock 実装を今後の regression smoke として固定する |
 | `FW-VAL-019` | Device-side timing diagnostic probe | `sample_tick_us` により host jitter と firmware sampling jitter を分離できる | `PASS` | Bundle A user test で `1200` samples、sequence gap `0`、timing diagnostics `1199/1199` を確認 |
 | `FW-VAL-020` | Device-side 10 ms cadence | device sample interval が nominal `10 ms` 近傍に維持される | `FAIL` | Bundle A user test で device interval `mean=13.268 ms`, `p95=12.899 ms`, `max=34.816 ms`。sampling architecture / sensor read scheduling の次タスクへ移す |
+| `FW-VAL-021` | Extended cadence breakdown probe | acquisition / telemetry publish / scheduler lateness を firmware timing diagnostic で分離できる | `TODO` | `codex/fw-sampling-cadence` で実装。`pio run` と protocol smoke は通過。実機 upload 後に `tools/wired_timing_probe.py` で各 summary を確認する |
 
 ## 6. Integration Checklist
 
@@ -283,6 +284,9 @@
 - Bundle C user test で BLE scan / auto-connect が意図どおり動作した
 - Bundle D user test で Flow fixed range / X follow 改善に加え、secondary `ViewBox` の Y-axis mouse interaction 有効化後に O2 right-axis が操作可能であることを確認した
 - Bundle E user test で `tools/sampling_batch_budget.py --mtu-bytes 185 --notify-interval-ms 50 --sample-period-ms 10` が `Payload margin bytes: 74`, `Verdict: fit` となることを確認した
+- `codex/fw-sampling-cadence` で cooperative scheduler を `micros()` deadline に変更し、wired timing diagnostic を `sample_tick_us` + acquisition / telemetry publish / scheduler lateness に拡張した
+- 同ブランチで USB CDC TX buffer を拡大し、TX capacity が不足した場合に測定ループを長時間ブロックしない送信 preflight を追加した
+- `.venv_gui_prototype/bin/python -m compileall gui_prototype/src tools/wired_timing_probe.py tools/protocol_fixture_smoke.py`、`tools/protocol_fixture_smoke.py`、`pio run` が通過した
 
 ## 8. 更新ルール
 

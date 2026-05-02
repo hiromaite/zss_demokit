@@ -169,13 +169,13 @@ def main() -> int:
         host_timestamps: list[float] = []
         sequences: list[int] = []
         status_flags: list[int] = []
-        device_ticks_by_sequence: dict[int, int] = {}
+        timing_by_sequence: dict[int, dict[str, int]] = {}
 
         while len(sequences) < args.warmup + args.samples:
             frame = session.read_next_frame(timeout_s=4.0)
             if frame.message_type == WIRED_MESSAGE_TYPE_TIMING_DIAGNOSTIC:
                 timing = decode_timing_diagnostic(frame)
-                device_ticks_by_sequence[int(timing["sequence"])] = int(timing["sample_tick_us"])
+                timing_by_sequence[int(timing["sequence"])] = timing
                 continue
             if frame.message_type != WIRED_MESSAGE_TYPE_TELEMETRY_SAMPLE:
                 continue
@@ -193,7 +193,7 @@ def main() -> int:
                 continue
             if frame.message_type == WIRED_MESSAGE_TYPE_TIMING_DIAGNOSTIC:
                 timing = decode_timing_diagnostic(frame)
-                device_ticks_by_sequence[int(timing["sequence"])] = int(timing["sample_tick_us"])
+                timing_by_sequence[int(timing["sequence"])] = timing
 
     host_timestamps = host_timestamps[args.warmup:]
     sequences = sequences[args.warmup:]
@@ -205,16 +205,44 @@ def main() -> int:
         for index in range(1, len(host_timestamps))
     ]
     device_inter_arrival_ms: list[float] = []
+    acquisition_duration_ms: list[float] = []
+    telemetry_publish_duration_ms: list[float] = []
+    scheduler_lateness_ms: list[float] = []
+    residual_or_wait_ms: list[float] = []
     matched_device_ticks = 0
-    for previous_sequence, current_sequence in zip(sequences, sequences[1:]):
-        previous_tick = device_ticks_by_sequence.get(previous_sequence)
-        current_tick = device_ticks_by_sequence.get(current_sequence)
-        if previous_tick is None or current_tick is None:
+    matched_extended_timing = 0
+    for sequence in sequences:
+        timing = timing_by_sequence.get(sequence)
+        if timing is None:
             continue
+        acquisition_us = timing.get("acquisition_duration_us")
+        publish_us = timing.get("telemetry_publish_duration_us")
+        lateness_us = timing.get("scheduler_lateness_us")
+        if acquisition_us is None or publish_us is None or lateness_us is None:
+            continue
+        matched_extended_timing += 1
+        acquisition_duration_ms.append(float(acquisition_us) / 1000.0)
+        telemetry_publish_duration_ms.append(float(publish_us) / 1000.0)
+        scheduler_lateness_ms.append(float(lateness_us) / 1000.0)
+
+    for previous_sequence, current_sequence in zip(sequences, sequences[1:]):
+        previous_timing = timing_by_sequence.get(previous_sequence)
+        current_timing = timing_by_sequence.get(current_sequence)
+        if previous_timing is None or current_timing is None:
+            continue
+        previous_tick = int(previous_timing["sample_tick_us"])
+        current_tick = int(current_timing["sample_tick_us"])
         if current_sequence != previous_sequence + 1:
             continue
         matched_device_ticks += 1
-        device_inter_arrival_ms.append(tick_delta_us(previous_tick, current_tick) / 1000.0)
+        interval_us = tick_delta_us(previous_tick, current_tick)
+        device_inter_arrival_ms.append(interval_us / 1000.0)
+        acquisition_us = previous_timing.get("acquisition_duration_us")
+        publish_us = previous_timing.get("telemetry_publish_duration_us")
+        if acquisition_us is not None and publish_us is not None:
+            residual_or_wait_ms.append(
+                (interval_us - int(acquisition_us) - int(publish_us)) / 1000.0
+            )
 
     sequence_gaps = [
         sequences[index] - sequences[index - 1]
@@ -224,6 +252,10 @@ def main() -> int:
     host_summary = summarize_intervals(inter_arrival_ms)
     device_summary = summarize_intervals(device_inter_arrival_ms)
     device_jitter_summary = summarize_jitter_us(device_inter_arrival_ms, nominal_period_ms)
+    acquisition_summary = summarize_intervals(acquisition_duration_ms)
+    telemetry_publish_summary = summarize_intervals(telemetry_publish_duration_ms)
+    scheduler_lateness_summary = summarize_intervals(scheduler_lateness_ms)
+    residual_summary = summarize_intervals(residual_or_wait_ms)
 
     print("Capabilities:", capabilities)
     print(f"Collected telemetry samples: {len(sequences)}")
@@ -232,9 +264,14 @@ def main() -> int:
     print(f"Non-unit sequence gaps: {gap_count}")
     print(f"Observed status flags: {sorted(set(status_flags))}")
     print(f"Timing diagnostics matched: {matched_device_ticks}/{max(0, len(sequences) - 1)} interval(s)")
+    print(f"Extended timing diagnostics matched: {matched_extended_timing}/{len(sequences)} sample(s)")
     print(format_interval_summary("Host read/decode inter-arrival ms", host_summary))
     print(format_interval_summary("Device sample interval ms", device_summary))
     print(format_jitter_summary("Device sample jitter us", device_jitter_summary))
+    print(format_interval_summary("Firmware acquisition duration ms", acquisition_summary))
+    print(format_interval_summary("Firmware telemetry publish duration ms", telemetry_publish_summary))
+    print(format_interval_summary("Firmware scheduler lateness ms", scheduler_lateness_summary))
+    print(format_interval_summary("Firmware residual/wait interval ms", residual_summary))
     print("Note: host read/decode intervals include USB/OS buffering and probe loop batching; use device sample interval for firmware cadence.")
     print("wired_timing_probe_ok")
     return 0

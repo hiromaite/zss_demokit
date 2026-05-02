@@ -38,7 +38,7 @@ zss::app::CommandProcessor g_command_processor(
 zss::transport::BleTransport g_ble_transport;
 zss::transport::SerialTransport g_serial_transport;
 
-uint32_t g_next_sample_deadline_ms = 0;
+uint32_t g_next_sample_deadline_us = 0;
 uint32_t g_last_summary_log_ms = 0;
 bool g_measurement_core_ready = false;
 bool g_ble_transport_ready = false;
@@ -183,14 +183,18 @@ uint16_t selectNominalSamplePeriodMs() {
     return zss::board::kDefaultNominalSamplePeriodMs;
 }
 
-void updateSamplingCadenceForActiveTransport(uint32_t now_ms) {
+uint32_t nominalSamplePeriodUs() {
+    return static_cast<uint32_t>(g_app_state.nominalSamplePeriodMs()) * 1000u;
+}
+
+void updateSamplingCadenceForActiveTransport(uint32_t now_us) {
     const uint16_t target_period_ms = selectNominalSamplePeriodMs();
     if (target_period_ms == g_app_state.nominalSamplePeriodMs()) {
         return;
     }
 
     g_app_state.setNominalSamplePeriodMs(target_period_ms);
-    g_next_sample_deadline_ms = now_ms + target_period_ms;
+    g_next_sample_deadline_us = now_us + (static_cast<uint32_t>(target_period_ms) * 1000u);
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Timing",
@@ -198,23 +202,27 @@ void updateSamplingCadenceForActiveTransport(uint32_t now_ms) {
         static_cast<unsigned>(target_period_ms));
 }
 
-void runSamplingStep(uint32_t now_ms) {
-    if (g_next_sample_deadline_ms == 0) {
-        g_next_sample_deadline_ms = now_ms + g_app_state.nominalSamplePeriodMs();
+void runSamplingStep(uint32_t now_us) {
+    const uint32_t nominal_period_us = nominalSamplePeriodUs();
+    if (nominal_period_us == 0u) {
         return;
     }
 
-    if (static_cast<int32_t>(now_ms - g_next_sample_deadline_ms) < 0) {
+    if (g_next_sample_deadline_us == 0) {
+        g_next_sample_deadline_us = now_us + nominal_period_us;
+        return;
+    }
+
+    if (static_cast<int32_t>(now_us - g_next_sample_deadline_us) < 0) {
         return;
     }
 
     const uint32_t previous_status_flags = g_app_state.statusFlags();
-    const uint32_t nominal_period_ms = g_app_state.nominalSamplePeriodMs();
     const uint32_t sample_started_us = micros();
-    const uint32_t lateness_ms = now_ms - g_next_sample_deadline_ms;
-    const uint32_t missed_intervals = nominal_period_ms == 0 ? 0u : (lateness_ms / nominal_period_ms);
+    const uint32_t scheduler_lateness_us = sample_started_us - g_next_sample_deadline_us;
+    const uint32_t missed_intervals = scheduler_lateness_us / nominal_period_us;
     const bool overrun =
-        lateness_ms > zss::board::kSamplingOverrunToleranceMs ||
+        scheduler_lateness_us > (zss::board::kSamplingOverrunToleranceMs * 1000u) ||
         missed_intervals > 0u;
 
     g_app_state.setStatusFlag(zss::protocol::kStatusFlagSamplingOverrunMask, overrun);
@@ -223,9 +231,10 @@ void runSamplingStep(uint32_t now_ms) {
         g_app_state.incrementSampleOverrunCount(missed_intervals + 1u);
     }
 
-    g_next_sample_deadline_ms += (missed_intervals + 1u) * nominal_period_ms;
+    g_next_sample_deadline_us += (missed_intervals + 1u) * nominal_period_us;
 
     const auto measurements = g_measurement_core.acquire();
+    const uint32_t acquisition_duration_us = micros() - sample_started_us;
     const auto& differential_pressure = g_measurement_core.latestDifferentialPressureMeasurements();
     auto canonical_measurements = measurements;
     updateDiagnosticBits();
@@ -262,9 +271,16 @@ void runSamplingStep(uint32_t now_ms) {
 
     g_app_state.setDiagnosticBit(zss::protocol::kDiagnosticBitTelemetryPublishedMask, true);
     const auto telemetry_payload = zss::protocol::buildTelemetryPayload(g_app_state);
+    const uint32_t telemetry_publish_started_us = micros();
     g_ble_transport.publishTelemetry(telemetry_payload);
     g_serial_transport.publishTelemetry(telemetry_payload);
-    g_serial_transport.publishTimingDiagnostic(sequence, sample_started_us);
+    const uint32_t telemetry_publish_duration_us = micros() - telemetry_publish_started_us;
+    g_serial_transport.publishTimingDiagnostic(
+        sequence,
+        sample_started_us,
+        acquisition_duration_us,
+        telemetry_publish_duration_us,
+        scheduler_lateness_us);
 }
 
 void emitSummaryLog(uint32_t now_ms) {
@@ -477,8 +493,9 @@ void loop() {
     }
 
     const uint32_t now_ms = millis();
-    updateSamplingCadenceForActiveTransport(now_ms);
-    runSamplingStep(now_ms);
+    const uint32_t now_us = micros();
+    updateSamplingCadenceForActiveTransport(now_us);
+    runSamplingStep(now_us);
     updateStatusLedContext();
     g_status_led.tick(now_ms);
     emitSummaryLog(now_ms);

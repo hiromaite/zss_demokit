@@ -71,6 +71,7 @@ total_frame_size = 16 + payload_length + 2
 | `0x13` | `error` | Device -> GUI | Parse or execution error |
 | `0x14` | `ping` | GUI -> Device | Optional keepalive |
 | `0x15` | `pong` | Device -> GUI | Optional keepalive response |
+| `0x16` | `timing_diagnostic` | Device -> GUI | Wired-only device timing breakdown |
 
 ## 6. Telemetry Sample Payload v1
 
@@ -246,9 +247,30 @@ Payload size: `8 bytes`
 | `0x04` | `payload_parse_error` |
 | `0x05` | `command_execution_error` |
 
-## 13. Message Flow
+## 13. Timing Diagnostic Payload v1
 
-### 13.1 Startup Flow
+Timing diagnostic frames are wired-only engineering frames used to separate device sampling cadence from host receive jitter.
+GUI and tools must accept both the legacy `4-byte` payload and the extended `16-byte` payload.
+
+### 13.1 Payload Layout
+
+| Offset | Size | Type | Field | Notes |
+| :--- | :--- | :--- | :--- | :--- |
+| `0` | `4` | `uint32` | `sample_tick_us` | `micros()` at sample start |
+| `4` | `4` | `uint32` | `acquisition_duration_us` | Measurement frontend acquisition time |
+| `8` | `4` | `uint32` | `telemetry_publish_duration_us` | BLE + wired telemetry publish call time, excluding this timing frame |
+| `12` | `4` | `uint32` | `scheduler_lateness_us` | Sample start lateness against the firmware deadline |
+
+Payload size: `16 bytes`
+
+Compatibility:
+
+- Legacy payloads containing only `sample_tick_us` remain valid.
+- Timing diagnostic frames are not canonical measurements and do not change recording schema requirements.
+
+## 14. Message Flow
+
+### 14.1 Startup Flow
 
 ```mermaid
 sequenceDiagram
@@ -265,7 +287,7 @@ sequenceDiagram
     DEV-->>GUI: periodic telemetry_sample(request_id=0)
 ```
 
-### 13.2 Pump Control Flow
+### 14.2 Pump Control Flow
 
 ```mermaid
 sequenceDiagram
@@ -277,7 +299,7 @@ sequenceDiagram
     DEV-->>GUI: status_snapshot(request_id=10)
 ```
 
-## 14. Parser Requirements
+## 15. Parser Requirements
 
 - Parser shall resynchronize by searching for `0xA5 0x5A`
 - Parser shall validate `payload_length` before allocating buffers
@@ -285,7 +307,7 @@ sequenceDiagram
 - GUI shall treat `telemetry_sample` as the only high-rate frame type
 - GUI shall compute `flow_rate_lpm` after parsing telemetry or status payloads
 
-## 15. Throughput Notes
+## 16. Throughput Notes
 
 With a `20-byte` telemetry payload:
 
@@ -295,12 +317,21 @@ With a `20-byte` telemetry payload:
 
 This leaves substantial headroom at the v1 default baudrate `115200`.
 
-## 16. Open Questions
+With the current wired diagnostic payloads enabled:
+
+- diagnostic telemetry payload frame: `54 bytes`
+- extended timing diagnostic frame: `34 bytes`
+- combined high-rate diagnostic stream at `10 ms`: approximately `8800 bytes/s`
+
+This is still within the nominal `115200 baud` byte budget, but it leaves less margin.
+Production transport work should therefore decouple measurement from writes and eventually make high-rate diagnostics capability-gated or buffered.
+
+## 17. Open Questions
 
 - Whether a text debug mode should coexist in the same firmware image
 - Whether startup should include an unsolicited `capabilities` frame before any command request
 
-## 17. TODO
+## 18. TODO
 
 - [ ] Decide if unsolicited startup `capabilities` frame is desirable
 - [ ] Decide if `header_flags` should be used for fragmentation in future versions
