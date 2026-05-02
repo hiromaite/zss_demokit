@@ -167,11 +167,17 @@ USER_TEST_REQUIRED:
 - fixed-size ring buffer から serial は全サンプル送信、BLE は batch notify する設計を検討する
 - BLE v1 compatibility を残し、batch は capability gated extension とする
 
+Bundle E current slice:
+
+- `docs/sampling_architecture_v1.md` に task ownership、ring buffer contract、BLE batch direction、jitter diagnostics、開発順を固定した
+- `tools/sampling_batch_budget.py` を追加し、MTU / notify interval / sample period / compact sample size から batch feasibility を見積もれるようにした
+- 現在の PoC budget では `MTU=185`, `notify=50 ms`, `sample=10 ms`, `header=8`, `sample=20` の条件で `5 samples required`, `8 samples fit`, `Verdict: fit`
+
 この端末で可能な確認:
 
 - design document
-- host-side encoder / decoder PoC
-- fixture smoke
+- host-side batch budget PoC
+- Python compile
 
 USER_TEST_REQUIRED:
 
