@@ -58,6 +58,7 @@ class ConnectionController(QObject):
     telemetry_received = Signal(object)
     log_generated = Signal(str, str)
     ble_devices_discovered = Signal(list)
+    ble_scan_phase_changed = Signal(str)
     ports_discovered = Signal(list)
 
     def __init__(self, backend: QObject, parent: QObject | None = None) -> None:
@@ -77,6 +78,7 @@ class ConnectionController(QObject):
         self._backend.telemetry_generated.connect(self.telemetry_received)
         self._backend.log_generated.connect(self.log_generated)
         self._backend.ble_devices_discovered.connect(self.ble_devices_discovered)
+        self._backend.ble_scan_phase_changed.connect(self.ble_scan_phase_changed)
         self._backend.ports_discovered.connect(self.ports_discovered)
 
     def is_connected(self) -> bool:

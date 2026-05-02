@@ -78,7 +78,7 @@ BLE_TELEMETRY_CHARACTERISTIC_UUID = "00002A58-0000-1000-8000-00805F9B34FB"
 BLE_STATUS_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10001"
 BLE_CAPABILITIES_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10002"
 BLE_EVENT_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10003"
-PREFERRED_BLE_NAME_PREFIXES = ("M5STAMP-MONITOR",)
+PREFERRED_BLE_NAME_PREFIXES = ("GasSensor-Proto", "M5STAMP-MONITOR")
 PREFERRED_WIRED_PORT_TOKENS = ("usbmodem", "usbserial", "tty.usb", "cu.usb")
 BLE_SCAN_TIMEOUT_S = 2.5
 WIRED_HANDSHAKE_INITIAL_DELAY_MS = 1200
@@ -110,6 +110,7 @@ class MockBackend(QObject):
     capabilities_changed = Signal(object)
     log_generated = Signal(str, str)
     ble_devices_discovered = Signal(list)
+    ble_scan_phase_changed = Signal(str)
     ports_discovered = Signal(list)
 
     def __init__(self, mode: str, parent: QObject | None = None) -> None:
@@ -145,6 +146,7 @@ class MockBackend(QObject):
         self._pending_wired_timing_diag: dict[int, int] = {}
 
         self._ble_discovered_devices: dict[str, str | None] = {}
+        self._ble_scan_in_progress = False
         self._ble_loop: asyncio.AbstractEventLoop | None = None
         self._ble_thread: threading.Thread | None = None
         self._ble_client: Any | None = None
@@ -177,18 +179,25 @@ class MockBackend(QObject):
         if self._mode != BLE_MODE:
             self.ble_devices_discovered.emit([])
             return
+        if self._ble_scan_in_progress:
+            self.log_generated.emit("info", "BLE scan is already in progress.")
+            return
 
         if self._ble_discovered_devices:
             self.ble_devices_discovered.emit(list(self._ble_discovered_devices.keys()))
 
+        self._ble_scan_in_progress = True
+        self.ble_scan_phase_changed.emit("scanning")
         if BleakScanner is None:
             self._ble_discovered_devices = {
-                "M5STAMP-MONITOR": None,
+                "GasSensor-Proto": None,
                 "M5STAMP-MONITOR-LAB-B": None,
                 "ZSS-PROTOTYPE-NODE": None,
             }
             self.ble_devices_discovered.emit(list(self._ble_discovered_devices.keys()))
             self.log_generated.emit("warn", "BLE live scan is unavailable; using mock device list.")
+            self._ble_scan_in_progress = False
+            self.ble_scan_phase_changed.emit("idle")
             return
 
         threading.Thread(target=self._scan_ble_worker, daemon=True).start()
@@ -425,6 +434,8 @@ class MockBackend(QObject):
             self._ble_discovered_devices = {}
             self.ble_devices_discovered.emit([])
             self.log_generated.emit("error", f"BLE scan failed: {exc}")
+            self._ble_scan_in_progress = False
+            self.ble_scan_phase_changed.emit("idle")
             return
 
         labels: list[str] = []
@@ -454,9 +465,12 @@ class MockBackend(QObject):
             )
         else:
             self.log_generated.emit("info", f"BLE scan completed with {len(labels)} device(s).")
+        self._ble_scan_in_progress = False
+        self.ble_scan_phase_changed.emit("idle")
 
     def _connect_mock_ble_device(self, identifier: str) -> None:
         self._ble_session_kind = "mock"
+        self.connection_phase_changed.emit("connecting", identifier)
         self._connected = True
         self._connected_name = identifier
         self._start_monotonic = time.monotonic()
@@ -464,6 +478,7 @@ class MockBackend(QObject):
         self._heater_power_on = False
         self._sample_timer.start()
         self.connection_changed.emit(True, identifier)
+        self.connection_phase_changed.emit("connected", identifier)
         self.log_generated.emit("info", f"Connected to {identifier} in mock BLE mode.")
         self.request_capabilities()
         self.request_status()
@@ -478,6 +493,7 @@ class MockBackend(QObject):
 
         self._ble_session_kind = "live"
         self._ble_disconnect_requested = False
+        self.connection_phase_changed.emit("connecting", identifier)
         self._ble_thread = threading.Thread(
             target=self._run_ble_session_thread,
             args=(identifier, target_identifier),
@@ -501,6 +517,8 @@ class MockBackend(QObject):
             self.log_generated.emit("error", f"BLE session failed: {exc}")
             if self._connected:
                 self._emit_ble_disconnected(identifier)
+            else:
+                self.connection_phase_changed.emit("failed", identifier)
         finally:
             self._ble_client = None
             self._ble_loop = None
@@ -518,6 +536,7 @@ class MockBackend(QObject):
         self._connected_name = identifier
         self._start_monotonic = time.monotonic()
         self.connection_changed.emit(True, identifier)
+        self.connection_phase_changed.emit("connected", identifier)
         self.log_generated.emit("info", f"Connected to {identifier} over BLE.")
 
         await client.start_notify(BLE_TELEMETRY_CHARACTERISTIC_UUID, self._on_ble_telemetry_notification)
@@ -655,6 +674,7 @@ class MockBackend(QObject):
         self._ble_last_status_received_monotonic = 0.0
         self._ble_status_request_nonce = 0
         self.connection_changed.emit(False, identifier)
+        self.connection_phase_changed.emit("disconnected", identifier)
         self.log_generated.emit("warn", f"Disconnected from {identifier}.")
 
     def _on_ble_telemetry_notification(self, _: Any, data: bytearray) -> None:

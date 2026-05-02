@@ -210,7 +210,7 @@ BLE は低から中頻度の telemetry を安定して運ぶ transport とする
 
 v1 方針:
 
-- 可能な限り既存の device name と UUID を維持する
+- BLE UUID は維持し、device name は `GasSensor-Proto` を優先する。移行期間は host 側で legacy `M5STAMP-MONITOR*` も受ける
 - 詳細 packet layout と extension service 方針は `ble_transport_v1.md` を参照する
 
 ### 7.2 GATT 構成案

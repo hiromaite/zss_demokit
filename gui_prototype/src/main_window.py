@@ -324,6 +324,8 @@ class MainWindow(QMainWindow):
         self._last_plot_data_key: tuple[object, ...] | None = None
         self._active_plot_key = self._plot_key_from_label(self.app_settings.plot.selected_plot)
         self._pending_mode_switch_target: str | None = None
+        self._ble_scan_in_progress = False
+        self._ble_auto_connect_attempted = False
         self._latest_low_range_differential_pressure_pa: float | None = None
         self._latest_high_range_differential_pressure_pa: float | None = None
         self._latest_zirconia_ip_voltage_v: float | None = None
@@ -401,11 +403,11 @@ class MainWindow(QMainWindow):
         row = QHBoxLayout()
         row.setSpacing(8)
         self.ble_device_selector = QComboBox()
-        self.ble_device_selector.addItem("M5STAMP-MONITOR")
+        self.ble_device_selector.addItem("GasSensor-Proto")
         row.addWidget(self.ble_device_selector, 1)
         self.ble_scan_button = QPushButton("Scan")
         self.ble_scan_button.setObjectName("SecondaryButton")
-        self.ble_scan_button.clicked.connect(self.connection_controller.scan_ble_devices)
+        self.ble_scan_button.clicked.connect(self._scan_ble_devices_from_ui)
         self.ble_connect_button = QPushButton("Connect")
         self.ble_connect_button.setObjectName("PrimaryButton")
         self.ble_connect_button.clicked.connect(self._toggle_connection)
@@ -729,6 +731,7 @@ class MainWindow(QMainWindow):
         self.connection_controller.telemetry_received.connect(self._on_telemetry)
         self.connection_controller.log_generated.connect(self._append_log)
         self.connection_controller.ble_devices_discovered.connect(self._on_ble_devices_discovered)
+        self.connection_controller.ble_scan_phase_changed.connect(self._on_ble_scan_phase_changed)
         self.connection_controller.ports_discovered.connect(self._on_ports_discovered)
 
     def _apply_persisted_preferences(self) -> None:
@@ -785,6 +788,7 @@ class MainWindow(QMainWindow):
 
     def _prime_mode_specific_lists(self) -> None:
         if self.mode == BLE_MODE:
+            self._ble_auto_connect_attempted = False
             self.ble_device_selector.clear()
             self.ble_device_selector.addItem("Scanning for compatible BLE device...")
             self.ble_device_selector.setEnabled(False)
@@ -804,8 +808,12 @@ class MainWindow(QMainWindow):
     def _sync_connection_controls(self) -> None:
         phase = self.ui_state.connection.phase
         connected = self.connection_controller.is_connected() and phase == "connected"
-        busy = phase in {"connecting", "handshaking", "disconnecting"}
-        if phase == "connecting":
+        connection_busy = phase in {"connecting", "handshaking", "disconnecting"}
+        ble_scan_busy = self.mode == BLE_MODE and self._ble_scan_in_progress
+        busy = connection_busy or ble_scan_busy
+        if ble_scan_busy:
+            connect_text = "Scanning..."
+        elif phase == "connecting":
             connect_text = "Connecting..."
         elif phase == "handshaking":
             connect_text = "Handshake..."
@@ -821,6 +829,7 @@ class MainWindow(QMainWindow):
         self.wired_connect_button.setEnabled((not busy) and (connected or wired_available))
         self.ble_device_selector.setEnabled((not busy) and (not connected) and ble_available)
         self.ble_scan_button.setEnabled((not busy) and (not connected))
+        self.ble_scan_button.setText("Scanning..." if ble_scan_busy else "Scan")
         self.port_selector.setEnabled((not busy) and (not connected) and wired_available)
         self.refresh_ports_button.setEnabled((not busy) and (not connected))
 
@@ -831,13 +840,17 @@ class MainWindow(QMainWindow):
             self.connection_controller.disconnect_device()
             return
         if self.mode == BLE_MODE:
-            identifier = self.ble_device_selector.currentText().strip() or "M5STAMP-MONITOR"
+            identifier = self.ble_device_selector.currentText().strip() or "GasSensor-Proto"
         else:
             identifier = self.port_selector.currentText() or "Prototype-Port"
         self.ui_state.connection.phase = "connecting"
         self.transport_state_value.setText("Connecting")
         self._sync_connection_controls()
         self.connection_controller.connect_device(identifier)
+
+    def _scan_ble_devices_from_ui(self) -> None:
+        self._ble_auto_connect_attempted = False
+        self.connection_controller.scan_ble_devices()
 
     def _on_connection_changed(self, connected: bool, identifier: str) -> None:
         had_plot_samples = bool(self.plot_controller.time_values)
@@ -915,10 +928,28 @@ class MainWindow(QMainWindow):
         self.ble_device_selector.clear()
         if devices:
             self.ble_device_selector.addItems(devices)
-            preferred_index = max(0, self.ble_device_selector.findText(current))
+            auto_target = self._first_expected_ble_device(devices)
+            preferred_index = self.ble_device_selector.findText(auto_target or current)
+            preferred_index = max(0, preferred_index)
             self.ble_device_selector.setCurrentIndex(preferred_index)
+            if auto_target is not None and self._should_auto_connect_ble():
+                self._ble_auto_connect_attempted = True
+                self._append_log("info", f"Auto-connecting to preferred BLE device {auto_target}.")
+                self.ui_state.connection.phase = "connecting"
+                self.transport_state_value.setText("Connecting")
+                self._sync_connection_controls()
+                QTimer.singleShot(0, lambda target=auto_target: self.connection_controller.connect_device(target))
         else:
             self.ble_device_selector.addItem("No compatible BLE device detected")
+        self._sync_connection_controls()
+
+    def _on_ble_scan_phase_changed(self, phase: str) -> None:
+        self._ble_scan_in_progress = phase == "scanning"
+        if self._ble_scan_in_progress:
+            self.ble_scan_button.setText("Scanning...")
+            self.ble_device_selector.setEnabled(False)
+        else:
+            self.ble_scan_button.setText("Scan")
         self._sync_connection_controls()
 
     def _on_ports_discovered(self, ports: list[str]) -> None:
@@ -1312,6 +1343,9 @@ class MainWindow(QMainWindow):
         self._stop_recording()
         self.mode = new_mode
         self.ui_state.mode = new_mode
+        if new_mode != BLE_MODE:
+            self._ble_scan_in_progress = False
+            self._ble_auto_connect_attempted = False
         self.app_settings.last_mode = new_mode
         self.telemetry_health_monitor.set_mode(new_mode)
         self.connection_controller.set_mode(new_mode)
@@ -1644,6 +1678,17 @@ class MainWindow(QMainWindow):
 
     def _is_expected_ble_identifier(self, identifier: str) -> bool:
         return any(identifier.startswith(prefix) for prefix in PREFERRED_BLE_NAME_PREFIXES)
+
+    def _first_expected_ble_device(self, devices: list[str]) -> str | None:
+        return next((device for device in devices if self._is_expected_ble_identifier(device)), None)
+
+    def _should_auto_connect_ble(self) -> bool:
+        return (
+            self.mode == BLE_MODE
+            and not self._ble_auto_connect_attempted
+            and not self.connection_controller.is_connected()
+            and self.ui_state.connection.phase in {"disconnected", "failed"}
+        )
 
     def _is_expected_wired_identifier(self, identifier: str) -> bool:
         normalized = identifier.strip()

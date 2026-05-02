@@ -365,7 +365,7 @@ async def run_smoke(
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", default="M5STAMP-MONITOR")
+    parser.add_argument("--name", default="GasSensor-Proto")
     parser.add_argument("--address")
     parser.add_argument("--scan-timeout", type=float, default=8.0)
     parser.add_argument("--telemetry-count", type=int, default=8)

@@ -18,7 +18,7 @@
 
 | Logical Name | UUID | Properties | Notes |
 | :--- | :--- | :--- | :--- |
-| `DEVICE_NAME` | `M5STAMP-MONITOR` | advertising name | Existing name |
+| `DEVICE_NAME` | `GasSensor-Proto` | advertising name | Operator-facing preferred name; host filters also accept legacy `M5STAMP-MONITOR*` during transition |
 | `CONTROL_SERVICE_UUID` | `0000180F-0000-1000-8000-00805F9B34FB` | service | Existing service |
 | `PUMP_CONTROL_CHARACTERISTIC_UUID` | `00002A19-0000-1000-8000-00805F9B34FB` | `WRITE` | Existing pump control characteristic |
 | `MONITORING_SERVICE_UUID` | `0000181A-0000-1000-8000-00805F9B34FB` | service | Existing service |
