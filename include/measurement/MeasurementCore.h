@@ -23,6 +23,8 @@ class MeasurementCore {
     bool differentialPressureHealthy() const;
     const char* lastError() const;
     const char* differentialPressureLastError() const;
+    const char* differentialPressureLowRangeLastError() const;
+    const char* differentialPressureHighRangeLastError() const;
     const DifferentialPressureMeasurements& latestDifferentialPressureMeasurements() const;
     const AcquisitionTiming& latestAcquisitionTiming() const;
 

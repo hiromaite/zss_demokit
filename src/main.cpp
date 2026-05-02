@@ -48,6 +48,10 @@ constexpr uint8_t kEventSeverityInfo = 0;
 constexpr uint8_t kEventSeverityWarn = 1;
 constexpr uint8_t kEventSeverityError = 2;
 
+const char* fallbackErrorText(const char* message) {
+    return message != nullptr && message[0] != '\0' ? message : "no detail";
+}
+
 uint32_t warningMaskFromStatusFlags(uint32_t status_flags) {
     return status_flags &
            (zss::protocol::kStatusFlagAdcFaultMask |
@@ -161,12 +165,28 @@ void logCapabilitiesPreview() {
 
 void logDifferentialPressureFrontendStatus() {
     if (g_measurement_core.differentialPressureAvailable()) {
+        const bool low_available = g_measurement_core.differentialPressureLowRangeAvailable();
+        const bool high_available = g_measurement_core.differentialPressureHighRangeAvailable();
         zss::services::Logger::log(
             zss::services::LogLevel::Info,
             "Boot",
             "SDP frontend initialized: low=%u high=%u.",
-            static_cast<unsigned>(g_measurement_core.differentialPressureLowRangeAvailable()),
-            static_cast<unsigned>(g_measurement_core.differentialPressureHighRangeAvailable()));
+            static_cast<unsigned>(low_available),
+            static_cast<unsigned>(high_available));
+        if (!low_available) {
+            zss::services::Logger::log(
+                zss::services::LogLevel::Warn,
+                "Boot",
+                "SDP810-125Pa unavailable. Check connection or sensor health: %s",
+                fallbackErrorText(g_measurement_core.differentialPressureLowRangeLastError()));
+        }
+        if (!high_available) {
+            zss::services::Logger::log(
+                zss::services::LogLevel::Warn,
+                "Boot",
+                "SDP811-500Pa unavailable. Check connection or sensor health: %s",
+                fallbackErrorText(g_measurement_core.differentialPressureHighRangeLastError()));
+        }
         return;
     }
 
@@ -174,7 +194,17 @@ void logDifferentialPressureFrontendStatus() {
         zss::services::LogLevel::Warn,
         "Boot",
         "Dual-SDP frontend unavailable: %s",
-        g_measurement_core.differentialPressureLastError());
+        fallbackErrorText(g_measurement_core.differentialPressureLastError()));
+    zss::services::Logger::log(
+        zss::services::LogLevel::Warn,
+        "Boot",
+        "SDP810-125Pa unavailable. Check connection or sensor health: %s",
+        fallbackErrorText(g_measurement_core.differentialPressureLowRangeLastError()));
+    zss::services::Logger::log(
+        zss::services::LogLevel::Warn,
+        "Boot",
+        "SDP811-500Pa unavailable. Check connection or sensor health: %s",
+        fallbackErrorText(g_measurement_core.differentialPressureHighRangeLastError()));
 }
 
 uint16_t selectNominalSamplePeriodMs() {

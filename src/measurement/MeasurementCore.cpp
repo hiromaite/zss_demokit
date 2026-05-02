@@ -115,6 +115,14 @@ const char* MeasurementCore::differentialPressureLastError() const {
     return differential_pressure_frontend_.lastError();
 }
 
+const char* MeasurementCore::differentialPressureLowRangeLastError() const {
+    return differential_pressure_frontend_.lowRangeLastError();
+}
+
+const char* MeasurementCore::differentialPressureHighRangeLastError() const {
+    return differential_pressure_frontend_.highRangeLastError();
+}
+
 const DifferentialPressureMeasurements& MeasurementCore::latestDifferentialPressureMeasurements() const {
     return latest_differential_pressure_measurements_;
 }
