@@ -125,14 +125,15 @@ Acquisition scheduling slice:
 - keep `SDP810` / `SDP811` in Continuous Mode; cache scale factor from startup full sample and use pressure-word runtime reads
 - track `SDP810` / `SDP811` availability independently so an absent or failed sensor does not block the 10 ms sample loop
 - advertise and publish raw differential-pressure field bits independently; a system with only `SDP811` available may publish `differential_pressure_high_range_pa` while omitting `differential_pressure_low_range_pa`
-- stagger diagnostic ADS reads (`ADS1115 ch0/ch1`) across the lighter samples
+- after the faulty `SDP810` was replaced, restore all ADS1115 channels (`ch0/ch1/ch2`) to every `10 ms` sample because the full ADC set fits comfortably within the period
 - treat raw differential pressure channels as diagnostic values that may be one scheduling phase stale
 
 Current result on `codex/fw-acquisition-scheduler`:
 
-- current hardware reports `SDP frontend initialized: low=0 high=1`
-- wired timing probe after availability hardening: sequence gap `0`, acquisition `mean=2.325 ms`, differential-pressure read `mean=0.250 ms`
-- the remaining jitter is no longer acquisition-bound; next tuning should focus on scheduler lateness / loop task separation
+- current hardware reports `SDP frontend initialized: low=1 high=1` after replacing the faulty `SDP810`
+- wired timing probe after restoring full ADS reads and adding deadline-aware cooperative waiting: sequence gap `0`, device sample jitter `max_abs=5 us`, scheduler lateness `max=0.006 ms`
+- acquisition remains stable with all ADS channels and both SDP channels: acquisition `mean=5.464 ms`, ADC total `mean=5.052 ms`, differential-pressure read `mean=0.392 ms`
+- the wired cooperative scheduler now meets the sub-100 us device-side jitter target in this live test; remaining architecture work should focus on keeping this behavior under BLE/batch and heavier GUI interaction scenarios
 
 ## 8. Local PoC
 

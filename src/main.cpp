@@ -47,6 +47,7 @@ bool g_serial_transport_ready = false;
 constexpr uint8_t kEventSeverityInfo = 0;
 constexpr uint8_t kEventSeverityWarn = 1;
 constexpr uint8_t kEventSeverityError = 2;
+constexpr uint32_t kNonCriticalServiceGuardUs = 3000u;
 
 const char* fallbackErrorText(const char* message) {
     return message != nullptr && message[0] != '\0' ? message : "no detail";
@@ -219,6 +220,29 @@ uint16_t selectNominalSamplePeriodMs() {
 
 uint32_t nominalSamplePeriodUs() {
     return static_cast<uint32_t>(g_app_state.nominalSamplePeriodMs()) * 1000u;
+}
+
+bool nextSampleDeadlineIsNear(uint32_t now_us) {
+    if (g_next_sample_deadline_us == 0u) {
+        return false;
+    }
+    const int32_t time_until_deadline_us =
+        static_cast<int32_t>(g_next_sample_deadline_us - now_us);
+    return time_until_deadline_us > 0 &&
+           static_cast<uint32_t>(time_until_deadline_us) <= kNonCriticalServiceGuardUs;
+}
+
+void waitUntilNextSampleDeadline() {
+    while (g_next_sample_deadline_us != 0u) {
+        const int32_t time_until_deadline_us =
+            static_cast<int32_t>(g_next_sample_deadline_us - micros());
+        if (time_until_deadline_us <= 0) {
+            return;
+        }
+        if (time_until_deadline_us > 250) {
+            delayMicroseconds(100);
+        }
+    }
 }
 
 void updateSamplingCadenceForActiveTransport(uint32_t now_us) {
@@ -443,6 +467,15 @@ void setup() {
 }
 
 void loop() {
+    uint32_t now_us = micros();
+    updateSamplingCadenceForActiveTransport(now_us);
+    if (nextSampleDeadlineIsNear(now_us)) {
+        waitUntilNextSampleDeadline();
+        runSamplingStep(micros());
+    } else {
+        runSamplingStep(now_us);
+    }
+
     g_ble_transport.update();
     g_serial_transport.update();
     g_app_state.setTransportSessionActive(g_serial_transport.isConnected() || g_ble_transport.isConnected());
@@ -535,9 +568,6 @@ void loop() {
     }
 
     const uint32_t now_ms = millis();
-    const uint32_t now_us = micros();
-    updateSamplingCadenceForActiveTransport(now_us);
-    runSamplingStep(now_us);
     updateStatusLedContext();
     g_status_led.tick(now_ms);
     emitSummaryLog(now_ms);

@@ -307,7 +307,7 @@ Branch: `codex/fw-acquisition-scheduler`
 - ADS1115 ch2 (`zirconia_output_voltage_v`) は毎 sample で読む
 - SDP8xx は Continuous Mode のまま、起動時に full sample から scale factor を取得し、通常 loop では pressure word のみを読む
 - SDP low-range / high-range は sensor availability を個別に持ち、初期化できていない、または read failure になった sensor を毎 sample で読み続けない
-- ADS1115 ch0 (`zirconia_ip_voltage_v`) と ch1 (`heater_rtd_resistance_ohm`) は低頻度に stagger して読む
+- ADS1115 ch0 (`zirconia_ip_voltage_v`), ch1 (`heater_rtd_resistance_ohm`), ch2 (`zirconia_output_voltage_v`) は、faulty SDP810 交換後の実測で全 channel 毎 sample 取得へ戻す
 - telemetry は各 channel の latest cached value を publish する
 - これは RTOS / ring buffer 化前の最小リスク slice であり、正式な高頻度取得方式は追加実測後に決める
 
@@ -332,3 +332,13 @@ Branch: `codex/fw-acquisition-scheduler`
 - acquisition bottleneck は current hardware 条件では解消した
 - 残る timing 課題は sensor read ではなく、loop scheduler lateness / cooperative task scheduling 側として扱う
 - SDP810 を再接続した状態では、capabilities が low/high 両方を広告し、low/high raw が両方 finite になることを再検証する
+
+2026-05-02 second follow-up:
+
+- SDP810 個体交換後、boot log と flow probe で `low=1 high=1`、capabilities `telemetry_field_bits=123`、low/high raw とも finite を確認した
+- 故障個体対策として入れた safety behavior のうち、per-sensor availability / unavailable WARN log / capabilities field gating は堅牢性向上として維持する
+- 一方、ADS1115 ch0/ch1 の低頻度 stagger は情報量低下にあたるため、全 ADS channel を毎 `10 ms` sample で読む構成へ戻した
+- full ADS + dual SDP pressure-word read の 1200-sample probe では sequence gap `0`, acquisition `mean=5.464 ms`, ADC total `mean=5.052 ms`, differential pressure total `mean=0.392 ms`, slow acquisition `0`
+- cooperative loop では deadline 直前に BLE / serial / LED などの非クリティカル処理へ入ることが jitter の主因だったため、sample deadline が近い場合は短く待って sample を先に実行する guard を追加した
+- final 1200-sample probe: device interval `mean=10.000 ms`, `min=9.995 ms`, `p95=10.001 ms`, `max=10.004 ms`, device jitter `max_abs=5 us`, scheduler lateness `max=0.006 ms`
+- `tools/wired_serial_smoke.py` と `tools/wired_flow_probe.py --duration-s 4` は通過し、wired commands / telemetry continuity / low-high raw payload は維持された
