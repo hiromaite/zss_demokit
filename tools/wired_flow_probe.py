@@ -75,6 +75,22 @@ def main() -> int:
         ser.write(build_command_frame(WIRED_COMMAND_ID_GET_CAPABILITIES, request_id=1))
         ser.flush()
 
+        capabilities = None
+        capabilities_deadline = time.time() + 2.0
+        while time.time() < capabilities_deadline and capabilities is None:
+            waiting = int(ser.in_waiting)
+            if waiting <= 0:
+                time.sleep(0.02)
+                continue
+            chunk = ser.read(waiting)
+            for frame in frame_buffer.push(chunk):
+                if frame.message_type == 0x03:
+                    capabilities = decode_capabilities(frame)
+                    break
+
+        ser.reset_input_buffer()
+        frame_buffer = WiredFrameBuffer()
+
         deadline = time.time() + max(1.0, args.duration_s + args.warmup_s)
         warmup_deadline = time.time() + max(0.0, args.warmup_s)
 
@@ -83,7 +99,6 @@ def main() -> int:
         last_sequence: int | None = None
         non_unit_gap_total = 0
         field_bits_seen: set[int] = set()
-        capabilities = None
         has_dp_bit = False
         differential_pressures: list[float] = []
         low_range_pressures: list[float] = []
@@ -98,7 +113,7 @@ def main() -> int:
 
             chunk = ser.read(waiting)
             for frame in frame_buffer.push(chunk):
-                if frame.message_type == 0x03 and capabilities is None:
+                if frame.message_type == 0x03:
                     capabilities = decode_capabilities(frame)
                     continue
 

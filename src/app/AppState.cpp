@@ -52,14 +52,20 @@ void AppState::clearDifferentialPressureSelectedPa() {
     latest_differential_pressure_selected_pa_ = 0.0f;
 }
 
-void AppState::setDifferentialPressureRawPa(float low_range_value, float high_range_value) {
-    has_differential_pressure_raw_pa_ = true;
+void AppState::setDifferentialPressureRawPa(
+    float low_range_value,
+    bool has_low_range_value,
+    float high_range_value,
+    bool has_high_range_value) {
+    has_differential_pressure_low_range_pa_ = has_low_range_value;
+    has_differential_pressure_high_range_pa_ = has_high_range_value;
     latest_differential_pressure_low_range_pa_ = low_range_value;
     latest_differential_pressure_high_range_pa_ = high_range_value;
 }
 
 void AppState::clearDifferentialPressureRawPa() {
-    has_differential_pressure_raw_pa_ = false;
+    has_differential_pressure_low_range_pa_ = false;
+    has_differential_pressure_high_range_pa_ = false;
     latest_differential_pressure_low_range_pa_ = 0.0f;
     latest_differential_pressure_high_range_pa_ = 0.0f;
 }
@@ -103,7 +109,16 @@ float AppState::latestDifferentialPressureSelectedPa() const {
 }
 
 bool AppState::hasDifferentialPressureRawPa() const {
-    return has_differential_pressure_raw_pa_;
+    return has_differential_pressure_low_range_pa_ ||
+           has_differential_pressure_high_range_pa_;
+}
+
+bool AppState::hasDifferentialPressureLowRangePa() const {
+    return has_differential_pressure_low_range_pa_;
+}
+
+bool AppState::hasDifferentialPressureHighRangePa() const {
+    return has_differential_pressure_high_range_pa_;
 }
 
 float AppState::latestDifferentialPressureLowRangePa() const {

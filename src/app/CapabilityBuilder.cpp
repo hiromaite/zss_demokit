@@ -8,7 +8,8 @@ DeviceCapabilities CapabilityBuilder::build(
     transport::TransportKind transport_kind,
     uint16_t nominal_sample_period_ms,
     bool advertise_differential_pressure_selected,
-    bool advertise_differential_pressure_raw_channels,
+    bool advertise_differential_pressure_low_range,
+    bool advertise_differential_pressure_high_range,
     bool advertise_zirconia_ip_voltage,
     bool advertise_internal_voltage) {
     DeviceCapabilities capabilities{};
@@ -17,9 +18,12 @@ DeviceCapabilities CapabilityBuilder::build(
         capabilities.telemetry_field_bits |=
             protocol::kTelemetryFieldDifferentialPressureSelectedMask;
     }
-    if (advertise_differential_pressure_raw_channels) {
+    if (advertise_differential_pressure_low_range) {
         capabilities.telemetry_field_bits |=
-            protocol::kTelemetryFieldDifferentialPressureLowRangeMask |
+            protocol::kTelemetryFieldDifferentialPressureLowRangeMask;
+    }
+    if (advertise_differential_pressure_high_range) {
+        capabilities.telemetry_field_bits |=
             protocol::kTelemetryFieldDifferentialPressureHighRangeMask;
     }
     if (advertise_zirconia_ip_voltage) {

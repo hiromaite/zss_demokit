@@ -301,3 +301,34 @@ Branch: `codex/fw-acquisition-scheduler`
 - 残課題はランダムな spike ではなく、全センサー逐次取得が `10 ms` を恒常的に超える構造的問題
 - 次の実装は「毎サンプル全センサーを必ず読む」から「最新値キャッシュを 10 ms sample frame に載せる」へ切り替える
 - 最小実装では SDP low/high を同一 tick で両方読まず、交互または選択レンジ優先で read し、raw diagnostic は stale 値許容とする
+
+実装方針:
+
+- ADS1115 ch2 (`zirconia_output_voltage_v`) は毎 sample で読む
+- SDP8xx は Continuous Mode のまま、起動時に full sample から scale factor を取得し、通常 loop では pressure word のみを読む
+- SDP low-range / high-range は sensor availability を個別に持ち、初期化できていない、または read failure になった sensor を毎 sample で読み続けない
+- ADS1115 ch0 (`zirconia_ip_voltage_v`) と ch1 (`heater_rtd_resistance_ohm`) は低頻度に stagger して読む
+- telemetry は各 channel の latest cached value を publish する
+- これは RTOS / ring buffer 化前の最小リスク slice であり、正式な高頻度取得方式は追加実測後に決める
+
+2026-05-02 follow-up:
+
+- Sensirion SDP8xx digital datasheet を確認し、`0x3615` Continuous Differential Pressure Average Till Read は本用途に適合するため、測定 mode 自体は変更しない
+- Datasheet reference: https://sensirion.com/media/documents/90500156/6167E43B/Sensirion_Differential_Pressure_Datasheet_SDP8xx_Digital.pdf
+- 実装上は `Sdp8xxSensor` が startup full sample で scale factor を cache し、runtime read は pressure word のみを取得するよう変更した
+- 実機ログで current hardware は `SDP frontend initialized: low=0 high=1` であり、SDP810 low-range が初期化できていないことを確認した
+- 旧実装は low-range 不在でも毎 sample read を試み、I2C timeout により `sdp_low_range_duration_us ~= 6.3 ms` を発生させていた
+- sensor availability を low/high 個別に持つよう変更し、不在 channel を capabilities / telemetry field bits から外すようにした
+- final 1200-sample probe: sequence gap `0`, acquisition breakdown `1200/1200`
+- device interval: `mean=9.999 ms`, `p95=11.459 ms`, `max=12.492 ms`
+- acquisition duration: `mean=2.325 ms`, `p95=3.663 ms`, `max=3.686 ms`
+- differential pressure total: `mean=0.250 ms`, SDP low-range `0.000 ms`, SDP high-range `mean=0.237 ms`
+- `tools/wired_serial_smoke.py` は capabilities / payload とも `telemetry_field_bits=107` で high-range raw のみを広告・送信することを確認した
+- `tools/wired_flow_probe.py --duration-s 4` は sequence gap `0`, finite `differential_pressure_selected_pa`, finite `SDP811 high-range raw`, no finite `SDP810 low-range raw` を確認した
+
+判断:
+
+- 今回観測した `~6.3 ms` の支配要因は SDP81x のレンジ差や Continuous Mode の測定時間ではなく、現在の接続状態で不在の SDP810 low-range を毎 sample で読み続けていたこと
+- acquisition bottleneck は current hardware 条件では解消した
+- 残る timing 課題は sensor read ではなく、loop scheduler lateness / cooperative task scheduling 側として扱う
+- SDP810 を再接続した状態では、capabilities が low/high 両方を広告し、low/high raw が両方 finite になることを再検証する

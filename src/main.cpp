@@ -131,12 +131,14 @@ void logCapabilitiesPreview() {
         g_measurement_core.differentialPressureAvailable(),
         false,
         false,
+        false,
         false);
     const auto serial_capabilities = zss::app::CapabilityBuilder::build(
         zss::transport::TransportKind::Serial,
         zss::board::kWiredNominalSamplePeriodMs,
         g_measurement_core.differentialPressureAvailable(),
-        g_measurement_core.differentialPressureAvailable(),
+        g_measurement_core.differentialPressureLowRangeAvailable(),
+        g_measurement_core.differentialPressureHighRangeAvailable(),
         true,
         zss::board::kLegacyInputAdcPin >= 0);
 
@@ -162,7 +164,9 @@ void logDifferentialPressureFrontendStatus() {
         zss::services::Logger::log(
             zss::services::LogLevel::Info,
             "Boot",
-            "Dual-SDP frontend initialized.");
+            "SDP frontend initialized: low=%u high=%u.",
+            static_cast<unsigned>(g_measurement_core.differentialPressureLowRangeAvailable()),
+            static_cast<unsigned>(g_measurement_core.differentialPressureHighRangeAvailable()));
         return;
     }
 
@@ -255,12 +259,16 @@ void runSamplingStep(uint32_t now_us) {
         canonical_measurements.differential_pressure_selected_pa = NAN;
         g_app_state.clearDifferentialPressureSelectedPa();
     }
-    if (g_measurement_core.differentialPressureHealthy() &&
-        isfinite(differential_pressure.low_range_differential_pressure_pa) &&
-        isfinite(differential_pressure.high_range_differential_pressure_pa)) {
+    const bool has_low_range_dp = g_measurement_core.differentialPressureHealthy() &&
+        isfinite(differential_pressure.low_range_differential_pressure_pa);
+    const bool has_high_range_dp = g_measurement_core.differentialPressureHealthy() &&
+        isfinite(differential_pressure.high_range_differential_pressure_pa);
+    if (has_low_range_dp || has_high_range_dp) {
         g_app_state.setDifferentialPressureRawPa(
             differential_pressure.low_range_differential_pressure_pa,
-            differential_pressure.high_range_differential_pressure_pa);
+            has_low_range_dp,
+            differential_pressure.high_range_differential_pressure_pa,
+            has_high_range_dp);
     } else {
         g_app_state.clearDifferentialPressureRawPa();
     }
@@ -296,7 +304,7 @@ void emitSummaryLog(uint32_t now_ms) {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Sample",
-        "seq=%lu Vip=%.3fV Vin=%.3fV Vout=%.3fV RTD=%.1fOhm DpSel=%.2fPa Dp125=%.2fPa Dp500=%.2fPa DpLow=%u flags=0x%08lX diag=0x%08lX overruns=%lu",
+        "seq=%lu Vip=%.3fV Vin=%.3fV Vout=%.3fV RTD=%.1fOhm DpMeas=%.2fPa DpSel=%.2fPa Dp125=%.2fPa Dp500=%.2fPa DpLow=%u flags=0x%08lX diag=0x%08lX overruns=%lu",
         static_cast<unsigned long>(g_app_state.latestSequence()),
         measurements.zirconia_ip_voltage_v,
         measurements.internal_voltage_v,
@@ -362,6 +370,7 @@ void setup() {
         zss::transport::TransportKind::Ble,
         zss::board::kBleNominalSamplePeriodMs,
         g_measurement_core.differentialPressureAvailable(),
+        false,
         false,
         false,
         false);
@@ -442,7 +451,9 @@ void loop() {
                             : g_app_state.nominalSamplePeriodMs(),
                         g_measurement_core.differentialPressureAvailable(),
                         transport_kind == zss::transport::TransportKind::Serial &&
-                            g_measurement_core.differentialPressureAvailable(),
+                            g_measurement_core.differentialPressureLowRangeAvailable(),
+                        transport_kind == zss::transport::TransportKind::Serial &&
+                            g_measurement_core.differentialPressureHighRangeAvailable(),
                         transport_kind == zss::transport::TransportKind::Serial,
                         transport_kind == zss::transport::TransportKind::Serial &&
                             zss::board::kLegacyInputAdcPin >= 0);

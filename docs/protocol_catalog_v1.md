@@ -255,6 +255,9 @@ binary transport 上では、一部の項目が code / bit field に符号化さ
 | `get_status` | Required | Required | Common logical command |
 | `set_pump_state` | Required | Required | Common logical command |
 
+Differential-pressure raw fields are independent diagnostic fields.
+If only one SDP81x sensor is detected, capabilities and telemetry may advertise only that raw channel while still publishing `differential_pressure_selected_pa`.
+
 ## 11. Open Questions
 
 - `transport_session_active` を bit `1` に残すか、完全に reserved にするか

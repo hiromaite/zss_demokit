@@ -10,6 +10,24 @@ MeasurementCore::MeasurementCore(
     : adc_frontend_(adc_frontend),
       differential_pressure_frontend_(differential_pressure_frontend) {}
 
+namespace {
+
+constexpr uint8_t kNoAuxiliaryAdsChannel = 0xFFu;
+
+uint8_t auxiliaryAdsChannelForPhase(uint32_t acquisition_phase, bool read_low_range) {
+    (void)read_low_range;
+    const uint32_t phase_in_aux_cycle = acquisition_phase % 10u;
+    if (phase_in_aux_cycle == 1u) {
+        return 1u;
+    }
+    if (phase_in_aux_cycle == 6u) {
+        return 0u;
+    }
+    return kNoAuxiliaryAdsChannel;
+}
+
+}  // namespace
+
 bool MeasurementCore::begin() {
     initialized_ = adc_frontend_.begin();
     differential_pressure_available_ = differential_pressure_frontend_.begin();
@@ -22,9 +40,14 @@ SensorMeasurements MeasurementCore::acquire() {
         return {};
     }
 
+    const bool read_low_range = true;
+    const uint8_t auxiliary_ads_channel =
+        auxiliaryAdsChannelForPhase(acquisition_phase_, read_low_range);
+    acquisition_phase_ += 1u;
+
     if (differential_pressure_available_) {
         latest_differential_pressure_measurements_ =
-            differential_pressure_frontend_.readMeasurements();
+            differential_pressure_frontend_.readScheduledMeasurements(read_low_range);
     } else {
         latest_differential_pressure_measurements_ = {};
         latest_differential_pressure_measurements_.low_range_differential_pressure_pa = NAN;
@@ -34,7 +57,7 @@ SensorMeasurements MeasurementCore::acquire() {
         latest_differential_pressure_measurements_.high_range_temperature_c = NAN;
     }
 
-    const auto measurements = adc_frontend_.readMeasurements();
+    const auto measurements = adc_frontend_.readScheduledMeasurements(auxiliary_ads_channel);
     latest_acquisition_timing_.adc_total_duration_us = adc_frontend_.lastTotalDurationUs();
     latest_acquisition_timing_.differential_pressure_total_duration_us =
         differential_pressure_available_ ? differential_pressure_frontend_.lastTotalDurationUs() : 0u;
@@ -62,6 +85,21 @@ bool MeasurementCore::externalAdcAvailable() const {
 
 bool MeasurementCore::differentialPressureAvailable() const {
     return differential_pressure_available_;
+}
+
+bool MeasurementCore::differentialPressureLowRangeAvailable() const {
+    return differential_pressure_available_ &&
+           differential_pressure_frontend_.lowRangeAvailable();
+}
+
+bool MeasurementCore::differentialPressureHighRangeAvailable() const {
+    return differential_pressure_available_ &&
+           differential_pressure_frontend_.highRangeAvailable();
+}
+
+bool MeasurementCore::differentialPressureRawChannelsAvailable() const {
+    return differential_pressure_available_ &&
+           differential_pressure_frontend_.rawChannelsAvailable();
 }
 
 bool MeasurementCore::differentialPressureHealthy() const {

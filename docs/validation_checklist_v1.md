@@ -89,9 +89,11 @@
 | `FW-VAL-017` | Service visibility payload publication | wired capabilities / payload が `zirconia_ip_voltage_v` と optional `internal_voltage_v` を壊さず扱える | `PASS` | `pio run`, upload, `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` により serial capabilities `telemetry_field_bits=67` を確認。current board config では `internal_voltage_v` unavailable のまま扱えることも確認 |
 | `FW-VAL-018` | Pump / heater safety interlock regression | pump OFF 時に heater が OFF へ落ち、pump OFF 中の heater ON 指令が拒否される | `TODO` | `CommandProcessor` 上の interlock 実装を今後の regression smoke として固定する |
 | `FW-VAL-019` | Device-side timing diagnostic probe | `sample_tick_us` により host jitter と firmware sampling jitter を分離できる | `PASS` | Bundle A user test で `1200` samples、sequence gap `0`、timing diagnostics `1199/1199` を確認 |
-| `FW-VAL-020` | Device-side 10 ms cadence | device sample interval が nominal `10 ms` 近傍に維持される | `FAIL` | `codex/fw-sampling-cadence` 実機 test で mean は `10.293 ms` まで改善したが、`max=29.050 ms` の spike が残る。次は sensor acquisition 側を優先調査する |
+| `FW-VAL-020` | Device-side 10 ms cadence | device sample interval が nominal `10 ms` 近傍に維持される | `PASS` | `codex/fw-acquisition-scheduler` 実機 test で sequence gap `0`, device interval `mean=9.999 ms`, `p95=11.459 ms`, `max=12.492 ms` を確認。sub-ms jitter 化は別 task として継続 |
 | `FW-VAL-021` | Extended cadence breakdown probe | acquisition / telemetry publish / scheduler lateness を firmware timing diagnostic で分離できる | `PASS` | `/dev/cu.usbmodem4101` へ upload 後、`tools/wired_timing_probe.py --samples 1200 --warmup 20` で extended timing `1200/1200`、sequence gap `0` を確認 |
 | `FW-VAL-022` | Acquisition source breakdown probe | ADS1115 ch0/ch1/ch2 と SDP810/SDP811 の取得時間を分離できる | `PASS` | `codex/fw-acquisition-scheduler` 実機 test で acquisition breakdown `1200/1200`、sequence gap `0` を確認。ADS total `5.063 ms`、SDP total `6.600 ms`、SDP low `6.280 ms` が支配的 |
+| `FW-VAL-023` | Staggered acquisition cadence probe | cached measurement / staggered acquisition により wired sample frame が `10 ms` 近傍に戻る | `PASS` | pressure-word SDP read、ADS diagnostic stagger、per-sensor availability により acquisition `mean=2.325 ms`, `p95=3.663 ms`, slow acquisition `0` を確認 |
+| `FW-VAL-024` | Sub-ms scheduler jitter tuning | device-side sample tick jitter を acquisition ではなく scheduler/task 側で評価する | `TODO` | 現状は sequence gap `0` で実用上改善済みだが、device sample jitter は `p95_abs=1460 us`, `max_abs=2496 us` が残るため、ring buffer / task separation 候補で継続 |
 
 ## 6. Integration Checklist
 
@@ -295,6 +297,13 @@
 - `/dev/cu.usbmodem4101` へ upload 後、`tools/wired_timing_probe.py --samples 1200 --warmup 20 --slow-threshold-ms 12 --slow-limit 12` を実施し、sequence gap `0`、acquisition breakdown `1200/1200` を確認した
 - 同 test では device interval `mean=12.217 ms`, `p95=12.322 ms`、acquisition `mean=11.685 ms`、ADC total `mean=5.063 ms`、differential pressure total `mean=6.600 ms`、ADS ch0/ch1/ch2 はそれぞれ約 `1.7 ms`、SDP low-range `mean=6.280 ms`、SDP high-range `mean=0.310 ms` を確認した
 - 再測定 `--samples 600 --slow-threshold-ms 10` でも同傾向で、全 `600` samples が `10 ms` を超える acquisition となったため、残課題はランダムスパイクではなく逐次センサー取得時間そのものと判断した
+- Sensirion SDP8xx の Continuous Mode 方針を維持しつつ、`Sdp8xxSensor` は startup full sample で scale factor を cache し、runtime では pressure word のみを読むよう変更した
+- current hardware では boot log が `SDP frontend initialized: low=0 high=1` を示し、SDP810 low-range は不在/初期化不可、SDP811 high-range は有効と判断した
+- 不在 low-range を毎 sample read していたため `~6.3 ms` の I2C timeout が発生していた。low/high availability を個別管理し、不在 channel を read / capabilities / telemetry field bits から外すよう修正した
+- `/dev/cu.usbmodem4101` へ upload 後、`tools/wired_timing_probe.py --samples 1200 --warmup 20 --slow-threshold-ms 5 --slow-limit 10` を実施し、sequence gap `0`, capabilities `telemetry_field_bits=107`, acquisition `mean=2.325 ms`, differential pressure total `mean=0.250 ms`, slow acquisition `0` を確認した
+- `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` により capabilities / status / telemetry が `differential_pressure_high_range_pa` のみを含み、pump / heater command smoke も通過することを確認した
+- `tools/wired_flow_probe.py --port /dev/cu.usbmodem4101 --duration-s 4` により sequence gap `0`, finite selected differential pressure, finite SDP811 high-range raw, no finite SDP810 low-range raw を確認した
+- 残る timing 改善余地は sensor acquisition ではなく scheduler lateness / loop task scheduling 側へ移した
 
 ## 8. 更新ルール
 

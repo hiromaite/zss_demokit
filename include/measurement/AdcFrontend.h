@@ -10,6 +10,7 @@ class AdcFrontend {
   public:
     bool begin();
     SensorMeasurements readMeasurements();
+    SensorMeasurements readScheduledMeasurements(uint8_t auxiliary_channel);
     bool isHealthy() const;
     bool lastReadSucceeded() const;
     bool externalAdcAvailable() const;
@@ -19,6 +20,7 @@ class AdcFrontend {
 
   private:
     bool initializeExternalAdc();
+    void readInternalVoltageIfEnabled(SensorMeasurements& measurements);
     bool tryReadAdsChannelVoltage(uint8_t channel, float& voltage_out);
     bool tryReadLegacySensorSet(SensorMeasurements& measurements);
     void setError(const char* message);
@@ -31,6 +33,7 @@ class AdcFrontend {
     uint32_t last_recovery_attempt_ms_ = 0;
     uint32_t last_total_duration_us_ = 0;
     uint32_t last_channel_duration_us_[4] = {};
+    SensorMeasurements latest_measurements_{};
     char last_error_[96] = {};
 };
 

@@ -26,9 +26,12 @@ TelemetryPayloadV1 buildTelemetryPayload(const app::AppState& app_state) {
             app_state.latestDifferentialPressureLowRangePa();
         payload.differential_pressure_high_range_pa =
             app_state.latestDifferentialPressureHighRangePa();
-        payload.telemetry_field_bits |=
-            kTelemetryFieldDifferentialPressureLowRangeMask |
-            kTelemetryFieldDifferentialPressureHighRangeMask;
+        if (app_state.hasDifferentialPressureLowRangePa()) {
+            payload.telemetry_field_bits |= kTelemetryFieldDifferentialPressureLowRangeMask;
+        }
+        if (app_state.hasDifferentialPressureHighRangePa()) {
+            payload.telemetry_field_bits |= kTelemetryFieldDifferentialPressureHighRangeMask;
+        }
     }
     if (isfinite(measurements.zirconia_ip_voltage_v)) {
         payload.telemetry_field_bits |= kTelemetryFieldZirconiaIpVoltageMask;
@@ -65,9 +68,12 @@ StatusSnapshotPayloadV1 buildStatusSnapshotPayload(const app::AppState& app_stat
             app_state.latestDifferentialPressureLowRangePa();
         payload.differential_pressure_high_range_pa =
             app_state.latestDifferentialPressureHighRangePa();
-        payload.telemetry_field_bits |=
-            kTelemetryFieldDifferentialPressureLowRangeMask |
-            kTelemetryFieldDifferentialPressureHighRangeMask;
+        if (app_state.hasDifferentialPressureLowRangePa()) {
+            payload.telemetry_field_bits |= kTelemetryFieldDifferentialPressureLowRangeMask;
+        }
+        if (app_state.hasDifferentialPressureHighRangePa()) {
+            payload.telemetry_field_bits |= kTelemetryFieldDifferentialPressureHighRangeMask;
+        }
     }
     if (isfinite(measurements.zirconia_ip_voltage_v)) {
         payload.telemetry_field_bits |= kTelemetryFieldZirconiaIpVoltageMask;

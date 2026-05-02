@@ -56,20 +56,7 @@ SensorMeasurements AdcFrontend::readMeasurements() {
         .differential_pressure_selected_pa = NAN,
     };
 
-    if (zss::board::kLegacyInputAdcPin >= 0) {
-        const uint32_t accumulator_limit =
-            static_cast<uint32_t>(zss::board::kInternalAdcOversamplingCount);
-        uint32_t millivolt_accumulator = 0u;
-        for (uint32_t index = 0; index < accumulator_limit; ++index) {
-            millivolt_accumulator += static_cast<uint32_t>(
-                analogReadMilliVolts(zss::board::kLegacyInputAdcPin));
-        }
-        const float averaged_millivolts =
-            static_cast<float>(millivolt_accumulator) /
-            static_cast<float>(accumulator_limit);
-        measurements.internal_voltage_v =
-            (averaged_millivolts / 1000.0f) * zss::board::kVoltageDividerRatio;
-    }
+    readInternalVoltageIfEnabled(measurements);
 
     if (!external_adc_available_) {
         const uint32_t now_ms = millis();
@@ -88,8 +75,62 @@ SensorMeasurements AdcFrontend::readMeasurements() {
         isfinite(measurements.zirconia_ip_voltage_v) &&
         isfinite(measurements.zirconia_output_voltage_v) &&
         isfinite(measurements.heater_rtd_resistance_ohm);
+    latest_measurements_ = measurements;
     last_total_duration_us_ = micros() - read_started_us;
     return measurements;
+}
+
+SensorMeasurements AdcFrontend::readScheduledMeasurements(uint8_t auxiliary_channel) {
+    const uint32_t read_started_us = micros();
+    if (!initialized_) {
+        last_read_succeeded_ = false;
+        latest_measurements_ = {};
+        last_total_duration_us_ = micros() - read_started_us;
+        return latest_measurements_;
+    }
+
+    for (uint32_t& duration_us : last_channel_duration_us_) {
+        duration_us = 0;
+    }
+
+    readInternalVoltageIfEnabled(latest_measurements_);
+
+    if (!external_adc_available_) {
+        const uint32_t now_ms = millis();
+        if (now_ms - last_recovery_attempt_ms_ >= zss::board::kAdcRecoveryIntervalMs) {
+            last_recovery_attempt_ms_ = now_ms;
+            external_adc_available_ = initializeExternalAdc();
+        }
+    }
+
+    bool output_ok = false;
+    if (external_adc_available_) {
+        output_ok = tryReadAdsChannelVoltage(2, latest_measurements_.zirconia_output_voltage_v);
+        if (auxiliary_channel == 0u) {
+            (void)tryReadAdsChannelVoltage(0, latest_measurements_.zirconia_ip_voltage_v);
+        } else if (auxiliary_channel == 1u) {
+            float heater_rtd_voltage = NAN;
+            if (tryReadAdsChannelVoltage(1, heater_rtd_voltage) &&
+                isfinite(heater_rtd_voltage)) {
+                const float denominator = zss::board::kRtdSourceVoltageV - heater_rtd_voltage;
+                if (fabsf(denominator) > 1.0e-6f) {
+                    latest_measurements_.heater_rtd_resistance_ohm =
+                        (heater_rtd_voltage * zss::board::kRtdSeriesResistanceOhm) / denominator;
+                }
+            }
+        }
+        if (!output_ok) {
+            external_adc_available_ = false;
+        }
+    }
+
+    last_read_succeeded_ =
+        external_adc_available_ &&
+        isfinite(latest_measurements_.zirconia_ip_voltage_v) &&
+        isfinite(latest_measurements_.zirconia_output_voltage_v) &&
+        isfinite(latest_measurements_.heater_rtd_resistance_ohm);
+    last_total_duration_us_ = micros() - read_started_us;
+    return latest_measurements_;
 }
 
 bool AdcFrontend::isHealthy() const {
@@ -141,6 +182,25 @@ bool AdcFrontend::initializeExternalAdc() {
         zss::board::kI2cSdaPin,
         zss::board::kI2cSclPin);
     return true;
+}
+
+void AdcFrontend::readInternalVoltageIfEnabled(SensorMeasurements& measurements) {
+    if (zss::board::kLegacyInputAdcPin < 0) {
+        return;
+    }
+
+    const uint32_t accumulator_limit =
+        static_cast<uint32_t>(zss::board::kInternalAdcOversamplingCount);
+    uint32_t millivolt_accumulator = 0u;
+    for (uint32_t index = 0; index < accumulator_limit; ++index) {
+        millivolt_accumulator += static_cast<uint32_t>(
+            analogReadMilliVolts(zss::board::kLegacyInputAdcPin));
+    }
+    const float averaged_millivolts =
+        static_cast<float>(millivolt_accumulator) /
+        static_cast<float>(accumulator_limit);
+    measurements.internal_voltage_v =
+        (averaged_millivolts / 1000.0f) * zss::board::kVoltageDividerRatio;
 }
 
 bool AdcFrontend::tryReadAdsChannelVoltage(uint8_t channel, float& voltage_out) {
