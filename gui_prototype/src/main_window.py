@@ -633,7 +633,7 @@ class MainWindow(QMainWindow):
         sensor_curve.setSkipFiniteCheck(True)
 
         self.sensor_secondary_view = pg.ViewBox()
-        self.sensor_secondary_view.setMouseEnabled(x=False, y=False)
+        self.sensor_secondary_view.setMouseEnabled(x=False, y=True)
         sensor_plot.scene().addItem(self.sensor_secondary_view)
         sensor_plot.getPlotItem().getAxis("right").linkToView(self.sensor_secondary_view)
         self.sensor_secondary_view.setXLink(sensor_plot.getPlotItem().vb)
@@ -685,7 +685,7 @@ class MainWindow(QMainWindow):
         heater_curve.setSkipFiniteCheck(True)
 
         self.heater_secondary_view = pg.ViewBox()
-        self.heater_secondary_view.setMouseEnabled(x=False, y=False)
+        self.heater_secondary_view.setMouseEnabled(x=False, y=True)
         heater_plot.scene().addItem(self.heater_secondary_view)
         heater_plot.getPlotItem().getAxis("right").linkToView(self.heater_secondary_view)
         self.heater_secondary_view.setXLink(heater_plot.getPlotItem().vb)
