@@ -100,4 +100,5 @@ Expected result:
 - if the icon looks soft or mis-scaled in Windows, replace `gui_prototype/assets/app_icon.ico`
 - if company metadata should be organization-only for release, change `APP_COMPANY_NAME` in `gui_prototype/src/app_metadata.py`
 - if `onedir` distribution is judged cumbersome after beta, reconsider `onefile` only after current smoke passes
-- after the recent right-column scroll changes, also sanity-check that plot heights still feel reasonable and that the vertical splitter between the two plots can still be dragged smoothly on Windows / alternate display scales
+- before manual Windows visual QA, run `python tools/gui_layout_smoke.py` on the packaging source checkout to catch horizontal-scroll, metric-row, and plot-height regressions
+- during manual Windows visual QA, still sanity-check that plot heights feel reasonable and that the vertical splitter between the two plots can be dragged smoothly on the actual display scale

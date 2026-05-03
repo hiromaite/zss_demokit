@@ -71,6 +71,7 @@ from theme import COLORS
 
 FLOW_DEFAULT_Y_RANGE_LPM = (-5.0, 5.0)
 O2_DEFAULT_Y_RANGE_PERCENT = (0.0, 25.0)
+PLOT_SPLITTER_DEFAULT_HEIGHT = 600
 
 
 def _panel(title: str, hint: str | None = None, object_name: str = "PanelCard") -> tuple[QFrame, QVBoxLayout]:
@@ -287,6 +288,23 @@ class VerticalOnlyScrollArea(QScrollArea):
         content = self.widget()
         if content is not None:
             content.setFixedWidth(self.viewport().width())
+
+
+class FixedHeightSplitter(QSplitter):
+    def __init__(self, orientation: Qt.Orientation, fixed_height: int, parent: QWidget | None = None) -> None:
+        super().__init__(orientation, parent)
+        self._fixed_height = fixed_height
+        self.setFixedHeight(fixed_height)
+
+    def sizeHint(self):  # type: ignore[override]
+        size = super().sizeHint()
+        size.setHeight(self._fixed_height)
+        return size
+
+    def minimumSizeHint(self):  # type: ignore[override]
+        size = super().minimumSizeHint()
+        size.setHeight(min(self._fixed_height, max(1, size.height())))
+        return size
 
 
 class MainWindow(QMainWindow):
@@ -646,11 +664,10 @@ class MainWindow(QMainWindow):
         self.plot_widgets: dict[str, pg.PlotWidget] = {}
         self.plot_curves: dict[str, object] = {}
 
-        self.plot_splitter = QSplitter(Qt.Vertical)
+        self.plot_splitter = FixedHeightSplitter(Qt.Vertical, PLOT_SPLITTER_DEFAULT_HEIGHT)
         self.plot_splitter.setChildrenCollapsible(False)
         self.plot_splitter.setHandleWidth(10)
         self.plot_splitter.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        self.plot_splitter.setFixedHeight(600)
         layout.addWidget(self.plot_splitter, 0)
 
         sensor_frame, sensor_layout = _panel("Flow / O2 Concentration", "Blue: flow rate, orange: O2 concentration when calibrated.")
@@ -1784,6 +1801,7 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
         self._apply_column_widths()
+        QTimer.singleShot(0, self._enforce_plot_splitter_height)
 
     def _apply_column_widths(self) -> None:
         if not hasattr(self, "left_column"):
@@ -1795,6 +1813,11 @@ class MainWindow(QMainWindow):
     def _apply_plot_splitter_sizes(self) -> None:
         if hasattr(self, "plot_splitter"):
             self.plot_splitter.setSizes([350, 240])
+            self._enforce_plot_splitter_height()
+
+    def _enforce_plot_splitter_height(self) -> None:
+        if hasattr(self, "plot_splitter"):
+            self.plot_splitter.setFixedHeight(PLOT_SPLITTER_DEFAULT_HEIGHT)
 
     def _sync_left_column_content_width(self) -> None:
         if not hasattr(self, "left_column") or not hasattr(self, "left_column_content"):
