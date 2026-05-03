@@ -249,6 +249,11 @@ def build_point(payload: dict[str, Any]) -> TelemetryPoint:
             if payload.get("differential_pressure_high_range_pa") not in (None, "")
             else None
         ),
+        device_sample_tick_us=(
+            int(payload["device_sample_tick_us"])
+            if payload.get("device_sample_tick_us") not in (None, "")
+            else None
+        ),
     )
 
 

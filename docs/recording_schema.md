@@ -67,7 +67,7 @@ session_20260408_153000.partial.csv
 # derived_metric_policy=dummy_selected_dp_orifice_v1
 # source_endpoint=BLE:M5STAMP-MONITOR
 # notes=
-host_received_at_iso,host_received_at_unix_ms,mode,transport_type,sequence,sequence_gap,inter_arrival_ms,host_inter_arrival_ms,device_inter_arrival_ms,device_sample_tick_us,nominal_sample_period_ms,status_flags_hex,pump_state,heater_power_state,zirconia_output_voltage_v,heater_rtd_resistance_ohm,zirconia_ip_voltage_v,internal_voltage_v,differential_pressure_selected_pa,differential_pressure_selected_source,differential_pressure_low_range_pa,differential_pressure_high_range_pa,flow_rate_lpm
+host_received_at_iso,host_received_at_unix_ms,mode,transport_type,sequence,sequence_gap,inter_arrival_ms,host_inter_arrival_ms,device_inter_arrival_ms,device_sample_tick_us,device_elapsed_s,nominal_sample_period_ms,status_flags_hex,pump_state,heater_power_state,zirconia_output_voltage_v,heater_rtd_resistance_ohm,zirconia_ip_voltage_v,internal_voltage_v,differential_pressure_selected_pa,differential_pressure_selected_source,differential_pressure_low_range_pa,differential_pressure_high_range_pa,flow_rate_lpm
 ```
 
 ## 5. Required Header Metadata Keys
@@ -105,6 +105,7 @@ inter_arrival_ms
 host_inter_arrival_ms
 device_inter_arrival_ms
 device_sample_tick_us
+device_elapsed_s
 nominal_sample_period_ms
 status_flags_hex
 pump_state
@@ -134,6 +135,7 @@ flow_rate_lpm
 | `host_inter_arrival_ms` | `float32` | ms | Optional | Difference from previous row host receive time |
 | `device_inter_arrival_ms` | `float32` | ms | Optional | Difference from previous row device sample tick; blank when unavailable |
 | `device_sample_tick_us` | `uint32` | us | Optional | Device-side sample start tick captured for timing diagnostics; blank when unavailable |
+| `device_elapsed_s` | `float64` | s | Optional | Device-side elapsed time from the first recorded device sample tick; recommended x-axis for analysis when available |
 | `nominal_sample_period_ms` | `uint16` | ms | Recommended | Expected sample period |
 | `status_flags_hex` | `string` | hex | Yes | Status flags as zero-padded hex |
 | `pump_state` | `uint8` | - | Yes | `1` when pump on, otherwise `0` |
@@ -178,22 +180,30 @@ flow_rate_lpm
 
 - wired など device-side timing diagnostic を提供する transport でのみ値を持つ
 - BLE など未対応 transport では空欄としてよい
+- device uptime tick であり、session 内の解析用 x-axis には通常 `device_elapsed_s` を使う
 
-### 7.6 `pump_state`
+### 7.6 `device_elapsed_s`
+
+- `device_sample_tick_us` が利用可能な場合のみ記録する
+- 記録ファイル内で最初に観測した device tick を `0.000000 s` とする
+- 32-bit microsecond tick の wrap を考慮して差分計算する
+- host receive timestamp の jitter を避けたい解析/グラフ化では、この列を優先して時間軸に使う
+
+### 7.7 `pump_state`
 
 - `status_flags` の bit `0` から導出する
 - `1` は ON、`0` は OFF
 
-### 7.7 Numeric Missing Values
+### 7.8 Numeric Missing Values
 
 - v1 の core measurement は基本空欄にしない
 - 取得不能時は空欄ではなく warning を伴う fallback 値使用を避け、可能ならその行を記録しないか fault 状態で扱う
 - raw diagnostic field (`differential_pressure_low_range_pa`, `differential_pressure_high_range_pa`) は transport に存在しない場合のみ空欄としてよい
 - service diagnostic field (`zirconia_ip_voltage_v`, `internal_voltage_v`) は transport / board config に存在しない場合のみ空欄としてよい
-- timing diagnostic field (`device_inter_arrival_ms`, `device_sample_tick_us`) は transport に存在しない場合のみ空欄としてよい
+- timing diagnostic field (`device_inter_arrival_ms`, `device_sample_tick_us`, `device_elapsed_s`) は transport に存在しない場合のみ空欄としてよい
 - `differential_pressure_selected_source` は raw diagnostic field が存在しない transport では空欄としてよい
 
-### 7.8 `flow_rate_lpm`
+### 7.9 `flow_rate_lpm`
 
 - v1 では placeholder として `dummy_selected_dp_orifice_v1` を使う
 - formula は以下の placeholder とする
@@ -208,15 +218,16 @@ flow_rate_lpm = sign(differential_pressure_selected_pa) * (1.0 * sqrt(abs(differ
 ## 8. Example Rows
 
 ```csv
-2026-04-08T15:30:00.100+09:00,1775639400100,BLE,ble,100,0,,,,50,0x00000001,1,0,0.640,123.4,,,1.250,,,,11.180340
-2026-04-08T15:30:00.150+09:00,1775639400150,BLE,ble,101,0,50.0,50.0,,,50,0x00000001,1,0,0.642,123.5,,,1.252,,,,11.189281
-2026-04-08T15:30:00.260+09:00,1775639400260,Wired,serial,103,1,50.0,110.0,50.0,5541200,50,0x00000021,1,0,0.641,123.6,0.913,,1.255,SDP810,1.240,1.270,11.202678
+2026-04-08T15:30:00.100+09:00,1775639400100,BLE,ble,100,0,,,,,,50,0x00000001,1,0,0.640,123.4,,,1.250,,,,11.180340
+2026-04-08T15:30:00.150+09:00,1775639400150,BLE,ble,101,0,50.0,50.0,,,,50,0x00000001,1,0,0.642,123.5,,,1.252,,,,11.189281
+2026-04-08T15:30:00.260+09:00,1775639400260,Wired,serial,103,1,50.0,110.0,50.0,5541200,0.000000,50,0x00000021,1,0,0.641,123.6,0.913,,1.255,SDP810,1.240,1.270,11.202678
 ```
 
 解釈:
 
 - 3 行目は `sequence_gap=1` のため 1 サンプル欠落を示す
 - 3 行目は host 側では `110.0 ms` 遅れて見えているが、device 側では `50.0 ms` cadence が維持されている例である
+- `device_elapsed_s` がある行は、host timestamp ではなく device-side sampling clock を基準にした plotting x-axis として扱える
 
 ## 9. v1 Scope Decisions
 

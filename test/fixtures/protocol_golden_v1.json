@@ -326,7 +326,8 @@
         "heater_rtd_resistance_ohm": 118.9,
         "differential_pressure_selected_pa": 1.45,
         "differential_pressure_low_range_pa": 1.45,
-        "differential_pressure_high_range_pa": 1.41
+        "differential_pressure_high_range_pa": 1.41,
+        "device_sample_tick_us": 100000
       },
       "target_point": {
         "sequence": 8738,
@@ -337,7 +338,8 @@
         "heater_rtd_resistance_ohm": 119.25,
         "differential_pressure_selected_pa": 1.5,
         "differential_pressure_low_range_pa": 1.5,
-        "differential_pressure_high_range_pa": 1.44
+        "differential_pressure_high_range_pa": 1.44,
+        "device_sample_tick_us": 130000
       },
       "expected_row": [
         "2026-04-15T10:00:00.011+09:00",
@@ -346,10 +348,11 @@
         "serial",
         "8738",
         "2",
+        "30.000",
         "11.250",
-        "11.250",
-        "",
-        "",
+        "30.000",
+        "130000",
+        "0.030000",
         "10",
         "0x00000003",
         "1",

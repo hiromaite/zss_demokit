@@ -514,6 +514,7 @@ class RecordingController:
         self._last_sequence: int | None = None
         self._last_received_at: datetime | None = None
         self._last_device_sample_tick_us: int | None = None
+        self._first_device_sample_tick_us: int | None = None
         self.session_id = ""
         self.started_at: datetime | None = None
         self.recording_path: Path | None = None
@@ -561,6 +562,7 @@ class RecordingController:
         self._last_sequence = None
         self._last_received_at = None
         self._last_device_sample_tick_us = None
+        self._first_device_sample_tick_us = None
         self.session_id = session_id
         self.started_at = started_at
         self.recording_path = paths.recording_path
@@ -607,6 +609,12 @@ class RecordingController:
             device_inter_arrival_ms = f"{(delta_us / 1000.0):.3f}"
 
         inter_arrival_ms = device_inter_arrival_ms or host_inter_arrival_ms
+        device_elapsed_s = ""
+        if point.device_sample_tick_us is not None:
+            if self._first_device_sample_tick_us is None:
+                self._first_device_sample_tick_us = point.device_sample_tick_us
+            elapsed_us = (point.device_sample_tick_us - self._first_device_sample_tick_us) & 0xFFFFFFFF
+            device_elapsed_s = f"{(elapsed_us / 1_000_000.0):.6f}"
 
         row = [
             host_received_at.isoformat(timespec="milliseconds"),
@@ -619,6 +627,7 @@ class RecordingController:
             host_inter_arrival_ms,
             device_inter_arrival_ms,
             str(point.device_sample_tick_us) if point.device_sample_tick_us is not None else "",
+            device_elapsed_s,
             str(point.nominal_sample_period_ms),
             format_status_flags(point.status_flags),
             str(1 if (point.status_flags & STATUS_FLAG_PUMP_ON) != 0 else 0),

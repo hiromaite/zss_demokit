@@ -18,6 +18,7 @@ CSV_COLUMNS = [
     "host_inter_arrival_ms",
     "device_inter_arrival_ms",
     "device_sample_tick_us",
+    "device_elapsed_s",
     "nominal_sample_period_ms",
     "status_flags_hex",
     "pump_state",

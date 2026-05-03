@@ -66,6 +66,7 @@
 | `GUI-VAL-032` | BLE auto-connect state smoke | preferred BLE device discovery 後に auto-connect し、scan / connect button state と preferred name が崩れない | `PASS` | mock BLE offscreen と user test で確認。`GasSensor-Proto` auto-connect、`tools/ble_backend_smoke.py`、fake-live `tools/gui_ble_session_probe.py` が通過 |
 | `GUI-VAL-033` | Plot axis and follow behavior smoke | Flow fixed Y range、fixed X span、O2 right-axis manual interaction が成立する | `PASS` | Bundle D user test で O2 right-axis mouse operation を確認。Flow / X follow の他改善も問題なし |
 | `GUI-VAL-034` | Diagnostic availability labels smoke | Device Status が BLE / Wired の optional diagnostic availability を operator-readable に表示する | `PASS` | `tools/gui_observability_smoke.py` で BLE legacy selected-only、BLE batch raw SDP、Wired raw SDP / service voltage labels を確認 |
+| `GUI-VAL-035` | Device elapsed CSV axis smoke | CSV に device-side 秒単位の解析用 time axis が保存される | `PASS` | `device_elapsed_s` を追加し、`tools/protocol_fixture_smoke.py` で device tick 起点の秒列、device inter-arrival 優先、既存 CSV row regression を確認 |
 
 ## 5. Firmware Checklist
 
@@ -104,7 +105,7 @@
 | `INT-VAL-002` | wired connect | GUI から serial 接続できる | `PASS` | `MockBackend(Wired)` の実機 smoke で `/dev/cu.usbmodem5101` 接続を確認 |
 | `INT-VAL-003` | Pump ON/OFF end-to-end | GUI command が実機動作へ届く | `PASS` | `tools/wired_serial_smoke.py` で `SetPumpState` と status flag 反映を確認 |
 | `INT-VAL-004` | Get Status end-to-end | GUI で status snapshot を取得できる | `PASS` | wired backend smoke と host smoke の両方で `status_snapshot` を確認 |
-| `INT-VAL-005` | Shared CSV recording | 実データを共通 schema で保存できる | `PASS` | BLE mock と wired 実機の両方で `.partial.csv -> .csv` finalize と schema header を確認 |
+| `INT-VAL-005` | Shared CSV recording | 実データを共通 schema で保存できる | `PASS` | BLE mock と wired 実機の両方で `.partial.csv -> .csv` finalize と schema header を確認。解析用 time axis として device tick 由来の `device_elapsed_s` を保存する |
 | `INT-VAL-006` | Wired 10 ms transport validation | `10 ms` path を end-to-end 検証できる | `PASS` | `wired_serial_smoke` と wired backend smoke で `nominal_sample_period_ms=10` を確認 |
 | `INT-VAL-007` | BLE legacy telemetry validation | BLE legacy telemetry 周期を検証できる | `PASS` | local Mac 実機 probe で `2221` samples / `177.54 s` を観測し、旧BLE単発notifyの実効 inter-arrival は約 `79.97 ms`、target range 内を確認。BLE batch slice 以降は `INT-VAL-015` と実機batch validationへ移行 |
 | `INT-VAL-008` | Wired event propagation | firmware event が GUI warning log に届く | `PASS` | `command_error` と `warning_raised` を wired 実機 + GUI backend smoke で確認 |
