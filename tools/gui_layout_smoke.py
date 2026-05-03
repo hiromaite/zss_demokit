@@ -19,6 +19,7 @@ for candidate in [str(GUI_ROOT), str(GUI_SRC)]:
 
 
 LAYOUT_CASES = (
+    (1480, 1100, "tall_desktop"),
     (1480, 940, "default"),
     (1366, 768, "windows_common"),
     (1280, 720, "compact_hd"),
@@ -80,6 +81,10 @@ def _assert_metric_cards_single_row(window, label: str) -> None:
     y_positions = {geometry[1] for geometry in geometries}
     if len(y_positions) != 1:
         raise AssertionError(f"{label}: metric cards wrapped vertically: {geometries}")
+    if window.metric_cards_container.height() > 96:
+        raise AssertionError(
+            f"{label}: metric cards container grew too tall: {window.metric_cards_container.height()}"
+        )
 
     previous_right = -1
     for x, _y, width, height in sorted(geometries):
@@ -90,6 +95,11 @@ def _assert_metric_cards_single_row(window, label: str) -> None:
         if x < previous_right:
             raise AssertionError(f"{label}: metric cards overlap horizontally: {geometries}")
         previous_right = x + width
+
+
+def _assert_compact_toolbar(window, label: str) -> None:
+    if window.plot_toolbar.height() > 170:
+        raise AssertionError(f"{label}: plot toolbar grew too tall: {window.plot_toolbar.height()}")
 
 
 def _assert_scroll_area_widths(window, label: str) -> None:
@@ -109,10 +119,15 @@ def _assert_scroll_area_widths(window, label: str) -> None:
 
 
 def _assert_plot_splitter(window, label: str) -> None:
-    expected_height = 600
-    if window.plot_splitter.height() != expected_height:
+    min_height = 600
+    initial_height = window.plot_splitter.height()
+    if initial_height < min_height:
         raise AssertionError(
-            f"{label}: plot splitter height {window.plot_splitter.height()} != {expected_height}"
+            f"{label}: plot splitter height {initial_height} is below minimum {min_height}"
+        )
+    if window.height() >= 1000 and initial_height <= min_height:
+        raise AssertionError(
+            f"{label}: plot splitter did not grow in a tall window: {initial_height}"
         )
 
     initial_sizes = window.plot_splitter.sizes()
@@ -127,7 +142,7 @@ def _assert_plot_splitter(window, label: str) -> None:
             f"{label}: plot splitter did not respond to programmatic resize: "
             f"{initial_sizes} -> {adjusted_sizes}"
         )
-    if window.plot_splitter.height() != expected_height:
+    if window.plot_splitter.height() != initial_height:
         raise AssertionError(
             f"{label}: plot splitter height changed after resize: {window.plot_splitter.height()}"
         )
@@ -165,10 +180,12 @@ def _run_case(raw_case: str) -> int:
             )
         _assert_scroll_area_widths(window, label)
         _assert_metric_cards_single_row(window, label)
+        _assert_compact_toolbar(window, label)
         _assert_plot_splitter(window, label)
         print(
             f"PASS {label} {width}x{height}: "
             f"left={window.left_column.width()} right={window.right_column.width()} "
+            f"cards={window.metric_cards_container.height()} toolbar={window.plot_toolbar.height()} "
             f"plot={window.plot_splitter.height()} splitter={window.plot_splitter.sizes()}"
         )
         sys.stdout.flush()

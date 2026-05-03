@@ -1168,8 +1168,8 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
   acquisition / recording を継続したまま operator が plot 表示だけを freeze / 整理できるようにした。次は Settings の Engineering / Tools 整理か Windows / low-resolution visual validation が候補
 - 2026-05-03 third slice として、Settings nav に `Engineering / Tools` を追加し、routine operator setting と engineering workflow を分離した。
   `Device` は connection summary / O2 calibration に寄せ、Flow Verification / Characterization / on-demand diagnostics は tools page から起動する
-- 2026-05-03 fourth slice として、`tools/gui_layout_smoke.py` を追加し、default / Windows common / compact HD / narrow lab sizes で
-  horizontal scroll、metric cards row、plot splitter height / resize response を offscreen regression として固定した。plot splitter の意図しない縦伸びも防止した
+- 2026-05-03 fourth slice として、`tools/gui_layout_smoke.py` を追加し、tall desktop / default / Windows common / compact HD / narrow lab sizes で
+  horizontal scroll、metric cards row、metric / toolbar compact height、plot splitter minimum height / tall-window growth / resize response を offscreen regression として固定した
 
 直近 bundle:
 

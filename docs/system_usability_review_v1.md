@@ -257,7 +257,7 @@ protocol fixture、GUI session probe、wired / BLE smoke、flow probe、timing p
 - `P1-OBS-001` は Device Status の raw SDP / service voltage / BLE batch availability label と `tools/gui_observability_smoke.py` により first slice を完了した
 - `P1-UX-002` は Plot Toolbar に `Pause Plot` と series visibility toggle を追加し、取得 / recording を止めずに表示だけ freeze できる first slice を完了した
 - `P1-UX-001` は Settings nav に `Engineering / Tools` を追加し、O2 calibration を `Device`、Flow Verification / Characterization / diagnostics を tools page へ分離する first slice を完了した
-- `P1-UX-003` は `tools/gui_layout_smoke.py` により default / Windows common / compact HD / narrow lab sizes を offscreen で固定し、plot splitter の意図しない縦伸びも防止した
+- `P1-UX-003` は `tools/gui_layout_smoke.py` により tall desktop / default / Windows common / compact HD / narrow lab sizes を offscreen で固定した。metric cards / toolbar は compact height、plot splitter は minimum height から tall window で伸びる挙動を確認する
 - 次に進めるなら `P2-DATA-001` recording latest summary / open folder / quick review が、計測後 UX の摩擦を下げる次の高価値候補
 
 ## 7. 今は深追いしないこと

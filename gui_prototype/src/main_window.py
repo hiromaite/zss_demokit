@@ -71,7 +71,7 @@ from theme import COLORS
 
 FLOW_DEFAULT_Y_RANGE_LPM = (-5.0, 5.0)
 O2_DEFAULT_Y_RANGE_PERCENT = (0.0, 25.0)
-PLOT_SPLITTER_DEFAULT_HEIGHT = 600
+PLOT_SPLITTER_MIN_HEIGHT = 600
 
 
 def _panel(title: str, hint: str | None = None, object_name: str = "PanelCard") -> tuple[QFrame, QVBoxLayout]:
@@ -290,20 +290,14 @@ class VerticalOnlyScrollArea(QScrollArea):
             content.setFixedWidth(self.viewport().width())
 
 
-class FixedHeightSplitter(QSplitter):
-    def __init__(self, orientation: Qt.Orientation, fixed_height: int, parent: QWidget | None = None) -> None:
+class PreferredHeightSplitter(QSplitter):
+    def __init__(self, orientation: Qt.Orientation, preferred_height: int, parent: QWidget | None = None) -> None:
         super().__init__(orientation, parent)
-        self._fixed_height = fixed_height
-        self.setFixedHeight(fixed_height)
+        self._preferred_height = preferred_height
 
     def sizeHint(self):  # type: ignore[override]
         size = super().sizeHint()
-        size.setHeight(self._fixed_height)
-        return size
-
-    def minimumSizeHint(self):  # type: ignore[override]
-        size = super().minimumSizeHint()
-        size.setHeight(min(self._fixed_height, max(1, size.height())))
+        size.setHeight(self._preferred_height)
         return size
 
 
@@ -592,8 +586,9 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(10)
 
-        cards = QWidget()
-        cards_layout = QHBoxLayout(cards)
+        self.metric_cards_container = QWidget()
+        self.metric_cards_container.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        cards_layout = QHBoxLayout(self.metric_cards_container)
         cards_layout.setContentsMargins(0, 0, 0, 0)
         cards_layout.setSpacing(10)
 
@@ -601,13 +596,24 @@ class MainWindow(QMainWindow):
         self.metric_o2 = MetricCard("O2 Concentration (1-cell)", "%")
         self.metric_heater = MetricCard("Heater RTD Resistance", "Ohm")
         self.metric_flow = MetricCard("Flow Rate", "L/min")
+        for metric_card in [
+            self.metric_flow,
+            self.metric_o2,
+            self.metric_zirconia,
+            self.metric_heater,
+        ]:
+            metric_card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         cards_layout.addWidget(self.metric_flow, 1)
         cards_layout.addWidget(self.metric_o2, 1)
         cards_layout.addWidget(self.metric_zirconia, 1)
         cards_layout.addWidget(self.metric_heater, 1)
-        layout.addWidget(cards)
+        layout.addWidget(self.metric_cards_container, 0)
 
-        toolbar, toolbar_layout = _panel("Plot Toolbar", "Time range, time-axis display, and view reset controls.")
+        self.plot_toolbar, toolbar_layout = _panel(
+            "Plot Toolbar",
+            "Time range, time-axis display, and view reset controls.",
+        )
+        self.plot_toolbar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         grid = QGridLayout()
         grid.setHorizontalSpacing(8)
         grid.setVerticalSpacing(8)
@@ -658,17 +664,18 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.plot_pause_button, 0, 6)
         toolbar_layout.addLayout(grid)
         toolbar_layout.addLayout(series_row)
-        layout.addWidget(toolbar)
+        layout.addWidget(self.plot_toolbar, 0)
 
         pg.setConfigOptions(antialias=False)
         self.plot_widgets: dict[str, pg.PlotWidget] = {}
         self.plot_curves: dict[str, object] = {}
 
-        self.plot_splitter = FixedHeightSplitter(Qt.Vertical, PLOT_SPLITTER_DEFAULT_HEIGHT)
+        self.plot_splitter = PreferredHeightSplitter(Qt.Vertical, PLOT_SPLITTER_MIN_HEIGHT)
         self.plot_splitter.setChildrenCollapsible(False)
         self.plot_splitter.setHandleWidth(10)
-        self.plot_splitter.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        layout.addWidget(self.plot_splitter, 0)
+        self.plot_splitter.setMinimumHeight(PLOT_SPLITTER_MIN_HEIGHT)
+        self.plot_splitter.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        layout.addWidget(self.plot_splitter, 1)
 
         sensor_frame, sensor_layout = _panel("Flow / O2 Concentration", "Blue: flow rate, orange: O2 concentration when calibrated.")
         sensor_frame.setMinimumHeight(260)
@@ -1801,7 +1808,6 @@ class MainWindow(QMainWindow):
     def resizeEvent(self, event) -> None:  # type: ignore[override]
         super().resizeEvent(event)
         self._apply_column_widths()
-        QTimer.singleShot(0, self._enforce_plot_splitter_height)
 
     def _apply_column_widths(self) -> None:
         if not hasattr(self, "left_column"):
@@ -1813,11 +1819,6 @@ class MainWindow(QMainWindow):
     def _apply_plot_splitter_sizes(self) -> None:
         if hasattr(self, "plot_splitter"):
             self.plot_splitter.setSizes([350, 240])
-            self._enforce_plot_splitter_height()
-
-    def _enforce_plot_splitter_height(self) -> None:
-        if hasattr(self, "plot_splitter"):
-            self.plot_splitter.setFixedHeight(PLOT_SPLITTER_DEFAULT_HEIGHT)
 
     def _sync_left_column_content_width(self) -> None:
         if not hasattr(self, "left_column") or not hasattr(self, "left_column_content"):
