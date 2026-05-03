@@ -246,8 +246,8 @@ binary transport 上では、一部の項目が code / bit field に符号化さ
 | `zirconia_output_voltage_v` | Required | Required | Common display item |
 | `heater_rtd_resistance_ohm` | Required | Required | Common display item |
 | `differential_pressure_selected_pa` | Required | Required | GUI computes flow rate from this canonical field |
-| `differential_pressure_low_range_pa` | Optional / usually omitted | Optional | Diagnostic field; typically available on wired only |
-| `differential_pressure_high_range_pa` | Optional / usually omitted | Optional | Diagnostic field; typically available on wired only |
+| `differential_pressure_low_range_pa` | Optional via BLE batch schema v2 | Optional | Diagnostic field; omitted from legacy BLE single-sample/status packets |
+| `differential_pressure_high_range_pa` | Optional via BLE batch schema v2 | Optional | Diagnostic field; omitted from legacy BLE single-sample/status packets |
 | `zirconia_ip_voltage_v` | Optional / usually omitted | Optional | Service / engineering diagnostic field; wired-first |
 | `internal_voltage_v` | Optional / usually omitted | Optional | Service / engineering diagnostic field; may depend on board config |
 | `flow_rate_lpm` | GUI-derived | GUI-derived | Not canonical transport field |

@@ -19,6 +19,7 @@ from protocol_constants import (
     derive_flow_rate_lpm_from_selected_differential_pressure_pa,
     format_status_flags,
     infer_differential_pressure_selected_source,
+    nominal_sample_period_ms_for_mode,
 )
 from recording_io import create_recording_paths, write_csv_header
 
@@ -324,7 +325,7 @@ class PlotController:
 class TelemetryHealthMonitor:
     def __init__(self, mode: str, nominal_sample_period_ms: int | None = None) -> None:
         self.mode = mode
-        self.nominal_sample_period_ms = nominal_sample_period_ms or (80 if mode == BLE_MODE else 10)
+        self.nominal_sample_period_ms = nominal_sample_period_ms or nominal_sample_period_ms_for_mode(mode)
         self.reset()
 
     def reset(self) -> None:
@@ -338,7 +339,7 @@ class TelemetryHealthMonitor:
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
-        self.nominal_sample_period_ms = 80 if mode == BLE_MODE else 10
+        self.nominal_sample_period_ms = nominal_sample_period_ms_for_mode(mode)
         self.reset()
 
     def update_nominal_sample_period(self, nominal_sample_period_ms: int | str) -> None:
@@ -414,7 +415,7 @@ class TelemetryHealthMonitor:
 class TelemetrySessionStats:
     def __init__(self, mode: str, nominal_sample_period_ms: int | None = None) -> None:
         self.mode = mode
-        self.nominal_sample_period_ms = nominal_sample_period_ms or (80 if mode == BLE_MODE else 10)
+        self.nominal_sample_period_ms = nominal_sample_period_ms or nominal_sample_period_ms_for_mode(mode)
         self.reset()
 
     def reset(self) -> None:
@@ -434,7 +435,7 @@ class TelemetrySessionStats:
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
-        self.nominal_sample_period_ms = 80 if mode == BLE_MODE else 10
+        self.nominal_sample_period_ms = nominal_sample_period_ms_for_mode(mode)
         self.reset()
 
     def update_nominal_sample_period(self, nominal_sample_period_ms: int | str) -> None:

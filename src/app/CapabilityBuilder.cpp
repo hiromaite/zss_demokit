@@ -41,8 +41,10 @@ DeviceCapabilities CapabilityBuilder::build(
         capabilities.feature_bits = protocol::kSerialFeatureBits;
     } else {
         capabilities.transport_type_code = protocol::TransportTypeCode::Ble;
-        capabilities.max_payload_bytes = static_cast<uint16_t>(protocol::kBleTelemetryPacketSize);
+        capabilities.max_payload_bytes = static_cast<uint16_t>(protocol::kBleTelemetryBatchMaxPacketSize);
         capabilities.feature_bits = protocol::kBleFeatureBits;
+        capabilities.telemetry_field_bits &=
+            protocol::kBleV1SingleSampleTelemetryFieldBitsMask;
     }
 
     return capabilities;

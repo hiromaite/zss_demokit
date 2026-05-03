@@ -52,7 +52,7 @@
 | ADS1115 再試行 / recovery | Yes | Yes | 現行も periodic recovery を持つ |
 | Sampling cadence control | Partial | Yes | 旧は `UPDATE_INTERVAL_MS` ベース。現行は deadline-based |
 | Sampling overrun detection | Yes | Yes | 現行の方が明示的で status/event に反映しやすい |
-| BLE / wired で cadence 切替 | No | Yes | 現行は BLE `80 ms`, wired `10 ms`, idle default を切替 |
+| BLE / wired で cadence 切替 | No | Yes | 現行は測定周期を `10 ms` に揃え、BLE legacy notify は互換用に間引き、BLE batch で複数サンプルを配送する方針 |
 | Structured status flags | Yes | Yes | 現行のほうが bit 数と意味が拡張されている |
 | Command error latch | No | Yes | 現行で追加 |
 | Transport session active flag | BLE only equivalent | Yes | 現行は transport session active bit を持つ |

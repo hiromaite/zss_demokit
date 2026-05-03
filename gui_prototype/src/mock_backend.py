@@ -14,9 +14,11 @@ from ble_protocol import (
     decode_ble_capabilities_packet,
     decode_ble_event_packet,
     decode_ble_status_snapshot,
+    decode_ble_telemetry_batch_packet,
     decode_ble_telemetry_packet,
 )
 from protocol_constants import (
+    BLE_FEATURE_TELEMETRY_BATCH,
     BLE_MODE,
     BLE_OPCODE_GET_CAPABILITIES,
     BLE_OPCODE_GET_STATUS,
@@ -78,6 +80,7 @@ BLE_TELEMETRY_CHARACTERISTIC_UUID = "00002A58-0000-1000-8000-00805F9B34FB"
 BLE_STATUS_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10001"
 BLE_CAPABILITIES_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10002"
 BLE_EVENT_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10003"
+BLE_TELEMETRY_BATCH_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10004"
 PREFERRED_BLE_NAME_PREFIXES = ("GasSensor-Proto", "M5STAMP-MONITOR")
 PREFERRED_WIRED_PORT_TOKENS = ("usbmodem", "usbserial", "tty.usb", "cu.usb")
 BLE_SCAN_TIMEOUT_S = 2.5
@@ -155,6 +158,7 @@ class MockBackend(QObject):
         self._ble_status_notify_available = False
         self._ble_event_notify_available = False
         self._ble_capabilities_read_available = False
+        self._ble_batch_notify_available = False
         self._ble_last_status_received_monotonic = 0.0
         self._ble_status_request_nonce = 0
 
@@ -384,6 +388,7 @@ class MockBackend(QObject):
         self._ble_status_notify_available = False
         self._ble_event_notify_available = False
         self._ble_capabilities_read_available = False
+        self._ble_batch_notify_available = False
         self._ble_last_status_received_monotonic = 0.0
         self._ble_status_request_nonce = 0
 
@@ -523,6 +528,11 @@ class MockBackend(QObject):
             self._ble_client = None
             self._ble_loop = None
             self._ble_thread = None
+            pending_tasks = [task for task in asyncio.all_tasks(loop) if not task.done()]
+            for task in pending_tasks:
+                task.cancel()
+            if pending_tasks:
+                loop.run_until_complete(asyncio.gather(*pending_tasks, return_exceptions=True))
             try:
                 loop.close()
             except Exception:
@@ -539,8 +549,6 @@ class MockBackend(QObject):
         self.connection_phase_changed.emit("connected", identifier)
         self.log_generated.emit("info", f"Connected to {identifier} over BLE.")
 
-        await client.start_notify(BLE_TELEMETRY_CHARACTERISTIC_UUID, self._on_ble_telemetry_notification)
-
         self._ble_status_notify_available = await self._start_ble_notify_if_available(
             BLE_STATUS_CHARACTERISTIC_UUID,
             self._on_ble_status_notification,
@@ -552,12 +560,37 @@ class MockBackend(QObject):
             "event",
         )
 
+        capabilities_payload: dict[str, object] | None = None
         try:
-            await self._ble_read_capabilities()
+            capabilities_payload = await self._ble_read_capabilities()
             self._ble_capabilities_read_available = True
         except Exception as exc:
             self._ble_capabilities_read_available = False
             self._emit_ble_degraded_capabilities(str(exc))
+
+        batch_supported = bool(
+            capabilities_payload is not None
+            and int(capabilities_payload.get("feature_bits", 0)) & BLE_FEATURE_TELEMETRY_BATCH
+        )
+        if batch_supported:
+            self._ble_batch_notify_available = await self._start_ble_notify_if_available(
+                BLE_TELEMETRY_BATCH_CHARACTERISTIC_UUID,
+                self._on_ble_telemetry_batch_notification,
+                "telemetry batch",
+            )
+        if self._ble_batch_notify_available:
+            self.log_generated.emit("info", "BLE telemetry batch notify enabled.")
+        else:
+            await client.start_notify(BLE_TELEMETRY_CHARACTERISTIC_UUID, self._on_ble_telemetry_notification)
+            feature_bits = int(capabilities_payload.get("feature_bits", 0)) if capabilities_payload is not None else 0
+            max_payload = int(capabilities_payload.get("max_payload_bytes", 0)) if capabilities_payload is not None else 0
+            nominal = int(capabilities_payload.get("nominal_sample_period_ms", 0)) if capabilities_payload is not None else 0
+            self.log_generated.emit(
+                "warn",
+                "BLE telemetry batch is not active; falling back to legacy telemetry notify. "
+                f"CSV/plot cadence will follow legacy notifications. "
+                f"cap_feature_bits=0x{feature_bits:08X} max_payload={max_payload} nominal_ms={nominal}",
+            )
 
         if self._ble_status_notify_available:
             await self._ble_write_opcode(BLE_OPCODE_GET_STATUS)
@@ -579,6 +612,7 @@ class MockBackend(QObject):
             for uuid in (
                 BLE_EVENT_CHARACTERISTIC_UUID,
                 BLE_STATUS_CHARACTERISTIC_UUID,
+                BLE_TELEMETRY_BATCH_CHARACTERISTIC_UUID,
                 BLE_TELEMETRY_CHARACTERISTIC_UUID,
             ):
                 try:
@@ -602,9 +636,9 @@ class MockBackend(QObject):
             self.log_generated.emit("warn", f"BLE {label} notify unavailable: {exc}")
             return False
 
-    async def _ble_read_capabilities(self) -> None:
+    async def _ble_read_capabilities(self) -> dict[str, object] | None:
         if self._ble_client is None:
-            return
+            return None
         capabilities_raw = await self._ble_client.read_gatt_char(BLE_CAPABILITIES_CHARACTERISTIC_UUID)
         payload = decode_ble_capabilities_packet(bytes(capabilities_raw))
         payload["derived_metric_policy"] = DERIVED_METRIC_POLICY_ID
@@ -613,6 +647,7 @@ class MockBackend(QObject):
         self._last_protocol_version = str(payload["protocol_version"])
         self.capabilities_changed.emit(payload)
         self.log_generated.emit("info", f"Capabilities loaded from {self._connected_name}.")
+        return payload
 
     async def _ble_read_status_snapshot(self) -> None:
         if self._ble_client is None:
@@ -671,6 +706,7 @@ class MockBackend(QObject):
         self._ble_status_notify_available = False
         self._ble_event_notify_available = False
         self._ble_capabilities_read_available = False
+        self._ble_batch_notify_available = False
         self._ble_last_status_received_monotonic = 0.0
         self._ble_status_request_nonce = 0
         self.connection_changed.emit(False, identifier)
@@ -706,6 +742,47 @@ class MockBackend(QObject):
             differential_pressure_high_range_pa=None,
         )
         self.telemetry_generated.emit(point)
+
+    def _on_ble_telemetry_batch_notification(self, _: Any, data: bytearray) -> None:
+        try:
+            packets = decode_ble_telemetry_batch_packet(bytes(data))
+        except Exception as exc:
+            self.log_generated.emit("warn", f"BLE telemetry batch decode failed: {exc}")
+            return
+
+        received_at = datetime.now()
+        for payload in packets:
+            self._pump_on = bool(payload["pump_on"])
+            self._heater_power_on = bool(payload.get("heater_power_on"))
+            self._warning_latched = bool(int(payload["status_flags"]) & STATUS_FLAG_TELEMETRY_RATE_WARNING)
+            self._last_protocol_version = str(payload["protocol_version"])
+            point = TelemetryPoint(
+                sequence=int(payload["sequence"]),
+                host_received_at=received_at,
+                nominal_sample_period_ms=int(payload["nominal_sample_period_ms"]),
+                status_flags=int(payload["status_flags"]),
+                zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
+                heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
+                zirconia_ip_voltage_v=None,
+                internal_voltage_v=None,
+                differential_pressure_selected_pa=(
+                    float(payload["differential_pressure_selected_pa"])
+                    if payload.get("differential_pressure_selected_pa") is not None
+                    else None
+                ),
+                differential_pressure_low_range_pa=(
+                    float(payload["differential_pressure_low_range_pa"])
+                    if payload.get("differential_pressure_low_range_pa") is not None
+                    else None
+                ),
+                differential_pressure_high_range_pa=(
+                    float(payload["differential_pressure_high_range_pa"])
+                    if payload.get("differential_pressure_high_range_pa") is not None
+                    else None
+                ),
+                device_sample_tick_us=int(payload["device_sample_tick_us"]),
+            )
+            self.telemetry_generated.emit(point)
 
     def _on_ble_status_notification(self, _: Any, data: bytearray) -> None:
         try:

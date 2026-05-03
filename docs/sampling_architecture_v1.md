@@ -63,23 +63,28 @@ Add a capability-gated batch telemetry extension for newer GUI builds.
 Candidate compact batch shape:
 
 ```text
-BleTelemetryBatchV1
+BleTelemetryBatchV2
   protocol_major: u8
   protocol_minor: u8
   batch_schema: u8
   sample_count: u8
   first_sequence: u32
+  first_sample_tick_us: u32
+  nominal_sample_period_ms: u16
+  telemetry_field_bits: u16
   repeated sample_count times:
-    sample_tick_delta_us: u16 or u32
-    status_flags_delta_or_u16: u16
+    sample_tick_delta_us: u32
+    status_flags: u32
     zirconia_output_voltage_v: float32
     heater_rtd_resistance_ohm: float32
     differential_pressure_selected_pa: float32
+    differential_pressure_low_range_pa: float32
+    differential_pressure_high_range_pa: float32
 ```
 
-For PoC budgeting, `8` bytes header plus `20` bytes per compact sample is conservative enough to check feasibility.
-With an ATT MTU of `185`, ATT notification payload is typically `182` bytes, which can fit `8` compact samples.
-At `100 Hz` sampling and `50 ms` BLE notify interval, `5` samples are required, so this budget has margin.
+For PoC budgeting, the implemented batch schema v2 uses a `16` byte header plus `28` bytes per sample.
+With an ATT MTU of `185`, ATT notification payload is typically `182` bytes, which can fit `5` samples.
+At `100 Hz` sampling and `50 ms` BLE notify interval, `5` samples are required, so the packet fits while also carrying raw `SDP810` / `SDP811` diagnostic values.
 
 The GUI decoder should accept both:
 
@@ -104,10 +109,10 @@ Host receive and CSV intervals are still useful, but they should not be mistaken
 
 ## 7. Development Order
 
-1. Add firmware-side `SampleFrame` and ring buffer without changing external payloads.
+1. Add firmware-side `SampleFrame` and ring buffer without changing serial payloads. Initial skeleton is now present on `codex/fw-acquisition-scheduler`; Serial still publishes every sample and BLE can consume recent frames for batch notify.
 2. Keep current serial and BLE single-sample behavior fed from the ring buffer.
 3. Validate wired timing with device-side ticks and no sequence gaps.
-4. Add capability-gated BLE batch encoder / GUI decoder behind a feature bit.
+4. Add capability-gated BLE batch encoder / GUI decoder behind a feature bit. First implementation slice is present and passes fake-live GUI continuity / recording smoke; live BLE validation remains required.
 5. Validate fake batch fixtures and recording schema compatibility.
 6. Only after that, consider task affinity / priority tuning and ADS1115 continuous-conversion mode.
 
@@ -147,6 +152,8 @@ Expected current PoC result:
 
 - `Samples required per notify: 5`
 - `Samples fit per notify: 8`
+- `Payload required bytes: 116`
+- `Payload margin bytes: 66`
 - `Verdict: fit`
 
 ## 9. User Test Required

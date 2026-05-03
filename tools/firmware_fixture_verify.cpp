@@ -166,7 +166,11 @@ std::vector<uint8_t> encodeBleTelemetryPayload(const TelemetryPayloadV1& payload
     writeFloat32Le(out, 16, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(out, 20, payload.differential_pressure_selected_pa);
     writeU16Le(out, 24, payload.nominal_sample_period_ms);
-    writeU16Le(out, 26, payload.telemetry_field_bits);
+    writeU16Le(
+        out,
+        26,
+        payload.telemetry_field_bits &
+            zss::protocol::kBleV1SingleSampleTelemetryFieldBitsMask);
     writeU32Le(out, 28, payload.diagnostic_bits);
     return out;
 }
@@ -180,7 +184,11 @@ std::vector<uint8_t> encodeBleStatusPayload(const StatusSnapshotPayloadV1& paylo
     writeU32Le(out, 4, payload.sequence);
     writeU32Le(out, 8, payload.status_flags);
     writeU16Le(out, 12, payload.nominal_sample_period_ms);
-    writeU16Le(out, 14, payload.telemetry_field_bits);
+    writeU16Le(
+        out,
+        14,
+        payload.telemetry_field_bits &
+            zss::protocol::kBleV1SingleSampleTelemetryFieldBitsMask);
     writeFloat32Le(out, 16, payload.zirconia_output_voltage_v);
     writeFloat32Le(out, 20, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(out, 24, payload.differential_pressure_selected_pa);
@@ -261,19 +269,19 @@ std::vector<uint8_t> buildFixture(const std::string& case_id) {
     using zss::protocol::WiredMessageType;
 
     if (case_id == "ble_telemetry_nominal") {
-        auto state = makeState(80, 4660, makeMeasurements(0.625f, 120.5f, 1.25f), true, true);
+        auto state = makeState(10, 4660, makeMeasurements(0.625f, 120.5f, 1.25f), true, true);
         return encodeBleTelemetryPayload(zss::protocol::buildTelemetryPayload(state));
     }
 
     if (case_id == "ble_status_fault") {
-        auto state = makeState(80, 4661, makeMeasurements(0.145f, 98.75f, 0.42f), true, false);
+        auto state = makeState(10, 4661, makeMeasurements(0.145f, 98.75f, 0.42f), true, false);
         state.setStatusFlag(zss::protocol::kStatusFlagAdcFaultMask, true);
         state.setStatusFlag(zss::protocol::kStatusFlagSensorFaultMask, true);
         return encodeBleStatusPayload(zss::protocol::buildStatusSnapshotPayload(state));
     }
 
     if (case_id == "ble_capabilities_ble") {
-        DeviceCapabilities capabilities = CapabilityBuilder::build(zss::transport::TransportKind::Ble, 80);
+        DeviceCapabilities capabilities = CapabilityBuilder::build(zss::transport::TransportKind::Ble, 10);
         const auto payload = zss::protocol::buildCapabilitiesPayload(capabilities);
         std::vector<uint8_t> out(sizeof(payload), 0);
         std::memcpy(out.data(), &payload, sizeof(payload));

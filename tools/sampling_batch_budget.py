@@ -46,12 +46,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=3,
         help="ATT notification overhead to subtract from MTU",
     )
-    parser.add_argument("--header-bytes", type=int, default=8, help="Batch packet header bytes")
+    parser.add_argument("--header-bytes", type=int, default=16, help="Batch packet header bytes")
     parser.add_argument(
         "--sample-bytes",
         type=int,
-        default=20,
-        help="Compact per-sample bytes in the proposed batch payload",
+        default=28,
+        help="Per-sample bytes in the BLE batch payload",
     )
     parser.add_argument("--notify-interval-ms", type=float, default=50.0)
     parser.add_argument("--sample-period-ms", type=float, default=10.0)

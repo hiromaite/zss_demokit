@@ -1069,7 +1069,7 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - `PlotController` と `RecordingController` は `selected differential pressure` のみを使って flow rate を算出する
 - firmware transport では packet size を広げず、`telemetry_field_bits bit3` を使って既存 `flow_sensor_voltage_v` slot を `differential_pressure_selected_pa` として再解釈する互換拡張を採用した
 - BLE / wired decoder は bit3 を見て `differential_pressure_selected_pa` を復元する
-- raw `SDP810 / SDP811` は diagnostic field として CSV にも保存し、BLE では unavailable 時に空欄とする
+- raw `SDP810 / SDP811` は diagnostic field として CSV にも保存し、BLE では batch schema v2で取得できる場合に保存、legacy/unavailable 時は空欄とする
 - `./.venv_pio/bin/pio run`、`python3.12 -m compileall gui_prototype/src/protocol_constants.py gui_prototype/src/ble_protocol.py gui_prototype/src/wired_protocol.py gui_prototype/src/mock_backend.py gui_prototype/src/controllers.py`、`python3.12 tools/protocol_fixture_smoke.py` は通過済み
 - `/dev/cu.usbmodem3101` への upload 後、`python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem3101 --baudrate 115200` により `telemetry_field_bits=15` と finite `differential_pressure_selected_pa` を live wired で確認済み
 - `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5` も `gui_wired_session_probe_ok` で通過済み

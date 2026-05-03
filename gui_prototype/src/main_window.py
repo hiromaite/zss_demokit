@@ -51,6 +51,7 @@ from flow_verification import FlowVerificationController, FlowVerificationPersis
 from mock_backend import MockBackend, TelemetryPoint
 from mock_backend import PREFERRED_BLE_NAME_PREFIXES, PREFERRED_WIRED_PORT_TOKENS
 from protocol_constants import (
+    BLE_FEATURE_TELEMETRY_BATCH,
     BLE_MODE,
     STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_PUMP_ON,
@@ -330,6 +331,8 @@ class MainWindow(QMainWindow):
         self._latest_high_range_differential_pressure_pa: float | None = None
         self._latest_zirconia_ip_voltage_v: float | None = None
         self._latest_internal_voltage_v: float | None = None
+        self._ble_batch_supported = False
+        self._ble_legacy_cadence_warning_emitted = False
 
         self._build_ui()
         self._bind_controllers()
@@ -855,10 +858,13 @@ class MainWindow(QMainWindow):
     def _on_connection_changed(self, connected: bool, identifier: str) -> None:
         had_plot_samples = bool(self.plot_controller.time_values)
         if connected:
+            self._ble_legacy_cadence_warning_emitted = False
             if self.mode != WIRED_MODE or self.ui_state.connection.phase not in {"connecting", "handshaking"}:
                 self.ui_state.connection.phase = "connected"
         else:
             self.ui_state.connection.phase = "disconnected"
+            self._ble_batch_supported = False
+            self._ble_legacy_cadence_warning_emitted = False
         self.ui_state.connection.identifier = identifier if connected else "Disconnected"
         self.transport_state_value.setText(self._connection_phase_label(self.ui_state.connection.phase))
         self._sync_connection_controls()
@@ -913,6 +919,11 @@ class MainWindow(QMainWindow):
 
     def _on_capabilities_changed(self, payload: dict) -> None:
         nominal = payload["nominal_sample_period_ms"]
+        feature_bits = int(payload.get("feature_bits", 0))
+        self._ble_batch_supported = (
+            self.mode == BLE_MODE and
+            (feature_bits & BLE_FEATURE_TELEMETRY_BATCH) != 0
+        )
         self.sample_period_value.setText(f"{nominal} ms")
         self.firmware_value.setText(str(payload["firmware_version"]))
         self.protocol_value.setText(str(payload["protocol_version"]))
@@ -922,6 +933,15 @@ class MainWindow(QMainWindow):
         self.ui_state.session_metadata.transport_type = str(payload.get("transport_type", transport_type_for_mode(self.mode)))
         self.telemetry_health_monitor.update_nominal_sample_period(nominal)
         self.telemetry_session_stats.update_nominal_sample_period(nominal)
+        if self.mode == BLE_MODE:
+            if self._ble_batch_supported:
+                self._append_log("info", "BLE telemetry batch is advertised by the device.")
+            else:
+                self._append_log(
+                    "warn",
+                    "BLE telemetry batch is not advertised by this device. "
+                    "Recording will use legacy BLE notification cadence rather than 10 ms samples.",
+                )
 
     def _on_ble_devices_discovered(self, devices: list[str]) -> None:
         current = self.ble_device_selector.currentText()
@@ -977,6 +997,17 @@ class MainWindow(QMainWindow):
             self._append_log(severity, message)
 
         if self.recording_controller.is_recording:
+            if (
+                self.mode == BLE_MODE and
+                point.nominal_sample_period_ms > 10 and
+                not self._ble_legacy_cadence_warning_emitted
+            ):
+                self._ble_legacy_cadence_warning_emitted = True
+                self._append_log(
+                    "warn",
+                    f"Recording BLE telemetry at {point.nominal_sample_period_ms} ms cadence. "
+                    "10 ms CSV rows require BLE batch-capable firmware and an active batch subscription.",
+                )
             self.recording_controller.append_row(
                 point=point,
                 mode=self.mode,
@@ -1157,6 +1188,11 @@ class MainWindow(QMainWindow):
         if not self._has_expected_connected_device():
             self._append_log("warn", "Connect to a device before starting recording.")
             return
+        if self.mode == BLE_MODE and not self._ble_batch_supported:
+            self._append_log(
+                "warn",
+                "Starting BLE recording without advertised batch support; CSV may not contain 10 ms samples.",
+            )
 
         try:
             self.recording_controller.start(
@@ -1468,7 +1504,7 @@ class MainWindow(QMainWindow):
             if self.mode == BLE_MODE:
                 self._append_log(
                     "warn",
-                    "Flow characterization opened in BLE mode. Wired mode is recommended because raw SDP810 / SDP811 fields may be unavailable over BLE.",
+                    "Flow characterization opened in BLE mode. Wired mode is still recommended for hardware bring-up; BLE raw SDP810 / SDP811 fields require batch-capable firmware.",
                 )
             if dialog.exec() == QDialog.DialogCode.Accepted and dialog.saved_session_result is not None:
                 self._append_log(

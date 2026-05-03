@@ -71,9 +71,9 @@
 | ID | Item | Expected Result | Status | Notes |
 | :--- | :--- | :--- | :--- | :--- |
 | `FW-VAL-001` | PlatformIO build | `pio run` が成功する | `PASS` | local `.venv_pio` 上の `pio run` で成功 |
-| `FW-VAL-002` | PlatformIO upload | 実機へ upload できる | `PASS` | `/dev/cu.usbmodem5101` へ upload 成功 |
+| `FW-VAL-002` | PlatformIO upload | 実機へ upload できる | `PASS` | `/dev/cu.usbmodem4101` へ upload 成功 |
 | `FW-VAL-003` | Boot log | serial monitor に boot log が出る | `PASS` | monitor 再接続後に boot 相当の初期ログを確認 |
-| `FW-VAL-004` | Capability preview log | BLE / serial capability preview が出る | `PASS` | boot log で `BLE caps: period=80 ms max_payload=32` と `Serial caps: period=10 ms max_payload=64` を確認 |
+| `FW-VAL-004` | Capability preview log | BLE / serial capability preview が出る | `PASS` | boot log で BLE / Serial capabilities preview が出ることを確認。BLE raw-SDP batch slice 以降は BLE capabilities が sample period `10 ms`, max payload `156` を示す |
 | `FW-VAL-009` | BLE advertise boot sanity | BLE stack 初期化後も boot / loop が継続する | `PASS` | serial log で BLE advertising 初期化後も summary log 継続を確認 |
 | `FW-VAL-005` | Sampling summary log | summary log が一定周期で出る | `PASS` | 約 1 秒周期で `Sample` log を観測 |
 | `FW-VAL-006` | Sequence monotonicity | `seq` が単調増加する | `PASS` | `seq=10, 23, 35, ...` と単調増加を確認 |
@@ -105,7 +105,7 @@
 | `INT-VAL-004` | Get Status end-to-end | GUI で status snapshot を取得できる | `PASS` | wired backend smoke と host smoke の両方で `status_snapshot` を確認 |
 | `INT-VAL-005` | Shared CSV recording | 実データを共通 schema で保存できる | `PASS` | BLE mock と wired 実機の両方で `.partial.csv -> .csv` finalize と schema header を確認 |
 | `INT-VAL-006` | Wired 10 ms transport validation | `10 ms` path を end-to-end 検証できる | `PASS` | `wired_serial_smoke` と wired backend smoke で `nominal_sample_period_ms=10` を確認 |
-| `INT-VAL-007` | BLE 50-100 ms validation | BLE telemetry 周期を検証できる | `PASS` | local Mac 実機 probe で `2221` samples / `177.54 s` を観測し、実効 inter-arrival は約 `79.97 ms`、target range 内を確認 |
+| `INT-VAL-007` | BLE legacy telemetry validation | BLE legacy telemetry 周期を検証できる | `PASS` | local Mac 実機 probe で `2221` samples / `177.54 s` を観測し、旧BLE単発notifyの実効 inter-arrival は約 `79.97 ms`、target range 内を確認。BLE batch slice 以降は `INT-VAL-015` と実機batch validationへ移行 |
 | `INT-VAL-008` | Wired event propagation | firmware event が GUI warning log に届く | `PASS` | `command_error` と `warning_raised` を wired 実機 + GUI backend smoke で確認 |
 | `INT-VAL-009` | Golden fixture regression smoke | shared fixture で GUI parser / firmware encoder / CSV row を回帰確認できる | `PASS` | `tools/protocol_fixture_smoke.py` と `tools/firmware_fixture_verify.cpp` により正常系 9 ケース、異常系 4 ケース、CSV row 1 ケースを確認 |
 | `INT-VAL-010` | BLE GUI continuity manual validation | local Mac GUI 実行で BLE continuity / reconnect を継続確認できる | `PASS` | `tools/gui_ble_session_probe.py --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60` で `Connect count=2`, `Connected telemetry segments=2`, `sequence_gap_total=0`, `Reconnect recovered=True`, `recovery=3.42 s`, `Recording sessions completed=1`, `gui_ble_session_probe_ok` を確認 |
@@ -113,13 +113,15 @@
 | `INT-VAL-012` | Windows packaged end-to-end smoke | Windows packaged app で `Wired` / `BLE` の両モードが blocking issue なく動く | `PASS` | user による Windows 11 Pro 実機確認で serial / BLE の両方に問題なしを確認 |
 | `INT-VAL-013` | GUI wired flow integration | GUI が selected differential pressure を含む wired session を継続処理できる | `PASS` | `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5` で `967` telemetry, warning/error `0`, CSV `799` rows, `gui_wired_session_probe_ok` を確認 |
 | `INT-VAL-014` | Wired flow probe baseline | wired transport 上で selected differential pressure と derived flow rate を集計できる | `PASS` | `tools/wired_flow_probe.py --port /dev/cu.usbmodem4101 --duration-s 4` で `telemetry_field_bits=63`, advertised differential pressure, finite `selected / SDP810 / SDP811` no-flow baseline を確認 |
-| `INT-VAL-015` | Wired flow operator sweep | low / medium / high flow で transport-level flow probe が handoff を観測できる | `TODO` | `tools/wired_flow_probe.py` を用いた user-operated flow sweep を次回実施 |
+| `INT-VAL-015` | BLE batch GUI decode smoke | BLE batch payload を GUI が通常 telemetry stream へ展開できる | `PASS` | fake-live `tools/gui_ble_session_probe.py --use-fake-live --duration-s 6 --recording-duration-s 2 --reconnect-at-s 3 --min-observed-duration-s 3` で `Telemetry samples observed=524`, sequence gap `0`, CSV non-unit gap `0`, `gui_ble_session_probe_ok` を確認。2026-05-03 user実機確認で BLE mode でも plot / CSV が `10 ms` sample列として復元されることを確認 |
+| `INT-VAL-023` | Wired flow operator sweep | low / medium / high flow で transport-level flow probe が handoff を観測できる | `TODO` | `tools/wired_flow_probe.py` を用いた user-operated flow sweep を次回実施 |
 | `INT-VAL-016` | Service visibility wired integration | wired 実機で service visibility wiring 後も command / recording / GUI session が退行しない | `PASS` | `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` と `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` を実施し、`wired_serial_smoke_ok` と `gui_wired_session_probe_ok` を確認 |
 | `INT-VAL-017` | Flow card raw SDP visibility | wired differential pressure raw values が flow metric card に表示される | `PASS` | offscreen live connection で `flow_detail=SDP811: -0.05 Pa / SDP810: -0.05 Pa`, `detail_visible=True` を確認 |
 | `INT-VAL-018` | Flow characterization PoC smoke | raw SDP810 / SDP811 capture wizard が設定画面から生成でき、JSON/CSV保存と解析summaryが動く | `PASS` | `flow_characterization_dialog_smoke_ok`、controller fake telemetry capture、`tools/flow_characterization_analyze.py` smoke を確認 |
 | `INT-VAL-019` | Optional diagnostic availability UX | BLE / Wired で提供される diagnostic fields の差が GUI と CSV 上で誤解なく扱われる | `TODO` | wired-first diagnostics と BLE unavailable fields を operator-readable に表示する方針を確認する |
 | `INT-VAL-020` | Pump noise isolation matrix | pump OFF / ON / separate supply / pneumatic isolation 条件で zirconia noise の相関を比較できる | `TODO` | `USER_TEST_REQUIRED`: pump 操作、電源条件変更、必要なら oscilloscope 観測が必要 |
 | `INT-VAL-021` | Bundle validation integration | A/B/C/D/E branches の user test 結果を統合判断に反映できる | `PASS` | B/C/D/E は user test OK。A は diagnostics OK だが 10 ms cadence failure を検出したため、merge 可能な診断成果と次期 firmware task に分離 |
+| `INT-VAL-022` | BLE raw SDP batch parity | BLE mode でも flow card と CSV raw columns に `SDP811` / `SDP810` が入る | `PASS` | `tools/ble_backend_smoke.py` と fake-live `tools/gui_ble_session_probe.py` で raw SDP が `TelemetryPoint` / CSV raw columns へ入ることを確認。2026-05-03 user実機GUI確認で flow card detail 表示と BLE CSV `10 ms` recording を確認 |
 
 ## 7. 実施ログ
 
@@ -206,7 +208,7 @@
 - `python3.12 -m compileall tools/gui_ble_session_probe.py` を実施し、新 probe の compile を確認
 - `tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6` を実施し、fake live backend 上で `recording finalize`, `planned reconnect`, `summary verdict` が通ることを確認
 - BLE 実機 probe の結果を受け、planned reconnect を含む場合の観測時間基準を `session duration - reconnect timeout budget` に調整した
-- firmware 側は active transport に応じて sampling cadence を `wired=10 ms` / `BLE=80 ms` へ動的切替するよう更新し、BLE packet 上の `nominal_sample_period_ms` も payload と一致させた
+- firmware 側は過去に active transport に応じて sampling cadence を `wired=10 ms` / `BLE=80 ms` へ切替していたが、BLE batch slice 以降は測定周期を `10 ms` に寄せ、legacy単発notifyのみ互換用にrate-limitする方針へ変更した
 - GUI 側は live BLE disconnect を background task で二重に閉じないよう更新し、shutdown 時の pending task warning を解消する方針に変更した
 - local Mac 実機で `tools/gui_ble_session_probe.py --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60` を実施し、`sequence_gap_total=0`, `Reconnect recovered=True`, `recovery=3.42 s`, `Recording sessions completed=1`, `gui_ble_session_probe_ok` を確認
 - probe 後の follow-up として BLE status fallback を harden し、short probe `--duration-s 40 --recording-duration-s 12 --reconnect-at-s 20 --min-observed-duration-s 25` で `Status events=7`, `sequence_gap_total=0`, `gui_ble_session_probe_ok` を確認
@@ -287,6 +289,11 @@
 - Bundle C user test で BLE scan / auto-connect が意図どおり動作した
 - Bundle D user test で Flow fixed range / X follow 改善に加え、secondary `ViewBox` の Y-axis mouse interaction 有効化後に O2 right-axis が操作可能であることを確認した
 - Bundle E user test で `tools/sampling_batch_budget.py --mtu-bytes 185 --notify-interval-ms 50 --sample-period-ms 10` が `Payload margin bytes: 74`, `Verdict: fit` となることを確認した
+- BLE batch first implementation slice では header を `16` bytes に確定し、同条件で `Samples required per notify=5`, `Samples fit per notify=8`, `Payload required bytes=116`, `Payload margin bytes=66`, `Verdict: fit` を確認した
+- BLE raw-SDP batch schema v2では per-sampleを `28` bytesへ拡張し、同条件で `Samples required per notify=5`, `Samples fit per notify=5`, `Payload required bytes=156`, `Payload margin bytes=26`, `Verdict: fit` を確認した
+- 2026-05-03 user実機確認で、BLE modeでも plot と CSV が `10 ms` sample列として記録されることを確認した
+- 2026-05-03 raw-SDP batch schema v2を `/dev/cu.usbmodem4101` へ upload し、`tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` で serial capabilities `telemetry_field_bits=123`、raw `SDP810` / `SDP811`、pump / heater command path が継続することを確認した
+- 2026-05-03 user実機GUI確認で、BLE mode の flow card detail に raw `SDP811` / `SDP810` の小表示が出ること、BLE recording CSV が `10 ms` cadence で保存されることを確認した
 - `codex/fw-sampling-cadence` で cooperative scheduler を `micros()` deadline に変更し、wired timing diagnostic を `sample_tick_us` + acquisition / telemetry publish / scheduler lateness に拡張した
 - 同ブランチで USB CDC TX buffer を拡大し、TX capacity が不足した場合に測定ループを長時間ブロックしない送信 preflight を追加した
 - `.venv_gui_prototype/bin/python -m compileall gui_prototype/src tools/wired_timing_probe.py tools/protocol_fixture_smoke.py`、`tools/protocol_fixture_smoke.py`、`pio run` が通過した

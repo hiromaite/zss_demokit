@@ -15,9 +15,11 @@ from ble_protocol import (  # noqa: E402
     decode_ble_capabilities_packet,
     decode_ble_event_packet,
     decode_ble_status_snapshot,
+    decode_ble_telemetry_batch_packet,
     decode_ble_telemetry_packet,
 )
 from protocol_constants import (  # noqa: E402
+    BLE_FEATURE_TELEMETRY_BATCH,
     BLE_OPCODE_GET_STATUS,
     BLE_OPCODE_PING,
     BLE_OPCODE_SET_HEATER_OFF,
@@ -32,6 +34,7 @@ TELEMETRY_CHARACTERISTIC_UUID = "00002A58-0000-1000-8000-00805F9B34FB"
 STATUS_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10001"
 CAPABILITIES_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10002"
 EVENT_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10003"
+TELEMETRY_BATCH_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10004"
 
 
 @dataclass
@@ -88,6 +91,16 @@ class BleCycleCollector:
                 received_at_monotonic=time.monotonic(),
             )
         )
+
+    def on_telemetry_batch(self, _: str, data: bytearray) -> None:
+        received_at = time.monotonic()
+        for packet in decode_ble_telemetry_batch_packet(bytes(data)):
+            self.result.telemetry.append(
+                TelemetryObservation(
+                    packet=packet,
+                    received_at_monotonic=received_at,
+                )
+            )
 
     def on_status(self, _: str, data: bytearray) -> None:
         self.result.status_packets.append(decode_ble_status_snapshot(bytes(data)))
@@ -176,7 +189,6 @@ async def run_cycle(
 
     async with BleakClient(target_identifier) as client:
         print(f"cycle_{cycle_index}_connected", client.is_connected)
-        await client.start_notify(TELEMETRY_CHARACTERISTIC_UUID, collector.on_telemetry)
 
         collector.result.status_notify_available = await start_notify_if_available(
             client,
@@ -198,6 +210,23 @@ async def run_cycle(
             print(f"cycle_{cycle_index}_capabilities", collector.result.capabilities)
         except Exception as exc:
             print(f"cycle_{cycle_index}_capabilities_degraded: {exc}")
+
+        batch_notify_available = False
+        if (
+            collector.result.capabilities is not None
+            and int(collector.result.capabilities.get("feature_bits", 0)) & BLE_FEATURE_TELEMETRY_BATCH
+        ):
+            batch_notify_available = await start_notify_if_available(
+                client,
+                TELEMETRY_BATCH_CHARACTERISTIC_UUID,
+                collector.on_telemetry_batch,
+                "telemetry_batch",
+            )
+        if batch_notify_available:
+            print(f"cycle_{cycle_index}_telemetry_batch_notify_enabled")
+        else:
+            await client.start_notify(TELEMETRY_CHARACTERISTIC_UUID, collector.on_telemetry)
+            print(f"cycle_{cycle_index}_legacy_telemetry_notify_enabled")
 
         initial_status = await request_status_snapshot(
             client,
@@ -262,6 +291,10 @@ async def run_cycle(
 
         try:
             await client.stop_notify(TELEMETRY_CHARACTERISTIC_UUID)
+        except Exception:
+            pass
+        try:
+            await client.stop_notify(TELEMETRY_BATCH_CHARACTERISTIC_UUID)
         except Exception:
             pass
         if collector.result.status_notify_available:

@@ -179,7 +179,10 @@ Bundle E current slice:
 
 - `docs/sampling_architecture_v1.md` に task ownership、ring buffer contract、BLE batch direction、jitter diagnostics、開発順を固定した
 - `tools/sampling_batch_budget.py` を追加し、MTU / notify interval / sample period / compact sample size から batch feasibility を見積もれるようにした
-- 現在の PoC budget では `MTU=185`, `notify=50 ms`, `sample=10 ms`, `header=8`, `sample=20` の条件で `5 samples required`, `8 samples fit`, `Verdict: fit`
+- 初期 PoC budget では `MTU=185`, `notify=50 ms`, `sample=10 ms`, `header=8`, `sample=20` の条件で `5 samples required`, `8 samples fit`, `Verdict: fit`
+- `codex/fw-acquisition-scheduler` の first BLE batch implementation slice で header は `16` bytes に確定し、firmware-side `SampleFrame` ring buffer、BLE batch characteristic、GUI batch decoder、fake-live GUI probe を追加した
+- raw SDP対応後の batch schema v2 budget は `header=16`, `sample=28` で `5 samples required`, `5 samples fit`, `Payload required bytes=156`, `Payload margin bytes=26`, `Verdict: fit`
+- 2026-05-03 user実機GUI確認で、BLE mode の flow card detail に raw `SDP811` / `SDP810` が表示され、CSV も `10 ms` cadence で記録されることを確認した
 
 この端末で可能な確認:
 

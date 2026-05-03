@@ -22,6 +22,7 @@ from ble_protocol import (  # noqa: E402
     decode_ble_capabilities_packet,
     decode_ble_event_packet,
     decode_ble_status_snapshot,
+    decode_ble_telemetry_batch_packet,
     decode_ble_telemetry_packet,
 )
 from controllers import RecordingController  # noqa: E402
@@ -41,6 +42,7 @@ FLOAT_TOLERANCE = 1e-6
 
 BLE_DECODERS = {
     "ble_telemetry": decode_ble_telemetry_packet,
+    "ble_telemetry_batch": decode_ble_telemetry_batch_packet,
     "ble_status": decode_ble_status_snapshot,
     "ble_capabilities": decode_ble_capabilities_packet,
     "ble_event": decode_ble_event_packet,

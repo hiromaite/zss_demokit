@@ -6,6 +6,7 @@
 #include "app/AppState.h"
 #include "app/CapabilityBuilder.h"
 #include "app/CommandProcessor.h"
+#include "app/SampleFrameRingBuffer.h"
 #include "board/BoardConfig.h"
 #include "measurement/AdcFrontend.h"
 #include "measurement/DifferentialPressureFrontend.h"
@@ -37,9 +38,12 @@ zss::app::CommandProcessor g_command_processor(
     g_heater_power_controller);
 zss::transport::BleTransport g_ble_transport;
 zss::transport::SerialTransport g_serial_transport;
+zss::app::SampleFrameRingBuffer<zss::board::kSampleFrameRingCapacity> g_sample_frames;
 
 uint32_t g_next_sample_deadline_us = 0;
 uint32_t g_last_summary_log_ms = 0;
+uint32_t g_last_ble_batch_publish_ms = 0;
+uint32_t g_ble_batch_last_sequence = 0;
 bool g_measurement_core_ready = false;
 bool g_ble_transport_ready = false;
 bool g_serial_transport_ready = false;
@@ -333,9 +337,42 @@ void runSamplingStep(uint32_t now_us) {
 
     g_app_state.setDiagnosticBit(zss::protocol::kDiagnosticBitTelemetryPublishedMask, true);
     const auto telemetry_payload = zss::protocol::buildTelemetryPayload(g_app_state);
+    zss::app::SampleFrame sample_frame{};
+    sample_frame.telemetry = telemetry_payload;
+    sample_frame.sample_tick_us = sample_started_us;
+    sample_frame.acquisition_duration_us = acquisition_duration_us;
+    sample_frame.scheduler_lateness_us = scheduler_lateness_us;
+    sample_frame.acquisition_timing = g_measurement_core.latestAcquisitionTiming();
+    g_sample_frames.push(sample_frame);
+
     const uint32_t telemetry_publish_started_us = micros();
     g_ble_transport.publishTelemetry(telemetry_payload);
     g_serial_transport.publishTelemetry(telemetry_payload);
+    const uint32_t publish_now_ms = millis();
+    if (g_ble_transport.isConnected()) {
+        if (publish_now_ms - g_last_ble_batch_publish_ms >=
+            zss::board::kBleTelemetryBatchNotifyIntervalMs) {
+            zss::app::SampleFrame batch_frames[zss::protocol::kBleTelemetryBatchMaxSamples]{};
+            const size_t pending_batch_count = g_sample_frames.countSince(g_ble_batch_last_sequence);
+            const size_t batch_count = g_sample_frames.copySince(
+                g_ble_batch_last_sequence,
+                batch_frames,
+                zss::protocol::kBleTelemetryBatchMaxSamples);
+            if (batch_count > 0u && g_ble_transport.publishTelemetryBatch(batch_frames, batch_count)) {
+                g_ble_batch_last_sequence =
+                    batch_frames[batch_count - 1u].telemetry.sequence;
+                if (pending_batch_count > batch_count) {
+                    g_last_ble_batch_publish_ms =
+                        publish_now_ms - zss::board::kBleTelemetryBatchNotifyIntervalMs;
+                } else {
+                    g_last_ble_batch_publish_ms = publish_now_ms;
+                }
+            }
+        }
+    } else {
+        g_ble_batch_last_sequence = telemetry_payload.sequence;
+        g_last_ble_batch_publish_ms = publish_now_ms;
+    }
     const uint32_t telemetry_publish_duration_us = micros() - telemetry_publish_started_us;
     g_serial_transport.publishTimingDiagnostic(
         sequence,

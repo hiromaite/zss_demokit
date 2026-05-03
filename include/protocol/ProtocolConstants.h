@@ -19,6 +19,7 @@ inline constexpr const char kBleExtensionServiceUuid[] = "8B1F1000-5C4B-47C1-A74
 inline constexpr const char kBleStatusSnapshotCharacteristicUuid[] = "8B1F1001-5C4B-47C1-A742-9D6617B10001";
 inline constexpr const char kBleCapabilitiesCharacteristicUuid[] = "8B1F1001-5C4B-47C1-A742-9D6617B10002";
 inline constexpr const char kBleEventCharacteristicUuid[] = "8B1F1001-5C4B-47C1-A742-9D6617B10003";
+inline constexpr const char kBleTelemetryBatchCharacteristicUuid[] = "8B1F1001-5C4B-47C1-A742-9D6617B10004";
 inline constexpr uint8_t kWiredSof0 = 0xA5;
 inline constexpr uint8_t kWiredSof1 = 0x5A;
 
@@ -117,12 +118,20 @@ inline constexpr uint16_t kTelemetryFieldDifferentialPressureLowRangeMask = 1u <
 inline constexpr uint16_t kTelemetryFieldDifferentialPressureHighRangeMask = 1u << 5;
 inline constexpr uint16_t kTelemetryFieldZirconiaIpVoltageMask = 1u << 6;
 inline constexpr uint16_t kTelemetryFieldInternalVoltageMask = 1u << 7;
+inline constexpr uint16_t kBleV1SingleSampleTelemetryFieldBitsMask =
+    kTelemetryFieldBits |
+    kTelemetryFieldDifferentialPressureSelectedMask;
+inline constexpr uint16_t kBleTelemetryBatchFieldBitsMask =
+    kBleV1SingleSampleTelemetryFieldBitsMask |
+    kTelemetryFieldDifferentialPressureLowRangeMask |
+    kTelemetryFieldDifferentialPressureHighRangeMask;
 
 inline constexpr uint32_t kBleFeatureBits =
     (1u << 0) |
     (1u << 1) |
     (1u << 2) |
-    (1u << 3);
+    (1u << 3) |
+    (1u << 4);
 
 inline constexpr uint32_t kSerialFeatureBits =
     (1u << 0) |
@@ -131,6 +140,12 @@ inline constexpr uint32_t kSerialFeatureBits =
     (1u << 3);
 
 inline constexpr size_t kBleTelemetryPacketSize = 32;
+inline constexpr size_t kBleTelemetryBatchHeaderSize = 16;
+inline constexpr size_t kBleTelemetryBatchSampleSize = 28;
+inline constexpr size_t kBleTelemetryBatchMaxSamples = 5;
+inline constexpr size_t kBleTelemetryBatchMaxPacketSize =
+    kBleTelemetryBatchHeaderSize +
+    (kBleTelemetryBatchSampleSize * kBleTelemetryBatchMaxSamples);
 inline constexpr size_t kBleStatusSnapshotPacketSize = 28;
 inline constexpr size_t kBleCapabilitiesPacketSize = 24;
 inline constexpr size_t kBleEventPacketSize = 12;
