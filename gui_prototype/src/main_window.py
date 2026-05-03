@@ -17,9 +17,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QMainWindow,
-    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -47,6 +45,7 @@ from dialogs import (
     ModeSwitchDialog,
     SettingsDialog,
 )
+from event_log_panel import EventLogPanel
 from flow_characterization import FlowCharacterizationController, FlowCharacterizationPersistence
 from flow_history_dialogs import FlowCharacterizationHistoryDialog, FlowVerificationHistoryDialog
 from flow_verification import FlowVerificationController, FlowVerificationPersistence
@@ -358,7 +357,6 @@ class MainWindow(QMainWindow):
         self._ble_batch_supported = False
         self._ble_legacy_cadence_warning_emitted = False
         self._latest_recording_summary: RecordingCsvSummary | None = None
-        self._latest_log_export_path: Path | None = None
 
         self._build_ui()
         self._bind_controllers()
@@ -815,38 +813,11 @@ class MainWindow(QMainWindow):
         )
         log_frame.setObjectName("WarningCard")
         log_layout = log_frame.content_layout
-        log_filter_row = QHBoxLayout()
-        log_filter_row.setSpacing(8)
-        self.log_severity_filter_combo = QComboBox()
-        self.log_severity_filter_combo.addItems(list(self.warning_controller.SEVERITY_FILTERS))
-        self.log_severity_filter_combo.currentTextChanged.connect(self._refresh_log_pane)
-        self.log_search_edit = QLineEdit()
-        self.log_search_edit.setPlaceholderText("Filter log text")
-        self.log_search_edit.textChanged.connect(self._refresh_log_pane)
-        self.copy_visible_log_button = QPushButton("Copy Visible")
-        self.copy_visible_log_button.setObjectName("SecondaryButton")
-        self.copy_visible_log_button.clicked.connect(self._copy_visible_log)
-        self.export_visible_log_button = QPushButton("Export Visible")
-        self.export_visible_log_button.setObjectName("SecondaryButton")
-        self.export_visible_log_button.clicked.connect(self._export_visible_log)
-        log_filter_row.addWidget(QLabel("Show"))
-        log_filter_row.addWidget(self.log_severity_filter_combo, 0)
-        log_filter_row.addWidget(self.log_search_edit, 1)
-        log_filter_row.addWidget(self.copy_visible_log_button, 0)
-        log_filter_row.addWidget(self.export_visible_log_button, 0)
-        log_layout.addLayout(log_filter_row)
-
-        self.log_summary_label = QLabel("0 visible / 0 total")
-        self.log_summary_label.setObjectName("SectionHint")
-        self.log_summary_label.setWordWrap(True)
-        log_layout.addWidget(self.log_summary_label)
-
-        self.log_pane = QPlainTextEdit()
-        self.log_pane.setObjectName("LogPane")
-        self.log_pane.setReadOnly(True)
-        self.log_pane.setMinimumHeight(225)
-        log_layout.addWidget(self.log_pane)
-        self._refresh_log_pane()
+        self.event_log_panel = EventLogPanel(
+            self.warning_controller,
+            self._current_recording_directory,
+        )
+        log_layout.addWidget(self.event_log_panel)
         layout.addWidget(log_frame)
 
         return shell
@@ -1500,71 +1471,33 @@ class MainWindow(QMainWindow):
 
     def _append_log(self, severity: str, message: str) -> None:
         entry = self.warning_controller.append(severity, message)
-        if not hasattr(self, "log_pane"):
-            return
-        visible_entries = self._visible_log_entries()
-        if entry in visible_entries:
-            self.log_pane.appendPlainText(self.warning_controller.format_entry(entry))
-            self._update_log_summary(visible_entries)
-            return
-        self._refresh_log_pane()
+        if hasattr(self, "event_log_panel"):
+            self.event_log_panel.append_entry(entry)
 
-    def _visible_log_entries(self):
-        if not hasattr(self, "log_severity_filter_combo"):
-            return self.warning_controller.entries()
-        return self.warning_controller.filtered_entries(
-            severity_filter=self.log_severity_filter_combo.currentText(),
-            query=self.log_search_edit.text() if hasattr(self, "log_search_edit") else "",
-        )
-
-    def _refresh_log_pane(self) -> None:
-        if not hasattr(self, "log_pane"):
-            return
-        entries = self._visible_log_entries()
-        self.log_pane.setPlainText(
-            "\n".join(self.warning_controller.format_entry(entry) for entry in entries)
-        )
-        self._update_log_summary(entries)
-
-    def _update_log_summary(self, visible_entries) -> None:
-        if not hasattr(self, "log_summary_label"):
-            return
-        visible_entries = list(visible_entries)
-        all_entries = self.warning_controller.entries()
-        visible_counts = self.warning_controller.severity_counts(visible_entries)
-        total_counts = self.warning_controller.severity_counts(all_entries)
-        self.log_summary_label.setText(
-            f"{len(visible_entries)} visible / {len(all_entries)} total | "
-            f"visible warn/error: {visible_counts.get('warn', 0)}/{visible_counts.get('error', 0)} | "
-            f"total warn/error: {total_counts.get('warn', 0)}/{total_counts.get('error', 0)}"
-        )
-        has_visible = bool(visible_entries)
-        self.copy_visible_log_button.setEnabled(has_visible)
-        self.export_visible_log_button.setEnabled(has_visible)
-
-    def _copy_visible_log(self) -> None:
-        entries = self._visible_log_entries()
-        if not entries:
+    def _copy_visible_log(self) -> bool:
+        if not hasattr(self, "event_log_panel"):
+            return False
+        copied = self.event_log_panel.copy_visible()
+        if not copied:
             self._append_log("warn", "No visible log entries are available to copy.")
-            return
-        QApplication.clipboard().setText(
-            "\n".join(self.warning_controller.format_entry(entry, include_date=True) for entry in entries)
-        )
-        self._append_log("info", f"Copied {len(entries)} visible log entr{'y' if len(entries) == 1 else 'ies'} to clipboard.")
+            return False
+        count = len(self.event_log_panel.visible_entries())
+        self._append_log("info", f"Copied {count} visible log entr{'y' if count == 1 else 'ies'} to clipboard.")
+        return True
 
-    def _export_visible_log(self) -> None:
-        entries = self._visible_log_entries()
-        if not entries:
-            self._append_log("warn", "No visible log entries are available to export.")
-            return
-        export_dir = self._current_recording_directory() / "event_logs"
-        export_path = export_dir / f"event_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    def _export_visible_log(self) -> Path | None:
+        if not hasattr(self, "event_log_panel"):
+            return None
         try:
-            self._latest_log_export_path = self.warning_controller.export_csv(export_path, entries)
+            export_path = self.event_log_panel.export_visible()
         except Exception as exc:
             self._append_log("error", f"Event log export failed: {exc}")
-            return
-        self._append_log("info", f"Event log exported: {self._latest_log_export_path}")
+            return None
+        if export_path is None:
+            self._append_log("warn", "No visible log entries are available to export.")
+            return None
+        self._append_log("info", f"Event log exported: {export_path}")
+        return export_path
 
     def _poll_telemetry_health(self) -> None:
         for severity, message in self.telemetry_health_monitor.poll():

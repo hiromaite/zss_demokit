@@ -146,19 +146,19 @@ def _exercise_event_log(window: MainWindow, base_dir: Path) -> None:
     window._append_log("warn", "Pump noise warning")  # noqa: SLF001
     window._append_log("error", "Serial connection failed")  # noqa: SLF001
 
-    window.log_severity_filter_combo.setCurrentText("Warnings + Errors")
-    if "Boot complete" in window.log_pane.toPlainText():
+    panel = window.event_log_panel
+    panel.severity_filter_combo.setCurrentText("Warnings + Errors")
+    if "Boot complete" in panel.log_pane.toPlainText():
         raise AssertionError("info log leaked into warn/error filter")
-    if "Pump noise warning" not in window.log_pane.toPlainText():
+    if "Pump noise warning" not in panel.log_pane.toPlainText():
         raise AssertionError("warning log missing from warn/error filter")
 
-    window.log_search_edit.setText("pump")
-    visible_text = window.log_pane.toPlainText()
+    panel.search_edit.setText("pump")
+    visible_text = panel.log_pane.toPlainText()
     if "Pump noise warning" not in visible_text or "Serial connection failed" in visible_text:
         raise AssertionError(f"search filter did not narrow log entries: {visible_text}")
 
-    window._export_visible_log()  # noqa: SLF001
-    export_path = window._latest_log_export_path  # noqa: SLF001
+    export_path = window._export_visible_log()  # noqa: SLF001
     if export_path is None or not export_path.exists():
         raise AssertionError("visible event log was not exported")
     with export_path.open("r", encoding="utf-8", newline="") as handle:

@@ -72,6 +72,8 @@ Status: done in this cleanup slice.
 - `dialogs.py` から Flow Verification / Flow Characterization history dialogs を
   `flow_history_dialogs.py` へ分離した
 - `main_window.py` と `tools/gui_log_history_smoke.py` の import path を更新した
+- `main_window.py` から Warning / Event Log UI と copy / export 操作を
+  `event_log_panel.py` へ分離した
 - Settings / details / guided workflow dialogs は今回は動かさず、risk を小さく保った
 
 ### Step D: Optional Physical Reorganization
