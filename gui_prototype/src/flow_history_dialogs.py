@@ -15,7 +15,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from dialogs import FlowVerificationDetailsDialog, _dialog_header, _format_optional, _style_dialog_buttons
+from dialog_helpers import dialog_header, format_optional, style_dialog_buttons
+from dialogs import FlowVerificationDetailsDialog
 from flow_characterization import (
     FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS,
     FlowCharacterizationLatestSummary,
@@ -47,7 +48,7 @@ class FlowVerificationHistoryDialog(QDialog):
         layout.setSpacing(14)
 
         layout.addWidget(
-            _dialog_header(
+            dialog_header(
                 "Flow Verification History",
                 "Review recent verification sessions and reopen a saved session summary when you need to compare PoC runs.",
             )
@@ -94,7 +95,7 @@ class FlowVerificationHistoryDialog(QDialog):
         shell.addWidget(detail_card, 1)
 
         button_box = QDialogButtonBox(QDialogButtonBox.Ok)
-        _style_dialog_buttons(button_box)
+        style_dialog_buttons(button_box)
         button_box.accepted.connect(self.accept)
         layout.addWidget(button_box)
 
@@ -127,8 +128,8 @@ class FlowVerificationHistoryDialog(QDialog):
             f"Overall: {summary.result}\n"
             f"Exhalation: {summary.exhalation_result or '--'}\n"
             f"Inhalation: {summary.inhalation_result or '--'}\n"
-            f"Mean abs error: {_format_optional(summary.mean_abs_error_percent, '{:0.2f} %')}\n"
-            f"Max abs error: {_format_optional(summary.max_abs_error_percent, '{:0.2f} %')}\n"
+            f"Mean abs error: {format_optional(summary.mean_abs_error_percent, '{:0.2f} %')}\n"
+            f"Max abs error: {format_optional(summary.max_abs_error_percent, '{:0.2f} %')}\n"
             f"Source switches: {summary.total_source_switch_count}\n"
             f"Criterion: {summary.criterion_version or '--'}\n"
             f"Path: {summary.path or '--'}"
@@ -182,7 +183,7 @@ class FlowCharacterizationHistoryDialog(QDialog):
         layout.setSpacing(14)
 
         layout.addWidget(
-            _dialog_header(
+            dialog_header(
                 "Flow Characterization History",
                 "Compare recent raw SDP characterization sessions before deciding selector thresholds or rough flow scaling.",
             )
@@ -221,7 +222,7 @@ class FlowCharacterizationHistoryDialog(QDialog):
         shell.addWidget(detail_card, 1)
 
         button_box = QDialogButtonBox(QDialogButtonBox.Ok)
-        _style_dialog_buttons(button_box)
+        style_dialog_buttons(button_box)
         button_box.accepted.connect(self.accept)
         layout.addWidget(button_box)
 
@@ -251,10 +252,10 @@ class FlowCharacterizationHistoryDialog(QDialog):
             f"Missing steps: {summary.missing_step_count}\n"
             f"Polarity: {summary.polarity_hint}\n"
             f"Low/high consistency: {summary.low_high_sign_consistency}\n"
-            f"Selected peak abs: {_format_optional(summary.selected_peak_abs_pa, '{:0.3f} Pa')}\n"
-            f"SDP810 peak abs: {_format_optional(summary.sdp810_peak_abs_pa, '{:0.3f} Pa')}\n"
-            f"SDP811 peak abs: {_format_optional(summary.sdp811_peak_abs_pa, '{:0.3f} Pa')}\n"
-            f"Rough gain: {_format_optional(summary.rough_gain_multiplier, '{:0.3f}x')} "
+            f"Selected peak abs: {format_optional(summary.selected_peak_abs_pa, '{:0.3f} Pa')}\n"
+            f"SDP810 peak abs: {format_optional(summary.sdp810_peak_abs_pa, '{:0.3f} Pa')}\n"
+            f"SDP811 peak abs: {format_optional(summary.sdp811_peak_abs_pa, '{:0.3f} Pa')}\n"
+            f"Rough gain: {format_optional(summary.rough_gain_multiplier, '{:0.3f}x')} "
             f"({summary.rough_gain_confidence or '--'})\n"
             f"Note preview: {summary.note_preview or '--'}"
         )

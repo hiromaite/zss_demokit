@@ -70,7 +70,7 @@
 | `GUI-VAL-036` | Recording post-run quick review smoke | recording stop 後に latest summary、folder open、CSV path copy の導線が有効化される | `PASS` | `tools/gui_recording_review_smoke.py` で `.partial.csv -> .csv` finalize、rows / duration / sequence gap summary、review buttons、clipboard copy を確認 |
 | `GUI-VAL-037` | Warning/event log filter and export smoke | Warning / Event Log を重要度・文字列で絞り込み、visible entries を copy / CSV export できる | `PASS` | `tools/gui_log_history_smoke.py` で `Warnings + Errors` filter、search、clipboard copy、`event_logs/event_log_*.csv` export を確認 |
 | `GUI-VAL-038` | Flow history comparison smoke | Verification / Characterization の recent history を summary-level に比較し、history summary CSV を export できる | `PASS` | `tools/gui_log_history_smoke.py` で Verification mean/max error comparison、Characterization polarity/peak/rough gain comparison、Settings の Characterization history entry、summary CSV export を確認 |
-| `GUI-VAL-039` | Project organization cleanup smoke | README / docs index / tools/resource guide 更新後も GUI history dialog / event log panel split が退行しない | `PASS` | `flow_history_dialogs.py` へ Flow History dialogs、`event_log_panel.py` へ Warning / Event Log UI を分離し、compileall、`tools/gui_log_history_smoke.py`、`tools/gui_engineering_tools_smoke.py`、`tools/gui_layout_smoke.py` で確認 |
+| `GUI-VAL-039` | Project organization cleanup smoke | README / docs index / tools/resource guide 更新後も GUI history dialog / event log panel split が退行しない | `PASS` | `flow_history_dialogs.py`、`event_log_panel.py`、`ui_helpers.py`、`plot_interactions.py`、`dialog_helpers.py` へ安全な責務分離を実施し、compileall、`tools/gui_log_history_smoke.py`、`tools/gui_engineering_tools_smoke.py`、`tools/gui_layout_smoke.py`、`tools/gui_plot_controls_smoke.py` で確認 |
 
 ## 5. Firmware Checklist
 

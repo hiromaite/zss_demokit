@@ -74,7 +74,26 @@ Status: done in this cleanup slice.
 - `main_window.py` と `tools/gui_log_history_smoke.py` の import path を更新した
 - `main_window.py` から Warning / Event Log UI と copy / export 操作を
   `event_log_panel.py` へ分離した
+- `main_window.py` から generic UI helpers を `ui_helpers.py` へ分離した
+- `main_window.py` から plot manual interaction helpers を `plot_interactions.py` へ分離した
+- shared dialog decoration / optional formatting helpers を `dialog_helpers.py` へ分離し、
+  `flow_history_dialogs.py` が `dialogs.py` の private helper に依存しない形へ寄せた
 - Settings / details / guided workflow dialogs は今回は動かさず、risk を小さく保った
+
+### Step C Task Register
+
+| Order | Task | Status | Decision |
+| :--- | :--- | :--- | :--- |
+| 1 | README / docs / tools / resource entry point refresh | Done | Current implementation and reference-only assets are now discoverable |
+| 2 | Flow history dialogs split | Done | History comparison UI is isolated in `flow_history_dialogs.py` |
+| 3 | Warning / Event Log panel split | Done | Log filtering, copy, and export are isolated in `event_log_panel.py` |
+| 4 | Generic UI helper split | Done | Panel, metric, collapsible, and vertical-scroll helpers are isolated in `ui_helpers.py` |
+| 5 | Plot interaction helper split | Done | ViewBox / AxisItem manual-interaction behavior is isolated in `plot_interactions.py` |
+| 6 | Shared dialog helper split | Done | Header, button styling, and optional number formatting are isolated in `dialog_helpers.py` |
+| 7 | Settings / guided workflow dialog split | Deferred | Valuable, but higher risk because workflows share persistence and validation state |
+| 8 | `mock_backend.py` transport/service split or rename | Deferred | High value, but should be done on a dedicated branch with serial/BLE fixture coverage |
+| 9 | Physical directory rename, e.g. `gui_prototype/` -> `desktop_app/` | Deferred | Requires packaging, docs, tools, and Windows command path migration |
+| 10 | Physical docs/tools archive move | Deferred | Prefer after beta packaging so links and release notes can be adjusted once |
 
 ### Step D: Optional Physical Reorganization
 
@@ -88,6 +107,25 @@ Status: future.
 
 ただし、これらは link / command path / packaging spec に影響するため、配布準備前の
 専用 branch で行う。
+
+### Step E: Backend Responsibility Split
+
+Status: future.
+
+`mock_backend.py` は名前に反して、fake data source だけでなく wired serial、BLE、
+recording event bridge、capability/status handling も含んでいる。これは次の
+maintenance branch で以下の順に分割する。
+
+- protocol encode/decode and capability model
+- fake backend / fixture backend
+- wired serial transport
+- BLE transport and batch decode
+- Qt-facing backend facade
+
+この分割は実機通信に直接影響するため、今回の organization cleanup では rename や
+large move を行わない。着手時は `tools/protocol_fixture_smoke.py`,
+`tools/wired_serial_smoke.py`, fake-live BLE probe, and Windows serial smoke を
+minimum gate とする。
 
 ## 5. 削除候補
 
@@ -106,7 +144,7 @@ local generated artifact として削除してよいもの:
 
 ## 6. 次の立ち止まりポイント
 
-Step A / B が終わった時点では、code behavior は変えないため risk は低い。
+Step A / B / C が終わった時点では、code behavior は変えないため risk は低い。
 今回の cleanup slice 後は、少なくとも以下を通す。
 
 ```sh
@@ -114,4 +152,5 @@ Step A / B が終わった時点では、code behavior は変えないため ris
 .venv_gui_prototype/bin/python tools/gui_log_history_smoke.py
 .venv_gui_prototype/bin/python tools/gui_engineering_tools_smoke.py
 .venv_gui_prototype/bin/python tools/gui_layout_smoke.py
+.venv_gui_prototype/bin/python tools/gui_plot_controls_smoke.py
 ```

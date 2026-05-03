@@ -79,6 +79,9 @@ python3.12 tools/gui_ble_session_probe.py --device-prefix GasSensor-Proto --dura
 - `dialogs.py` still contains several large dialog classes.
 - `event_log_panel.py` owns the Warning / Event Log UI and export actions.
 - `flow_history_dialogs.py` owns flow history comparison dialogs.
+- `ui_helpers.py` owns generic panel, metric, collapsible, and scroll helper widgets.
+- `plot_interactions.py` owns manual pan / zoom interaction helper items.
+- `dialog_helpers.py` owns shared dialog header, button styling, and optional value formatting.
 - `mock_backend.py` contains both fake behavior and live transport integration.
 - Future maintenance work should split these files by responsibility before
   adding much more UI surface area.

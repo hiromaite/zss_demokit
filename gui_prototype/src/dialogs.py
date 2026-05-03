@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 
 from app_metadata import APP_NAME
 from app_state import AppSettings
+from dialog_helpers import dialog_header, format_optional, style_dialog_buttons
 from flow_characterization import (
     FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS,
     FLOW_CHARACTERIZATION_STEPS,
@@ -58,29 +59,6 @@ from protocol_constants import (
 from recording_io import find_partial_recordings, summarize_partial_recordings
 
 
-def _dialog_header(title: str, subtitle: str) -> QFrame:
-    header = QFrame()
-    header.setObjectName("AccentCard")
-    header_layout = QVBoxLayout(header)
-    title_label = QLabel(title)
-    title_label.setObjectName("SectionTitle")
-    subtitle_label = QLabel(subtitle)
-    subtitle_label.setObjectName("SectionHint")
-    subtitle_label.setWordWrap(True)
-    header_layout.addWidget(title_label)
-    header_layout.addWidget(subtitle_label)
-    return header
-
-
-def _style_dialog_buttons(button_box: QDialogButtonBox) -> None:
-    ok_button = button_box.button(QDialogButtonBox.Ok)
-    cancel_button = button_box.button(QDialogButtonBox.Cancel)
-    if ok_button is not None:
-        ok_button.setObjectName("PrimaryButton")
-    if cancel_button is not None:
-        cancel_button.setObjectName("SecondaryButton")
-
-
 class PartialRecoveryDialog(QDialog):
     def __init__(self, base_dir: Path | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -92,7 +70,7 @@ class PartialRecoveryDialog(QDialog):
         root.setSpacing(14)
 
         root.addWidget(
-            _dialog_header(
+            dialog_header(
                 "Partial Session Recovery",
                 "Unfinished session files are kept as .partial.csv until a recording is finalized.",
             )
@@ -117,7 +95,7 @@ class PartialRecoveryDialog(QDialog):
         root.addWidget(listing, 1)
 
         button_box = QDialogButtonBox(QDialogButtonBox.Ok)
-        _style_dialog_buttons(button_box)
+        style_dialog_buttons(button_box)
         button_box.accepted.connect(self.accept)
         root.addWidget(button_box)
 
@@ -149,7 +127,7 @@ class ModeSwitchDialog(QDialog):
         layout.addWidget(warning)
 
         button_box = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
-        _style_dialog_buttons(button_box)
+        style_dialog_buttons(button_box)
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
         layout.addWidget(button_box)
@@ -235,7 +213,7 @@ class SettingsDialog(QDialog):
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
 
         button_box = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
-        _style_dialog_buttons(button_box)
+        style_dialog_buttons(button_box)
         self.button_box = button_box
         button_box.accepted.connect(self.accept)
         button_box.rejected.connect(self.reject)
@@ -1082,9 +1060,9 @@ class FlowCharacterizationDialog(QDialog):
             self.result_sources_label.setText("--")
             return
         self.result_duration_label.setText(f"{summary.duration_s:0.2f} s")
-        self.result_selected_label.setText(_format_optional(summary.selected_peak_abs_pa, "{:0.3f} Pa"))
-        self.result_sdp810_label.setText(_format_optional(summary.sdp810_peak_abs_pa, "{:0.3f} Pa"))
-        self.result_sdp811_label.setText(_format_optional(summary.sdp811_peak_abs_pa, "{:0.3f} Pa"))
+        self.result_selected_label.setText(format_optional(summary.selected_peak_abs_pa, "{:0.3f} Pa"))
+        self.result_sdp810_label.setText(format_optional(summary.sdp810_peak_abs_pa, "{:0.3f} Pa"))
+        self.result_sdp811_label.setText(format_optional(summary.sdp811_peak_abs_pa, "{:0.3f} Pa"))
         self.result_polarity_label.setText(
             f"selected={summary.selected_polarity}, SDP810={summary.sdp810_polarity}, SDP811={summary.sdp811_polarity}"
         )
@@ -1125,7 +1103,7 @@ class FlowVerificationDetailsDialog(QDialog):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(14)
 
-        header = _dialog_header(
+        header = dialog_header(
             "Latest Flow Verification Details",
             "Review the latest saved verification session summary and stroke-level results.",
         )
@@ -1162,11 +1140,11 @@ class FlowVerificationDetailsDialog(QDialog):
         zero_result = session.zero_check_result
         zero_rows = [
             ("Zero status", "--" if zero_result is None else zero_result.status),
-            ("Mean flow", _format_optional(zero_result.mean_flow_lpm, "{:+0.3f} L/min") if zero_result else "--"),
-            ("Peak abs flow", _format_optional(zero_result.peak_abs_flow_lpm, "{:0.3f} L/min") if zero_result else "--"),
-            ("Selected DP mean", _format_optional(zero_result.selected_dp_mean_pa, "{:+0.3f} Pa") if zero_result else "--"),
-            ("SDP811 mean", _format_optional(zero_result.sdp811_mean_pa, "{:+0.3f} Pa") if zero_result else "--"),
-            ("SDP810 mean", _format_optional(zero_result.sdp810_mean_pa, "{:+0.3f} Pa") if zero_result else "--"),
+            ("Mean flow", format_optional(zero_result.mean_flow_lpm, "{:+0.3f} L/min") if zero_result else "--"),
+            ("Peak abs flow", format_optional(zero_result.peak_abs_flow_lpm, "{:0.3f} L/min") if zero_result else "--"),
+            ("Selected DP mean", format_optional(zero_result.selected_dp_mean_pa, "{:+0.3f} Pa") if zero_result else "--"),
+            ("SDP811 mean", format_optional(zero_result.sdp811_mean_pa, "{:+0.3f} Pa") if zero_result else "--"),
+            ("SDP810 mean", format_optional(zero_result.sdp810_mean_pa, "{:+0.3f} Pa") if zero_result else "--"),
             ("Warnings", "--" if zero_result is None or not zero_result.warning_flags else ", ".join(zero_result.warning_flags)),
         ]
         for row_index, (name, value) in enumerate(zero_rows):
@@ -1220,7 +1198,7 @@ class FlowVerificationDetailsDialog(QDialog):
         layout.addWidget(note_card)
 
         button_box = QDialogButtonBox(QDialogButtonBox.Ok)
-        _style_dialog_buttons(button_box)
+        style_dialog_buttons(button_box)
         button_box.accepted.connect(self.accept)
         layout.addWidget(button_box)
 
@@ -1573,12 +1551,6 @@ class FlowVerificationDialog(QDialog):
                 "--" if row["peak_flow_lps"] is None else f"{row['peak_flow_lps']:0.3f} L/s"
             )
             labels["source"].setText(row["source"] or "--")
-
-
-def _format_optional(value: float | None, pattern: str) -> str:
-    if value is None:
-        return "--"
-    return pattern.format(value)
 
 
 def _format_step_label(result: VerificationStrokeResult) -> str:
