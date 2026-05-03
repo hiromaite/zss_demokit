@@ -32,7 +32,7 @@ python tools/release_readiness_check.py
 macOS / shell:
 
 ```bash
-source .venv_gui_prototype/bin/activate
+source <gui-venv>/bin/activate
 pip install "pyinstaller>=6,<7"
 python tools/release_readiness_check.py
 pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec
@@ -41,8 +41,8 @@ pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec
 Windows PowerShell:
 
 ```powershell
-py -3.12 -m venv .venv_gui_prototype
-.venv_gui_prototype\Scripts\Activate.ps1
+py -3.12 -m venv <gui-venv>
+<gui-venv>\Scripts\Activate.ps1
 pip install -r gui_prototype\requirements.txt
 pip install "pyinstaller>=6,<7"
 python tools\release_readiness_check.py

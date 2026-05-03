@@ -26,8 +26,8 @@ renames it.
 ## Run From Source
 
 ```bash
-python3.12 -m venv .venv_gui_prototype
-source .venv_gui_prototype/bin/activate
+python3.12 -m venv <gui-venv>
+source <gui-venv>/bin/activate
 pip install -r gui_prototype/requirements.txt
 python gui_prototype/main.py
 ```
@@ -38,7 +38,7 @@ Settings are stored with `QSettings` under the `zss-demokit` organization and
 ## Packaging
 
 ```bash
-source .venv_gui_prototype/bin/activate
+source <gui-venv>/bin/activate
 pip install "pyinstaller>=6,<7"
 python tools/release_readiness_check.py
 pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec

@@ -50,7 +50,9 @@ def main() -> int:
 
     required_docs = [
         PROJECT_ROOT / "README.md",
+        PROJECT_ROOT / "AGENTS.md",
         PROJECT_ROOT / "gui_prototype" / "packaging_README.md",
+        PROJECT_ROOT / "docs" / "project_status_v1.md",
         PROJECT_ROOT / "docs" / "distribution_plan_v1.md",
         PROJECT_ROOT / "docs" / "windows_beta_smoke_checklist_v1.md",
         PROJECT_ROOT / "docs" / "release_notes_beta3.md",

@@ -7,7 +7,7 @@ Run tools from the repository root. Prefer the GUI virtual environment for
 Python tools:
 
 ```sh
-source .venv_gui_prototype/bin/activate
+source <gui-venv>/bin/activate
 python tools/<tool>.py
 ```
 

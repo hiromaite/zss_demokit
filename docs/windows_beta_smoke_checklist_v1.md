@@ -17,7 +17,8 @@
 - Windows 11 Pro machine
 - Python `3.12.x`
 - repository checked out
-- virtual environment available for packaging
+- Python virtual environment available for packaging; the name is local and
+  does not need to be `.venv_gui_prototype`
 - target hardware available:
   - one wired device
   - one BLE device advertising as `GasSensor-Proto`
@@ -29,8 +30,8 @@ transition, but new smoke notes should prefer `GasSensor-Proto`.
 
 ```powershell
 cd <repo-root>
-py -3.12 -m venv .venv_gui_prototype
-.venv_gui_prototype\Scripts\Activate.ps1
+py -3.12 -m venv <gui-venv>
+<gui-venv>\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 pip install -r gui_prototype\requirements.txt
 pip install "pyinstaller>=6,<7"

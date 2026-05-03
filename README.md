@@ -5,27 +5,19 @@ The system connects to an M5Stack StampS3 based sensor device over USB serial
 or BLE, visualizes zirconia / flow related telemetry, controls the pump and
 heater path, and records measurement sessions to CSV for later analysis.
 
-This repository is no longer a static prototype archive. It contains the
-current PlatformIO firmware, the current PySide6 desktop application, shared
-protocol definitions, validation probes, packaging notes, and reference copies
-of older implementations.
+This repository contains the current PlatformIO firmware, the current PySide6
+desktop application, shared protocol definitions, validation probes, packaging
+notes, and reference copies of older implementations.
 
-## Current Status
+## Project State
 
-As of 2026-05-03:
+This project is active beta software. Firmware and desktop GUI are both active
+implementation surfaces. The current Windows distribution candidate is
+`0.1.0-beta.3` with package directory `dist/zss_demokit_gui_win64_beta3/`.
 
-- Firmware builds as a top-level PlatformIO project for `m5stack-stamps3`.
-- Wired serial supports capabilities, status, telemetry, command ack, events,
-  and 10 ms sample recording.
-- BLE supports the current control path and batch telemetry path used by the
-  GUI to reconstruct 10 ms plot / CSV rows when supported by the device.
-- The operator-facing BLE name is `GasSensor-Proto`; host filters still accept
-  legacy `M5STAMP-MONITOR*` names during transition.
-- The desktop GUI can run from source, package with PyInstaller, connect over
-  BLE or wired serial, record CSV files, show diagnostics, and run flow
-  verification / characterization workflows.
-- Windows beta packaging has been smoke-tested through `0.1.0-beta.2`; the
-  next distribution candidate is `0.1.0-beta.3`.
+See `docs/project_status_v1.md`, `docs/validation_checklist_v1.md`, and
+`docs/release_notes_beta3.md` for the current implementation snapshot,
+validation evidence, and beta package notes.
 
 ## Repository Map
 
@@ -41,110 +33,163 @@ As of 2026-05-03:
 | `resource/` | Reference-only legacy firmware / GUI and example GUI assets |
 | `build/`, `dist/`, `.pio/`, `.venv*` | Local generated artifacts; ignored by Git |
 
-## Firmware Quick Start
+## Prerequisites
 
-Use the repository-local PlatformIO environment when available.
+- Python `3.12.x`
+- PlatformIO for firmware work
+- A Python virtual environment for the desktop GUI
+- A Windows 11 Pro machine for packaged-app smoke testing
+- Target hardware when running wired, BLE, upload, or flow probes
+
+Virtual environment names are not fixed. The examples below use `<gui-venv>`
+and `<pio-venv>` as placeholders; choose names that fit your local workflow.
+
+## Firmware Setup
+
+Option A: use a globally available PlatformIO command.
 
 ```sh
-./.venv_pio/bin/pio run
-./.venv_pio/bin/pio run -t upload --upload-port <PORT>
-./.venv_pio/bin/pio device monitor --port <PORT> --baud 115200
+pio run
+pio run -t upload --upload-port <PORT>
+pio device monitor --port <PORT> --baud 115200
 ```
 
-If `.venv_pio` has not been created yet, create or restore the PlatformIO
-environment before building.
+Option B: install PlatformIO into a project-local virtual environment.
 
-## Desktop GUI Quick Start
+```sh
+python3.12 -m venv <pio-venv>
+source <pio-venv>/bin/activate
+python -m pip install --upgrade pip
+python -m pip install platformio
+pio run
+```
+
+On Windows PowerShell:
+
+```powershell
+py -3.12 -m venv <pio-venv>
+<pio-venv>\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install platformio
+pio run
+```
+
+## Desktop GUI Setup
 
 The current GUI implementation lives in `gui_prototype/`. The name remains for
 path stability, but the contents are the active desktop application.
 
+macOS / Linux shell:
+
 ```sh
-python3.12 -m venv .venv_gui_prototype
-source .venv_gui_prototype/bin/activate
-pip install -r gui_prototype/requirements.txt
+python3.12 -m venv <gui-venv>
+source <gui-venv>/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r gui_prototype/requirements.txt
 python gui_prototype/main.py
 ```
 
-Packaging:
+Windows PowerShell:
+
+```powershell
+py -3.12 -m venv <gui-venv>
+<gui-venv>\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r gui_prototype\requirements.txt
+python gui_prototype\main.py
+```
+
+## Packaging
+
+Run the release-readiness preflight before building a Windows package.
+
+macOS / Linux shell:
 
 ```sh
-source .venv_gui_prototype/bin/activate
-pip install "pyinstaller>=6,<7"
+source <gui-venv>/bin/activate
+python -m pip install "pyinstaller>=6,<7"
 python tools/release_readiness_check.py
 pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec
 ```
 
-Packaging metadata is centralized in
-`gui_prototype/src/app_metadata.py`. The current beta target is
-`0.1.0-beta.3` with distribution directory
-`dist/zss_demokit_gui_win64_beta3/`.
+Windows PowerShell:
+
+```powershell
+<gui-venv>\Scripts\Activate.ps1
+pip install "pyinstaller>=6,<7"
+python tools\release_readiness_check.py
+pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
+```
+
+Expected beta3 output:
+
+```text
+dist/zss_demokit_gui_win64_beta3/
+```
+
+Packaging metadata is centralized in `gui_prototype/src/app_metadata.py`.
+The full distribution gate is documented in `docs/distribution_plan_v1.md`.
 
 ## Validation
 
-Run the smallest relevant checks before and after a change.
+Run the smallest relevant checks before and after a change. Activate the GUI
+virtual environment first unless your shell already resolves the intended
+Python interpreter.
 
 No-device baseline:
 
 ```sh
-.venv_gui_prototype/bin/python -m compileall gui_prototype/src tools
-.venv_gui_prototype/bin/python tools/protocol_fixture_smoke.py
-.venv_gui_prototype/bin/python tools/gui_layout_smoke.py
-.venv_gui_prototype/bin/python tools/gui_log_history_smoke.py
+python -m compileall gui_prototype/src tools
+python tools/protocol_fixture_smoke.py
+python tools/gui_layout_smoke.py
+python tools/gui_log_history_smoke.py
 ```
 
 Firmware baseline:
 
 ```sh
-./.venv_pio/bin/pio run
-.venv_gui_prototype/bin/python tools/command_processor_smoke.py
+pio run
+python tools/command_processor_smoke.py
 ```
 
 Wired device:
 
 ```sh
-.venv_gui_prototype/bin/python tools/wired_serial_smoke.py --port <PORT> --baudrate 115200
-.venv_gui_prototype/bin/python tools/gui_wired_session_probe.py --port <PORT> --duration-s 18 --toggle-interval-s 3
-.venv_gui_prototype/bin/python tools/wired_flow_probe.py --port <PORT> --duration-s 6
+python tools/wired_serial_smoke.py --port <PORT> --baudrate 115200
+python tools/gui_wired_session_probe.py --port <PORT> --duration-s 18 --toggle-interval-s 3
+python tools/wired_flow_probe.py --port <PORT> --duration-s 6
 ```
 
 BLE device:
 
 ```sh
-.venv_gui_prototype/bin/python tools/ble_smoke.py --name GasSensor-Proto --telemetry-count 20 --telemetry-timeout 10 --observe-duration 8
-.venv_gui_prototype/bin/python tools/gui_ble_session_probe.py --device-prefix GasSensor-Proto --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60
+python tools/ble_smoke.py --name GasSensor-Proto --telemetry-count 20 --telemetry-timeout 10 --observe-duration 8
+python tools/gui_ble_session_probe.py --device-prefix GasSensor-Proto --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60
 ```
 
-The authoritative validation log is
-`docs/validation_checklist_v1.md`.
+The authoritative validation log is `docs/validation_checklist_v1.md`.
 
 ## Documentation
 
 Start with:
 
 - `docs/README.md` for the documentation index and status labels.
+- `docs/project_status_v1.md` for the current implementation snapshot.
 - `docs/system_requirements.md` for scope and system requirements.
 - `docs/system_architecture.md` for component boundaries.
 - `docs/protocol_catalog_v1.md` for canonical protocol names and fields.
 - `docs/implementation_backlog_v1.md` for active backlog and milestone state.
 - `docs/validation_checklist_v1.md` for tested behavior.
-- `docs/project_organization_review_v1.md` for repository cleanup decisions.
 - `docs/distribution_plan_v1.md` for beta distribution policy and task order.
 - `docs/release_notes_beta3.md` for the current beta package notes and known gaps.
 
 Some documents intentionally preserve historical planning context. When a
 document disagrees with current code, prefer the implementation, the active
-backlog, and the validation checklist, then update the stale document.
+backlog, the project status snapshot, and the validation checklist, then update
+the stale document.
 
-## Development Workflow
+## Agent Guidance
 
-Use focused branches, normally prefixed with `codex/`.
-
-```sh
-git status -sb
-git switch -c codex/<short-topic>
-```
-
-Keep implementation, validation updates, and documentation close together when
-they describe the same behavior. Avoid deleting reference material until it has
-been classified in `docs/README.md` or `resource/README.md`.
+Coding-agent-specific workflow rules live in `AGENTS.md`. Human contributors
+can read it too, but the root README intentionally avoids agent-only branch
+prefixes, tool behavior, or Codex-specific operating rules.

@@ -18,6 +18,7 @@ Use these labels when reading or updating documents:
 | :--- | :--- |
 | `Canonical` | Current reference for names, boundaries, or requirements |
 | `Active Plan` | Still used to drive upcoming implementation |
+| `Status Snapshot` | Time-sensitive summary of the current implementation and release candidate |
 | `Validation Log` | Records tested behavior and evidence |
 | `Release` | Packaging or user-test procedure |
 | `Reference` | Historical or comparative context; useful but not authoritative |
@@ -36,6 +37,12 @@ Use these labels when reading or updating documents:
 | `wired_transport_v1.md` | `Canonical` | Wired binary frame behavior |
 | `recording_schema.md` | `Canonical` | CSV schema and recording metadata |
 | `gui_implementation_spec_v1.md` | `Canonical` | GUI behavior and layout intent |
+
+## Status Snapshot
+
+| Document | Status | Purpose |
+| :--- | :--- | :--- |
+| `project_status_v1.md` | `Status Snapshot` | Current implementation state, beta candidate, validation state, and non-blocking gaps |
 
 ## Active Plans
 
@@ -72,10 +79,12 @@ Use these labels when reading or updating documents:
 
 For normal implementation:
 
-1. `implementation_backlog_v1.md`
-2. `system_usability_review_v1.md`
-3. `validation_checklist_v1.md`
-4. the source files touched by the task
+1. root `README.md`
+2. `project_status_v1.md`
+3. `implementation_backlog_v1.md`
+4. `system_usability_review_v1.md`
+5. `validation_checklist_v1.md`
+6. the source files touched by the task
 
 For protocol or CSV changes:
 
