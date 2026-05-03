@@ -21,7 +21,7 @@ for candidate in [str(GUI_ROOT), str(GUI_SRC)]:
 
 from app_metadata import APP_ID, APP_NAME, APP_ORGANIZATION, APP_VERSION
 from app_state import AppSettings
-from dialogs import FlowCharacterizationHistoryDialog, FlowVerificationHistoryDialog, SettingsDialog
+from dialogs import SettingsDialog
 from flow_characterization import (
     FLOW_CHARACTERIZATION_CRITERION_VERSION,
     FlowCharacterizationAnalysis,
@@ -29,6 +29,7 @@ from flow_characterization import (
     FlowCharacterizationSession,
     FlowRoughScaleEstimate,
 )
+from flow_history_dialogs import FlowCharacterizationHistoryDialog, FlowVerificationHistoryDialog
 from flow_verification import (
     FLOW_VERIFICATION_CRITERION_VERSION,
     FlowVerificationPersistence,

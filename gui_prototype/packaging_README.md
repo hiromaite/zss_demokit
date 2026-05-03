@@ -1,29 +1,22 @@
 # GUI Packaging Notes
 
-This note tracks the current packaging path for the desktop GUI.
+This note tracks the repeatable PyInstaller path for the desktop GUI.
 
-## Goal
-
-- keep the regular local Python run working on macOS during development
-- prepare a repeatable `PyInstaller` path for the later Windows 11 Pro packaging pass
-
-## Current Packaging Entry Point
+## Current Target
 
 - spec file: `gui_prototype/zss_demokit_gui.spec`
-- current beta naming target: `zss_demokit_gui_win64_beta2`
-- current application version: `0.1.0-beta.2`
+- application version: `0.1.0-beta.2`
+- distribution directory: `dist/zss_demokit_gui_win64_beta2/`
+- executable name: `zss_demokit_gui`
+- metadata source: `gui_prototype/src/app_metadata.py`
 
-The current spec is intentionally conservative:
+The current package is a beta-quality `onedir` bundle. Windows 11 Pro source
+run, PyInstaller packaging, wired smoke, and BLE smoke have been confirmed by
+user testing for beta2.
 
-- `onedir` style output
-- icon embedding is optional and auto-enabled when an asset is placed at `gui_prototype/assets/app_icon.ico` or another configured candidate path
-- no installer yet
-- `bleak.backends` is collected so the transport backend can be resolved on the target OS
-- `pyqtgraph` data files are bundled
-- Windows version metadata file is generated from `gui_prototype/src/app_metadata.py`
-- packaging icon asset can be regenerated with `python3.12 tools/generate_app_icon.py`
+## Build
 
-## Local Build Smoke
+macOS / shell:
 
 ```bash
 source .venv_gui_prototype/bin/activate
@@ -31,23 +24,37 @@ pip install "pyinstaller>=6,<7"
 pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec
 ```
 
-Expected output:
+Windows PowerShell:
 
-- bundle directory under `dist/zss_demokit_gui_win64_beta2/`
-- executable launches the same `LauncherWindow` as the source run
+```powershell
+py -3.12 -m venv .venv_gui_prototype
+.venv_gui_prototype\Scripts\Activate.ps1
+pip install -r gui_prototype\requirements.txt
+pip install "pyinstaller>=6,<7"
+pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
+```
 
-## Windows-Focused Follow-up
+## Expected Output
 
-Before the first Windows packaging pass, confirm:
+- `dist/zss_demokit_gui_win64_beta2/`
+- `zss_demokit_gui.exe` on Windows
+- the same launcher flow as `python gui_prototype/main.py`
 
-- generated icon is acceptable, or replace `gui_prototype/assets/app_icon.*` with the final art
-- product / publisher metadata text in `gui_prototype/src/app_metadata.py`
-- whether `onefile` is desirable or if `onedir` should remain the release default
-- output directory and archive naming convention
-- whether BLE on Windows needs any extra runtime prerequisites documented for users
+## Bundled Assets And Metadata
 
-## Known Gaps
+- `bleak.backends` is collected for target OS BLE resolution.
+- `pyqtgraph` data files are bundled.
+- Windows version metadata is generated from `app_metadata.py`.
+- The icon is optional and auto-enabled from `gui_prototype/assets/app_icon.*`.
+- The icon can be regenerated with `python3.12 tools/generate_app_icon.py`.
 
-- generated icon is a first-pass geometric asset and may still be art-directed later
-- Windows 11 Pro での packaging / launch / serial / BLE smoke は通過済み
+## Known Gaps Before Formal Release
+
 - no installer recipe yet
+- no code signing path yet
+- no updater path yet
+- generated icon is acceptable for beta but may still need art direction
+- release notes are still maintained through docs / commit history rather than
+  a formal packaged changelog
+- `onefile` packaging has not been selected; `onedir` remains the recommended
+  beta default because startup is faster and debugging is easier

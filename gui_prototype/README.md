@@ -1,34 +1,29 @@
-# GUI Prototype
+# Desktop GUI
 
-This directory contains a runnable desktop UI prototype for the new ZSS GUI.
+This directory contains the current PySide6 desktop GUI implementation for the
+ZSS Demo Kit.
 
-Purpose:
+The directory name `gui_prototype/` is historical. It is kept for path stability
+because tools, docs, and the PyInstaller spec already refer to it. Treat this
+directory as the active desktop application unless a later cleanup branch
+renames it.
 
-- verify layout and information density on macOS before implementation starts
-- confirm mode switching, settings flow, plot composition, and panel hierarchy
-- keep reference assets in `resource/example_gui/` untouched
+## Capabilities
 
-Notes:
+- BLE and wired serial connection modes
+- preferred device filtering for `GasSensor-Proto` with legacy
+  `M5STAMP-MONITOR*` compatibility
+- capabilities, status, telemetry, command, and event handling
+- real-time metric cards and two plot panels
+- plot pause, series visibility, manual pan / zoom, and retained history
+- pump and heater controls with firmware-side safety interlock support
+- CSV recording with partial-file finalization and post-run review
+- warning / event log filtering, search, copy, and CSV export
+- O2 ambient calibration
+- flow verification and flow characterization workflows
+- Windows-oriented PyInstaller packaging
 
-- this is now the practical implementation base for the desktop GUI, not just a visual mock
-- wired mode can talk to the firmware over real serial
-- BLE mode now has a real transport path via `bleak`, with manual scan from the UI
-- BLE mode schedules a status refresh after live `Pump ON/OFF` requests to improve operator feedback
-- if `bleak` is unavailable, BLE falls back to the prototype mock path
-- if BLE extension reads are unavailable, the UI degrades to telemetry-first operation instead of aborting the session
-- telemetry continuity is monitored in the GUI so delayed start / stalled stream conditions appear in the warning log
-- the wired mode uses the approved default `115200 baud / 8N1` in the UI
-- BLE scan results and wired port lists now prefer intended device candidates and preselect the first filtered result
-- plot history now uses an explicit `1800 s` retention window, and manual axis/view interactions disable auto-follow consistently in both BLE and wired modes
-- the Settings mode page now makes mode changes explicit with a `Save and Switch` action and disconnected reopen copy
-- plot rendering now runs with pyqtgraph antialiasing disabled and span-aware downsampling / windowed data extraction to reduce redraw cost
-- `flow_rate_lpm` uses the approved placeholder policy `dummy_selected_dp_orifice_v1`, deriving signed dummy flow directly from `selected differential pressure`
-- telemetry session summary is logged on disconnect to support BLE continuity / reconnect validation
-- settings are persisted locally with `QSettings`
-- recording directory, plot defaults, and launcher / main window sizes are restored on next startup
-- partial recovery detection uses the configured recording directory
-
-## Run
+## Run From Source
 
 ```bash
 python3.12 -m venv .venv_gui_prototype
@@ -37,33 +32,51 @@ pip install -r gui_prototype/requirements.txt
 python gui_prototype/main.py
 ```
 
-## Current Scope
+Settings are stored with `QSettings` under the `zss-demokit` organization and
+`gui-prototype` application key. The settings key is also historical.
 
-- `BLE` mode: real scan / connect path is implemented, with mock fallback only when `bleak` is unavailable
-- `Wired` mode: real serial transport against the current firmware scaffold
-- controller layer split is in place for connection, plotting, recording, and warning log concerns
-- recording writes the shared CSV schema to the configured directory, defaulting to `~/Documents/ZSS Demo Kit/`
-- validated path today: connect, capabilities, status, telemetry ingest, `Pump ON/OFF`, recording finalize
-
-## Smoke Tools
-
-- wired end-to-end smoke: `python3.12 tools/wired_serial_smoke.py --port /dev/cu.usbmodem5101 --baudrate 115200`
-- wired GUI session probe: `python3.12 tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 18 --toggle-interval-s 3`
-- BLE live smoke: `python3.12 tools/ble_smoke.py --name GasSensor-Proto --telemetry-count 20 --telemetry-timeout 10 --observe-duration 8 --reconnect-cycles 3`
-- BLE GUI session probe: `python3.12 tools/gui_ble_session_probe.py --device-prefix GasSensor-Proto --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60`
-- BLE GUI session probe logic smoke: `python3.12 tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6`
-- BLE backend reconnect smoke: `python3.12 tools/ble_backend_smoke.py`
-- shared protocol fixture smoke: `python3.12 tools/protocol_fixture_smoke.py`
-
-## Packaging Prep
-
-- spec file: `gui_prototype/zss_demokit_gui.spec`
-- packaging notes: `gui_prototype/packaging_README.md`
-- current Windows beta target: `zss_demokit_gui_win64_beta2` / `0.1.0-beta.2`
-- local smoke build:
+## Packaging
 
 ```bash
 source .venv_gui_prototype/bin/activate
 pip install "pyinstaller>=6,<7"
 pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec
 ```
+
+See `gui_prototype/packaging_README.md` for the current beta package name,
+metadata, known gaps, and Windows smoke path.
+
+## Useful Smoke Tools
+
+No-device / offscreen:
+
+```bash
+python3.12 tools/protocol_fixture_smoke.py
+python3.12 tools/gui_layout_smoke.py
+python3.12 tools/gui_plot_controls_smoke.py
+python3.12 tools/gui_recording_review_smoke.py
+python3.12 tools/gui_log_history_smoke.py
+```
+
+Wired:
+
+```bash
+python3.12 tools/wired_serial_smoke.py --port <PORT> --baudrate 115200
+python3.12 tools/gui_wired_session_probe.py --port <PORT> --duration-s 18 --toggle-interval-s 3
+```
+
+BLE:
+
+```bash
+python3.12 tools/ble_backend_smoke.py
+python3.12 tools/gui_ble_session_probe.py --use-fake-live --offscreen --duration-s 12 --recording-duration-s 4 --reconnect-at-s 6 --min-observed-duration-s 6 --connect-timeout-s 6
+python3.12 tools/gui_ble_session_probe.py --device-prefix GasSensor-Proto --duration-s 180 --recording-duration-s 45 --reconnect-at-s 60
+```
+
+## Code Organization Notes
+
+- `main_window.py` still owns too much UI assembly and orchestration.
+- `dialogs.py` still contains several large dialog classes.
+- `mock_backend.py` contains both fake behavior and live transport integration.
+- Future maintenance work should split these files by responsibility before
+  adding much more UI surface area.

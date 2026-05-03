@@ -42,14 +42,13 @@ from controllers import (
 )
 from dialogs import (
     FlowCharacterizationDialog,
-    FlowCharacterizationHistoryDialog,
     FlowVerificationDetailsDialog,
     FlowVerificationDialog,
-    FlowVerificationHistoryDialog,
     ModeSwitchDialog,
     SettingsDialog,
 )
 from flow_characterization import FlowCharacterizationController, FlowCharacterizationPersistence
+from flow_history_dialogs import FlowCharacterizationHistoryDialog, FlowVerificationHistoryDialog
 from flow_verification import FlowVerificationController, FlowVerificationPersistence
 from mock_backend import MockBackend, TelemetryPoint
 from mock_backend import PREFERRED_BLE_NAME_PREFIXES, PREFERRED_WIRED_PORT_TOKENS
