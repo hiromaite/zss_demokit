@@ -68,6 +68,8 @@
 | `GUI-VAL-034` | Diagnostic availability labels smoke | Device Status が BLE / Wired の optional diagnostic availability を operator-readable に表示する | `PASS` | `tools/gui_observability_smoke.py` で BLE legacy selected-only、BLE batch raw SDP、Wired raw SDP / service voltage labels を確認 |
 | `GUI-VAL-035` | Device elapsed CSV axis smoke | CSV に device-side 秒単位の解析用 time axis が保存される | `PASS` | `device_elapsed_s` を追加し、`tools/protocol_fixture_smoke.py` で device tick 起点の秒列、device inter-arrival 優先、既存 CSV row regression を確認 |
 | `GUI-VAL-036` | Recording post-run quick review smoke | recording stop 後に latest summary、folder open、CSV path copy の導線が有効化される | `PASS` | `tools/gui_recording_review_smoke.py` で `.partial.csv -> .csv` finalize、rows / duration / sequence gap summary、review buttons、clipboard copy を確認 |
+| `GUI-VAL-037` | Warning/event log filter and export smoke | Warning / Event Log を重要度・文字列で絞り込み、visible entries を copy / CSV export できる | `PASS` | `tools/gui_log_history_smoke.py` で `Warnings + Errors` filter、search、clipboard copy、`event_logs/event_log_*.csv` export を確認 |
+| `GUI-VAL-038` | Flow history comparison smoke | Verification / Characterization の recent history を summary-level に比較し、history summary CSV を export できる | `PASS` | `tools/gui_log_history_smoke.py` で Verification mean/max error comparison、Characterization polarity/peak/rough gain comparison、Settings の Characterization history entry、summary CSV export を確認 |
 
 ## 5. Firmware Checklist
 

@@ -383,6 +383,26 @@ class FlowCharacterizationSaveResult:
     csv_path: Path
 
 
+@dataclass(frozen=True)
+class FlowCharacterizationLatestSummary:
+    session_id: str
+    status: str
+    completed_at_iso: str
+    criterion_version: str
+    path: str
+    csv_path: str
+    completed_capture_steps: int
+    missing_step_count: int
+    polarity_hint: str
+    low_high_sign_consistency: str
+    selected_peak_abs_pa: float | None
+    sdp810_peak_abs_pa: float | None
+    sdp811_peak_abs_pa: float | None
+    rough_gain_multiplier: float | None
+    rough_gain_confidence: str
+    note_preview: str
+
+
 class FlowCharacterizationPersistence:
     def __init__(self, base_dir: Path) -> None:
         self._base_dir = base_dir / "flow_characterization"
@@ -395,7 +415,19 @@ class FlowCharacterizationPersistence:
         self._write_samples_csv(session, csv_path)
         return FlowCharacterizationSaveResult(json_path=json_path, csv_path=csv_path)
 
-    def load_session(self, path: Path) -> FlowCharacterizationSession | None:
+    def load_latest_session(self) -> FlowCharacterizationSession | None:
+        return self.load_session(self._latest_path())
+
+    def load_latest_summary(self) -> FlowCharacterizationLatestSummary | None:
+        path = self._latest_path()
+        session = self.load_session(path)
+        if session is None:
+            return None
+        return self._build_summary(session, path)
+
+    def load_session(self, path: Path | None) -> FlowCharacterizationSession | None:
+        if path is None:
+            return None
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -403,6 +435,105 @@ class FlowCharacterizationPersistence:
         if not isinstance(payload, dict):
             return None
         return FlowCharacterizationSession.from_dict(payload)
+
+    def list_recent_summaries(self, *, limit: int = 5) -> list[FlowCharacterizationLatestSummary]:
+        summaries: list[FlowCharacterizationLatestSummary] = []
+        for path in reversed(self._candidate_paths()):
+            session = self.load_session(path)
+            if session is None:
+                continue
+            summaries.append(self._build_summary(session, path))
+            if len(summaries) >= limit:
+                break
+        return summaries
+
+    def export_summary_csv(self, path: Path, summaries: list[FlowCharacterizationLatestSummary]) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fieldnames = [
+            "session_id",
+            "completed_at_iso",
+            "status",
+            "criterion_version",
+            "completed_capture_steps",
+            "missing_step_count",
+            "polarity_hint",
+            "low_high_sign_consistency",
+            "selected_peak_abs_pa",
+            "sdp810_peak_abs_pa",
+            "sdp811_peak_abs_pa",
+            "rough_gain_multiplier",
+            "rough_gain_confidence",
+            "path",
+            "csv_path",
+            "note_preview",
+        ]
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for summary in summaries:
+                writer.writerow(
+                    {
+                        "session_id": summary.session_id,
+                        "completed_at_iso": summary.completed_at_iso,
+                        "status": summary.status,
+                        "criterion_version": summary.criterion_version,
+                        "completed_capture_steps": summary.completed_capture_steps,
+                        "missing_step_count": summary.missing_step_count,
+                        "polarity_hint": summary.polarity_hint,
+                        "low_high_sign_consistency": summary.low_high_sign_consistency,
+                        "selected_peak_abs_pa": _csv_float(summary.selected_peak_abs_pa),
+                        "sdp810_peak_abs_pa": _csv_float(summary.sdp810_peak_abs_pa),
+                        "sdp811_peak_abs_pa": _csv_float(summary.sdp811_peak_abs_pa),
+                        "rough_gain_multiplier": _csv_float(summary.rough_gain_multiplier),
+                        "rough_gain_confidence": summary.rough_gain_confidence,
+                        "path": summary.path,
+                        "csv_path": summary.csv_path,
+                        "note_preview": summary.note_preview,
+                    }
+                )
+        return path
+
+    def _build_summary(
+        self,
+        session: FlowCharacterizationSession,
+        path: Path | None,
+    ) -> FlowCharacterizationLatestSummary:
+        analysis = session.analysis or analyze_flow_characterization_session(session)
+        estimate = analysis.rough_scale_estimate
+        note_preview = " ".join(session.operator_note.split())
+        if len(note_preview) > 96:
+            note_preview = f"{note_preview[:93]}..."
+        json_path = path or self._base_dir / f"{session.session_id}.json"
+        csv_path = json_path.with_name(f"{session.session_id}_samples.csv")
+        return FlowCharacterizationLatestSummary(
+            session_id=session.session_id,
+            status=session.status or "unknown",
+            completed_at_iso=session.completed_at_iso,
+            criterion_version=session.criterion_version,
+            path=str(json_path),
+            csv_path=str(csv_path),
+            completed_capture_steps=analysis.completed_capture_steps,
+            missing_step_count=len(analysis.missing_step_ids),
+            polarity_hint=analysis.polarity_hint,
+            low_high_sign_consistency=analysis.low_high_sign_consistency,
+            selected_peak_abs_pa=analysis.selected_peak_abs_pa,
+            sdp810_peak_abs_pa=analysis.low_range_peak_abs_pa,
+            sdp811_peak_abs_pa=analysis.high_range_peak_abs_pa,
+            rough_gain_multiplier=None if estimate is None else estimate.recommended_gain_multiplier,
+            rough_gain_confidence="" if estimate is None else estimate.confidence,
+            note_preview=note_preview,
+        )
+
+    def _latest_path(self) -> Path | None:
+        candidates = self._candidate_paths()
+        if not candidates:
+            return None
+        return candidates[-1]
+
+    def _candidate_paths(self) -> list[Path]:
+        if not self._base_dir.exists():
+            return []
+        return sorted(self._base_dir.glob("flow_characterization_*.json"))
 
     def _write_samples_csv(self, session: FlowCharacterizationSession, path: Path) -> None:
         fieldnames = [
@@ -515,6 +646,41 @@ class FlowCharacterizationPersistence:
             }
         )
         return row
+
+
+def compare_characterization_summaries(
+    current: FlowCharacterizationLatestSummary,
+    previous: FlowCharacterizationLatestSummary | None,
+) -> list[str]:
+    if previous is None:
+        return ["No older characterization session is available for comparison."]
+
+    lines = [
+        f"Compared with {previous.completed_at_iso or previous.session_id}:",
+        f"Status: {previous.status} -> {current.status}",
+        (
+            "Completed captures: "
+            f"{previous.completed_capture_steps}/{len(FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS)} -> "
+            f"{current.completed_capture_steps}/{len(FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS)}"
+        ),
+        f"Polarity hint: {previous.polarity_hint} -> {current.polarity_hint}",
+        f"Low/high consistency: {previous.low_high_sign_consistency} -> {current.low_high_sign_consistency}",
+    ]
+    if current.selected_peak_abs_pa is not None and previous.selected_peak_abs_pa is not None:
+        delta = current.selected_peak_abs_pa - previous.selected_peak_abs_pa
+        lines.append(
+            "Selected peak abs: "
+            f"{previous.selected_peak_abs_pa:0.3f} Pa -> {current.selected_peak_abs_pa:0.3f} Pa "
+            f"({delta:+0.3f} Pa)"
+        )
+    if current.rough_gain_multiplier is not None and previous.rough_gain_multiplier is not None:
+        delta = current.rough_gain_multiplier - previous.rough_gain_multiplier
+        lines.append(
+            "Rough gain multiplier: "
+            f"{previous.rough_gain_multiplier:0.3f}x -> {current.rough_gain_multiplier:0.3f}x "
+            f"({delta:+0.3f}x)"
+        )
+    return lines
 
 
 class FlowCharacterizationController(QObject):

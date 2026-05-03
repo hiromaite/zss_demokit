@@ -29,12 +29,15 @@ from PySide6.QtWidgets import (
 from app_metadata import APP_NAME
 from app_state import AppSettings
 from flow_characterization import (
+    FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS,
     FLOW_CHARACTERIZATION_STEPS,
     FlowCharacterizationAttempt,
     FlowCharacterizationAttemptSummary,
     FlowCharacterizationController,
+    FlowCharacterizationLatestSummary,
     FlowCharacterizationPersistence,
     FlowCharacterizationSaveResult,
+    compare_characterization_summaries,
 )
 from flow_verification import (
     FLOW_VERIFICATION_STEPS,
@@ -44,6 +47,7 @@ from flow_verification import (
     VerificationSession,
     VerificationStrokeResult,
     ZeroCheckResult,
+    compare_verification_summaries,
 )
 from protocol_constants import (
     BLE_MODE,
@@ -164,6 +168,8 @@ class SettingsDialog(QDialog):
         current_zirconia_voltage_v: float | None = None,
         flow_verification_summary: FlowVerificationLatestSummary | None = None,
         flow_verification_recent_summaries: list[FlowVerificationLatestSummary] | None = None,
+        flow_characterization_summary: FlowCharacterizationLatestSummary | None = None,
+        flow_characterization_recent_summaries: list[FlowCharacterizationLatestSummary] | None = None,
         flow_verification_available: bool = False,
         flow_characterization_available: bool = False,
         parent: QWidget | None = None,
@@ -175,12 +181,15 @@ class SettingsDialog(QDialog):
         self._current_zirconia_voltage_v = current_zirconia_voltage_v
         self._flow_verification_summary = flow_verification_summary
         self._flow_verification_recent_summaries = flow_verification_recent_summaries or []
+        self._flow_characterization_summary = flow_characterization_summary
+        self._flow_characterization_recent_summaries = flow_characterization_recent_summaries or []
         self._flow_verification_available = flow_verification_available
         self._flow_characterization_available = flow_characterization_available
         self._open_flow_verification_requested = False
         self._show_flow_verification_details_requested = False
         self._show_flow_verification_history_requested = False
         self._open_flow_characterization_requested = False
+        self._show_flow_characterization_history_requested = False
         self._pending_o2_air_calibration_voltage_v = settings.o2.air_calibration_voltage_v
         self._pending_o2_calibrated_at_iso = settings.o2.calibrated_at_iso
         self.setWindowTitle("Settings")
@@ -286,6 +295,10 @@ class SettingsDialog(QDialog):
     @property
     def flow_characterization_requested(self) -> bool:
         return self._open_flow_characterization_requested
+
+    @property
+    def flow_characterization_history_requested(self) -> bool:
+        return self._show_flow_characterization_history_requested
 
     def _page_wrapper(self) -> tuple[QWidget, QVBoxLayout]:
         page = QWidget()
@@ -519,12 +532,22 @@ class SettingsDialog(QDialog):
         self.flow_characterization_status_label.setWordWrap(True)
         characterization_layout.addWidget(self.flow_characterization_status_label)
 
+        self.flow_characterization_history_label = QLabel("")
+        self.flow_characterization_history_label.setObjectName("SectionHint")
+        self.flow_characterization_history_label.setWordWrap(True)
+        characterization_layout.addWidget(self.flow_characterization_history_label)
+
         characterization_row = QHBoxLayout()
         self.flow_characterization_button = QPushButton("Open Characterization PoC")
         self.flow_characterization_button.setObjectName("PrimaryButton")
         self.flow_characterization_button.setEnabled(self._flow_characterization_available)
         self.flow_characterization_button.clicked.connect(self._request_flow_characterization)
+        self.flow_characterization_history_button = QPushButton("Show History")
+        self.flow_characterization_history_button.setObjectName("SecondaryButton")
+        self.flow_characterization_history_button.setEnabled(bool(self._flow_characterization_recent_summaries))
+        self.flow_characterization_history_button.clicked.connect(self._request_flow_characterization_history)
         characterization_row.addWidget(self.flow_characterization_button)
+        characterization_row.addWidget(self.flow_characterization_history_button)
         characterization_row.addStretch(1)
         characterization_layout.addLayout(characterization_row)
         layout.addWidget(characterization_card)
@@ -716,17 +739,54 @@ class SettingsDialog(QDialog):
 
     def _refresh_flow_characterization_state(self) -> None:
         self.flow_characterization_button.setEnabled(self._flow_characterization_available)
+        self.flow_characterization_history_button.setEnabled(bool(self._flow_characterization_recent_summaries))
+        status_prefix = ""
+        if self._flow_characterization_summary is not None:
+            summary = self._flow_characterization_summary
+            status_prefix = (
+                f"Last characterization: {summary.status} "
+                f"({summary.completed_at_iso or 'timestamp unavailable'}), "
+                f"captures {summary.completed_capture_steps}/{len(FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS)}, "
+                f"polarity {summary.polarity_hint}."
+            )
         if self._flow_characterization_available:
             self.flow_characterization_status_label.setText(
-                "An expected connected device is available. Wired mode is recommended for raw dual-SDP capture."
+                (
+                    status_prefix + "\n"
+                    if status_prefix
+                    else ""
+                )
+                + "An expected connected device is available. Wired mode is recommended for raw dual-SDP capture."
             )
         else:
             self.flow_characterization_status_label.setText(
-                "Connect an expected device to enable the characterization PoC."
+                (
+                    status_prefix + "\n"
+                    if status_prefix
+                    else ""
+                )
+                + "Connect an expected device to enable the characterization PoC."
             )
+        if not self._flow_characterization_recent_summaries:
+            self.flow_characterization_history_label.setText("Recent characterization sessions: none")
+            return
+        preview_lines = []
+        for item in self._flow_characterization_recent_summaries[:3]:
+            rough = "--" if item.rough_gain_multiplier is None else f"{item.rough_gain_multiplier:0.2f}x"
+            preview_lines.append(
+                f"{item.completed_at_iso}: {item.status}, captures "
+                f"{item.completed_capture_steps}/{len(FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS)}, rough {rough}"
+            )
+        self.flow_characterization_history_label.setText(
+            "Recent characterization sessions:\n" + "\n".join(preview_lines)
+        )
 
     def _request_flow_characterization(self) -> None:
         self._open_flow_characterization_requested = True
+        self.accept()
+
+    def _request_flow_characterization_history(self) -> None:
+        self._show_flow_characterization_history_requested = True
         self.accept()
 
 
@@ -1211,11 +1271,23 @@ class FlowVerificationHistoryDialog(QDialog):
         self.history_note_label.setWordWrap(True)
         detail_layout.addWidget(self.history_note_label)
 
+        self.history_compare_label = QLabel("--")
+        self.history_compare_label.setObjectName("SectionHint")
+        self.history_compare_label.setWordWrap(True)
+        detail_layout.addWidget(self.history_compare_label)
+
         self.open_selected_button = QPushButton("Open Selected Details")
         self.open_selected_button.setObjectName("PrimaryButton")
         self.open_selected_button.setEnabled(False)
         self.open_selected_button.clicked.connect(self._open_selected_details)
-        detail_layout.addWidget(self.open_selected_button, 0)
+        self.export_history_button = QPushButton("Export Summary CSV")
+        self.export_history_button.setObjectName("SecondaryButton")
+        self.export_history_button.clicked.connect(self._export_history_summary)
+        button_row = QHBoxLayout()
+        button_row.addWidget(self.open_selected_button, 0)
+        button_row.addWidget(self.export_history_button, 0)
+        button_row.addStretch(1)
+        detail_layout.addLayout(button_row)
         detail_layout.addStretch(1)
         shell.addWidget(detail_card, 1)
 
@@ -1245,6 +1317,7 @@ class FlowVerificationHistoryDialog(QDialog):
         if index < 0 or index >= len(self._summaries):
             self.history_summary_label.setText("Select a session to review its summary.")
             self.history_note_label.setText("--")
+            self.history_compare_label.setText("--")
             self.open_selected_button.setEnabled(False)
             return
         summary = self._summaries[index]
@@ -1252,12 +1325,17 @@ class FlowVerificationHistoryDialog(QDialog):
             f"Overall: {summary.result}\n"
             f"Exhalation: {summary.exhalation_result or '--'}\n"
             f"Inhalation: {summary.inhalation_result or '--'}\n"
+            f"Mean abs error: {_format_optional(summary.mean_abs_error_percent, '{:0.2f} %')}\n"
+            f"Max abs error: {_format_optional(summary.max_abs_error_percent, '{:0.2f} %')}\n"
+            f"Source switches: {summary.total_source_switch_count}\n"
             f"Criterion: {summary.criterion_version or '--'}\n"
             f"Path: {summary.path or '--'}"
         )
         self.history_note_label.setText(
             "Note preview: " + (summary.note_preview or "--")
         )
+        previous = self._summaries[index + 1] if index + 1 < len(self._summaries) else None
+        self.history_compare_label.setText("\n".join(compare_verification_summaries(summary, previous)))
         self.open_selected_button.setEnabled(True)
 
     def _open_selected_details(self) -> None:
@@ -1271,6 +1349,129 @@ class FlowVerificationHistoryDialog(QDialog):
             return
         dialog = FlowVerificationDetailsDialog(session, session_path=path, parent=self)
         dialog.exec()
+
+    def _export_history_summary(self) -> None:
+        if not self._summaries:
+            return
+        base_path = Path(self._summaries[0].path) if self._summaries[0].path else Path.cwd()
+        export_path = (
+            base_path.parent
+            / f"flow_verification_history_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        )
+        self._persistence.export_summary_csv(export_path, self._summaries)
+        self.history_note_label.setText(f"Summary CSV exported: {export_path}")
+
+
+class FlowCharacterizationHistoryDialog(QDialog):
+    def __init__(
+        self,
+        summaries: list[FlowCharacterizationLatestSummary],
+        persistence: FlowCharacterizationPersistence,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(parent)
+        self._summaries = summaries
+        self._persistence = persistence
+        self.setWindowTitle("Flow Characterization History")
+        self.resize(980, 720)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
+
+        layout.addWidget(
+            _dialog_header(
+                "Flow Characterization History",
+                "Compare recent raw SDP characterization sessions before deciding selector thresholds or rough flow scaling.",
+            )
+        )
+
+        shell = QHBoxLayout()
+        shell.setSpacing(14)
+        layout.addLayout(shell, 1)
+
+        self.history_list = QListWidget()
+        shell.addWidget(self.history_list, 0)
+
+        detail_card = QFrame()
+        detail_card.setObjectName("SurfaceCard")
+        detail_layout = QVBoxLayout(detail_card)
+        self.history_summary_label = QLabel("Select a characterization session to review its summary.")
+        self.history_summary_label.setObjectName("SectionHint")
+        self.history_summary_label.setWordWrap(True)
+        detail_layout.addWidget(self.history_summary_label)
+
+        self.history_compare_label = QLabel("--")
+        self.history_compare_label.setObjectName("SectionHint")
+        self.history_compare_label.setWordWrap(True)
+        detail_layout.addWidget(self.history_compare_label)
+
+        self.history_path_label = QLabel("--")
+        self.history_path_label.setObjectName("SectionHint")
+        self.history_path_label.setWordWrap(True)
+        detail_layout.addWidget(self.history_path_label)
+
+        self.export_history_button = QPushButton("Export Summary CSV")
+        self.export_history_button.setObjectName("SecondaryButton")
+        self.export_history_button.clicked.connect(self._export_history_summary)
+        detail_layout.addWidget(self.export_history_button, 0)
+        detail_layout.addStretch(1)
+        shell.addWidget(detail_card, 1)
+
+        button_box = QDialogButtonBox(QDialogButtonBox.Ok)
+        _style_dialog_buttons(button_box)
+        button_box.accepted.connect(self.accept)
+        layout.addWidget(button_box)
+
+        self.history_list.currentRowChanged.connect(self._refresh_selected_summary)
+        self._populate_history()
+
+    def _populate_history(self) -> None:
+        for summary in self._summaries:
+            rough = "--" if summary.rough_gain_multiplier is None else f"{summary.rough_gain_multiplier:0.2f}x"
+            self.history_list.addItem(
+                f"{summary.completed_at_iso} | {summary.status} | "
+                f"captures {summary.completed_capture_steps}/{len(FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS)} | rough {rough}"
+            )
+        if self.history_list.count() > 0:
+            self.history_list.setCurrentRow(0)
+
+    def _refresh_selected_summary(self, index: int) -> None:
+        if index < 0 or index >= len(self._summaries):
+            self.history_summary_label.setText("Select a characterization session to review its summary.")
+            self.history_compare_label.setText("--")
+            self.history_path_label.setText("--")
+            return
+        summary = self._summaries[index]
+        self.history_summary_label.setText(
+            f"Status: {summary.status}\n"
+            f"Completed captures: {summary.completed_capture_steps}/{len(FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS)}\n"
+            f"Missing steps: {summary.missing_step_count}\n"
+            f"Polarity: {summary.polarity_hint}\n"
+            f"Low/high consistency: {summary.low_high_sign_consistency}\n"
+            f"Selected peak abs: {_format_optional(summary.selected_peak_abs_pa, '{:0.3f} Pa')}\n"
+            f"SDP810 peak abs: {_format_optional(summary.sdp810_peak_abs_pa, '{:0.3f} Pa')}\n"
+            f"SDP811 peak abs: {_format_optional(summary.sdp811_peak_abs_pa, '{:0.3f} Pa')}\n"
+            f"Rough gain: {_format_optional(summary.rough_gain_multiplier, '{:0.3f}x')} "
+            f"({summary.rough_gain_confidence or '--'})\n"
+            f"Note preview: {summary.note_preview or '--'}"
+        )
+        previous = self._summaries[index + 1] if index + 1 < len(self._summaries) else None
+        self.history_compare_label.setText("\n".join(compare_characterization_summaries(summary, previous)))
+        self.history_path_label.setText(
+            f"JSON: {summary.path or '--'}\nCSV: {summary.csv_path or '--'}"
+        )
+
+    def _export_history_summary(self) -> None:
+        if not self._summaries:
+            return
+        base_path = Path(self._summaries[0].path) if self._summaries[0].path else Path.cwd()
+        export_path = (
+            base_path.parent
+            / f"flow_characterization_history_summary_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        )
+        self._persistence.export_summary_csv(export_path, self._summaries)
+        self.history_path_label.setText(f"Summary CSV exported: {export_path}")
 
 
 class FlowVerificationDialog(QDialog):

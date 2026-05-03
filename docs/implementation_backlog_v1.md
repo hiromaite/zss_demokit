@@ -1172,6 +1172,11 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
   horizontal scroll、metric cards row、metric / toolbar compact height、plot splitter minimum height / tall-window growth / resize response を offscreen regression として固定した
 - 2026-05-03 fifth slice として、Recording panel に latest CSV summary、`Open Folder`、`Copy CSV Path` を追加した。
   recording stop 後に rows / duration / sequence range / gap / size をすぐ確認でき、CSV の保存先へ短い導線で移動できる
+- 2026-05-03 sixth slice として、Warning / Event Log に severity filter、text search、visible copy、CSV export を追加した。
+  user report や debug session の切り出しを軽くし、`tools/gui_log_history_smoke.py` で filter / copy / export を固定した
+- 2026-05-03 seventh slice として、Flow Verification / Flow Characterization history comparison を追加した。
+  Verification は mean / max volume error、out-of-target / skipped、source switch の変化を比較し、Characterization は capture completion、polarity、low/high consistency、selected peak、rough gain の変化を比較する。
+  どちらも history summary CSV export を持ち、hardware 完成後の調整判断材料を蓄積しやすくした
 
 直近 bundle:
 

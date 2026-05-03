@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QGridLayout,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QMainWindow,
     QPlainTextEdit,
     QPushButton,
@@ -41,6 +42,7 @@ from controllers import (
 )
 from dialogs import (
     FlowCharacterizationDialog,
+    FlowCharacterizationHistoryDialog,
     FlowVerificationDetailsDialog,
     FlowVerificationDialog,
     FlowVerificationHistoryDialog,
@@ -357,6 +359,7 @@ class MainWindow(QMainWindow):
         self._ble_batch_supported = False
         self._ble_legacy_cadence_warning_emitted = False
         self._latest_recording_summary: RecordingCsvSummary | None = None
+        self._latest_log_export_path: Path | None = None
 
         self._build_ui()
         self._bind_controllers()
@@ -813,11 +816,38 @@ class MainWindow(QMainWindow):
         )
         log_frame.setObjectName("WarningCard")
         log_layout = log_frame.content_layout
+        log_filter_row = QHBoxLayout()
+        log_filter_row.setSpacing(8)
+        self.log_severity_filter_combo = QComboBox()
+        self.log_severity_filter_combo.addItems(list(self.warning_controller.SEVERITY_FILTERS))
+        self.log_severity_filter_combo.currentTextChanged.connect(self._refresh_log_pane)
+        self.log_search_edit = QLineEdit()
+        self.log_search_edit.setPlaceholderText("Filter log text")
+        self.log_search_edit.textChanged.connect(self._refresh_log_pane)
+        self.copy_visible_log_button = QPushButton("Copy Visible")
+        self.copy_visible_log_button.setObjectName("SecondaryButton")
+        self.copy_visible_log_button.clicked.connect(self._copy_visible_log)
+        self.export_visible_log_button = QPushButton("Export Visible")
+        self.export_visible_log_button.setObjectName("SecondaryButton")
+        self.export_visible_log_button.clicked.connect(self._export_visible_log)
+        log_filter_row.addWidget(QLabel("Show"))
+        log_filter_row.addWidget(self.log_severity_filter_combo, 0)
+        log_filter_row.addWidget(self.log_search_edit, 1)
+        log_filter_row.addWidget(self.copy_visible_log_button, 0)
+        log_filter_row.addWidget(self.export_visible_log_button, 0)
+        log_layout.addLayout(log_filter_row)
+
+        self.log_summary_label = QLabel("0 visible / 0 total")
+        self.log_summary_label.setObjectName("SectionHint")
+        self.log_summary_label.setWordWrap(True)
+        log_layout.addWidget(self.log_summary_label)
+
         self.log_pane = QPlainTextEdit()
         self.log_pane.setObjectName("LogPane")
         self.log_pane.setReadOnly(True)
         self.log_pane.setMinimumHeight(225)
         log_layout.addWidget(self.log_pane)
+        self._refresh_log_pane()
         layout.addWidget(log_frame)
 
         return shell
@@ -1471,7 +1501,71 @@ class MainWindow(QMainWindow):
 
     def _append_log(self, severity: str, message: str) -> None:
         entry = self.warning_controller.append(severity, message)
-        self.log_pane.appendPlainText(f"[{entry.timestamp.strftime('%H:%M:%S')}] {entry.severity.upper():<5} {entry.message}")
+        if not hasattr(self, "log_pane"):
+            return
+        visible_entries = self._visible_log_entries()
+        if entry in visible_entries:
+            self.log_pane.appendPlainText(self.warning_controller.format_entry(entry))
+            self._update_log_summary(visible_entries)
+            return
+        self._refresh_log_pane()
+
+    def _visible_log_entries(self):
+        if not hasattr(self, "log_severity_filter_combo"):
+            return self.warning_controller.entries()
+        return self.warning_controller.filtered_entries(
+            severity_filter=self.log_severity_filter_combo.currentText(),
+            query=self.log_search_edit.text() if hasattr(self, "log_search_edit") else "",
+        )
+
+    def _refresh_log_pane(self) -> None:
+        if not hasattr(self, "log_pane"):
+            return
+        entries = self._visible_log_entries()
+        self.log_pane.setPlainText(
+            "\n".join(self.warning_controller.format_entry(entry) for entry in entries)
+        )
+        self._update_log_summary(entries)
+
+    def _update_log_summary(self, visible_entries) -> None:
+        if not hasattr(self, "log_summary_label"):
+            return
+        visible_entries = list(visible_entries)
+        all_entries = self.warning_controller.entries()
+        visible_counts = self.warning_controller.severity_counts(visible_entries)
+        total_counts = self.warning_controller.severity_counts(all_entries)
+        self.log_summary_label.setText(
+            f"{len(visible_entries)} visible / {len(all_entries)} total | "
+            f"visible warn/error: {visible_counts.get('warn', 0)}/{visible_counts.get('error', 0)} | "
+            f"total warn/error: {total_counts.get('warn', 0)}/{total_counts.get('error', 0)}"
+        )
+        has_visible = bool(visible_entries)
+        self.copy_visible_log_button.setEnabled(has_visible)
+        self.export_visible_log_button.setEnabled(has_visible)
+
+    def _copy_visible_log(self) -> None:
+        entries = self._visible_log_entries()
+        if not entries:
+            self._append_log("warn", "No visible log entries are available to copy.")
+            return
+        QApplication.clipboard().setText(
+            "\n".join(self.warning_controller.format_entry(entry, include_date=True) for entry in entries)
+        )
+        self._append_log("info", f"Copied {len(entries)} visible log entr{'y' if len(entries) == 1 else 'ies'} to clipboard.")
+
+    def _export_visible_log(self) -> None:
+        entries = self._visible_log_entries()
+        if not entries:
+            self._append_log("warn", "No visible log entries are available to export.")
+            return
+        export_dir = self._current_recording_directory() / "event_logs"
+        export_path = export_dir / f"event_log_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+        try:
+            self._latest_log_export_path = self.warning_controller.export_csv(export_path, entries)
+        except Exception as exc:
+            self._append_log("error", f"Event log export failed: {exc}")
+            return
+        self._append_log("info", f"Event log exported: {self._latest_log_export_path}")
 
     def _poll_telemetry_health(self) -> None:
         for severity, message in self.telemetry_health_monitor.poll():
@@ -1490,6 +1584,8 @@ class MainWindow(QMainWindow):
             current_zirconia_voltage_v=current_zirconia_voltage_v,
             flow_verification_summary=self._latest_flow_verification_summary(),
             flow_verification_recent_summaries=self._recent_flow_verification_summaries(),
+            flow_characterization_summary=self._latest_flow_characterization_summary(),
+            flow_characterization_recent_summaries=self._recent_flow_characterization_summaries(),
             flow_verification_available=self._has_expected_connected_device(),
             flow_characterization_available=self._has_expected_connected_device(),
             parent=self,
@@ -1503,6 +1599,7 @@ class MainWindow(QMainWindow):
         flow_verification_details_requested = dialog.flow_verification_details_requested
         flow_verification_history_requested = dialog.flow_verification_history_requested
         flow_characterization_requested = dialog.flow_characterization_requested
+        flow_characterization_history_requested = dialog.flow_characterization_history_requested
         previous_o2_air_calibration_voltage_v = self.app_settings.o2.air_calibration_voltage_v
         previous_o2_calibrated_at_iso = self.app_settings.o2.calibrated_at_iso
         if flow_verification_history_requested:
@@ -1516,6 +1613,9 @@ class MainWindow(QMainWindow):
             return
         if flow_characterization_requested:
             self._open_flow_characterization_dialog()
+            return
+        if flow_characterization_history_requested:
+            self._open_flow_characterization_history_dialog()
             return
         self._apply_dialog_settings(dialog)
         if requested_mode == previous_mode:
@@ -1615,6 +1715,12 @@ class MainWindow(QMainWindow):
     def _recent_flow_verification_summaries(self):
         return self._flow_verification_persistence().list_recent_summaries(limit=5)
 
+    def _latest_flow_characterization_summary(self):
+        return self._flow_characterization_persistence().load_latest_summary()
+
+    def _recent_flow_characterization_summaries(self):
+        return self._flow_characterization_persistence().list_recent_summaries(limit=5)
+
     def _open_flow_verification_dialog(self) -> None:
         if not self._has_expected_connected_device():
             self._append_log("warn", "Connect to an expected device before starting flow verification.")
@@ -1668,6 +1774,15 @@ class MainWindow(QMainWindow):
             self._append_log("warn", "No saved flow verification history is available yet.")
             return
         dialog = FlowVerificationHistoryDialog(summaries, persistence, parent=self)
+        dialog.exec()
+
+    def _open_flow_characterization_history_dialog(self) -> None:
+        persistence = self._flow_characterization_persistence()
+        summaries = persistence.list_recent_summaries(limit=12)
+        if not summaries:
+            self._append_log("warn", "No saved flow characterization history is available yet.")
+            return
+        dialog = FlowCharacterizationHistoryDialog(summaries, persistence, parent=self)
         dialog.exec()
 
     def _open_flow_characterization_dialog(self) -> None:

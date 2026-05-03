@@ -32,23 +32,83 @@ class LogEntry:
 
 
 class WarningController:
+    SEVERITY_FILTERS = (
+        "All",
+        "Info",
+        "Warnings + Errors",
+        "Warnings",
+        "Errors",
+    )
+
     def __init__(self, max_entries: int = 500) -> None:
         self._entries: deque[LogEntry] = deque(maxlen=max_entries)
         self.warning_count = 0
 
     def append(self, severity: str, message: str) -> LogEntry:
-        entry = LogEntry(timestamp=datetime.now(), severity=severity, message=message)
+        entry = LogEntry(timestamp=datetime.now(), severity=self._normalize_severity(severity), message=message)
         self._entries.append(entry)
-        if severity in {"warn", "error"}:
+        if entry.severity in {"warn", "error"}:
             self.warning_count += 1
         return entry
 
     def entries(self) -> list[LogEntry]:
         return list(self._entries)
 
+    def filtered_entries(self, *, severity_filter: str = "All", query: str = "") -> list[LogEntry]:
+        query = query.strip().lower()
+        return [
+            entry
+            for entry in self._entries
+            if self._matches_severity_filter(entry.severity, severity_filter)
+            and (not query or query in entry.message.lower() or query in entry.severity.lower())
+        ]
+
+    def severity_counts(self, entries: list[LogEntry] | None = None) -> dict[str, int]:
+        counts = {"info": 0, "warn": 0, "error": 0, "debug": 0}
+        for entry in entries if entries is not None else self._entries:
+            counts[entry.severity] = counts.get(entry.severity, 0) + 1
+        return counts
+
+    def export_csv(self, path: Path, entries: list[LogEntry]) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["timestamp_iso", "severity", "message"])
+            for entry in entries:
+                writer.writerow([entry.timestamp.isoformat(timespec="seconds"), entry.severity, entry.message])
+        return path
+
+    @staticmethod
+    def format_entry(entry: LogEntry, *, include_date: bool = False) -> str:
+        timestamp_format = "%Y-%m-%d %H:%M:%S" if include_date else "%H:%M:%S"
+        return f"[{entry.timestamp.strftime(timestamp_format)}] {entry.severity.upper():<5} {entry.message}"
+
     def clear(self) -> None:
         self._entries.clear()
         self.warning_count = 0
+
+    @staticmethod
+    def _normalize_severity(severity: str) -> str:
+        normalized = severity.strip().lower()
+        if normalized in {"warning", "warn"}:
+            return "warn"
+        if normalized in {"err", "error"}:
+            return "error"
+        if normalized in {"debug", "info"}:
+            return normalized
+        return "info"
+
+    @staticmethod
+    def _matches_severity_filter(severity: str, severity_filter: str) -> bool:
+        if severity_filter == "Info":
+            return severity == "info"
+        if severity_filter == "Warnings + Errors":
+            return severity in {"warn", "error"}
+        if severity_filter == "Warnings":
+            return severity == "warn"
+        if severity_filter == "Errors":
+            return severity == "error"
+        return True
 
 
 class ConnectionController(QObject):

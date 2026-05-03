@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import math
+import csv
 from collections import Counter
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
@@ -273,6 +274,10 @@ class FlowVerificationLatestSummary:
     out_of_target_count: int
     incomplete_count: int
     note_preview: str
+    stroke_count: int = 0
+    mean_abs_error_percent: float | None = None
+    max_abs_error_percent: float | None = None
+    total_source_switch_count: int = 0
 
 
 @dataclass
@@ -344,6 +349,50 @@ class FlowVerificationPersistence:
                 break
         return summaries
 
+    def export_summary_csv(self, path: Path, summaries: list[FlowVerificationLatestSummary]) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        fieldnames = [
+            "session_id",
+            "completed_at_iso",
+            "result",
+            "exhalation_result",
+            "inhalation_result",
+            "criterion_version",
+            "stroke_count",
+            "mean_abs_error_percent",
+            "max_abs_error_percent",
+            "advisory_count",
+            "out_of_target_count",
+            "incomplete_count",
+            "total_source_switch_count",
+            "path",
+            "note_preview",
+        ]
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+            for summary in summaries:
+                writer.writerow(
+                    {
+                        "session_id": summary.session_id,
+                        "completed_at_iso": summary.completed_at_iso,
+                        "result": summary.result,
+                        "exhalation_result": summary.exhalation_result,
+                        "inhalation_result": summary.inhalation_result,
+                        "criterion_version": summary.criterion_version,
+                        "stroke_count": summary.stroke_count,
+                        "mean_abs_error_percent": _csv_float(summary.mean_abs_error_percent),
+                        "max_abs_error_percent": _csv_float(summary.max_abs_error_percent),
+                        "advisory_count": summary.advisory_count,
+                        "out_of_target_count": summary.out_of_target_count,
+                        "incomplete_count": summary.incomplete_count,
+                        "total_source_switch_count": summary.total_source_switch_count,
+                        "path": summary.path,
+                        "note_preview": summary.note_preview,
+                    }
+                )
+        return path
+
     def _build_summary(
         self,
         session: VerificationSession,
@@ -359,6 +408,21 @@ class FlowVerificationPersistence:
                 out_of_target_count += 1
             elif stroke.result_status in {"incomplete", "skipped"}:
                 incomplete_count += 1
+        finite_abs_errors = [
+            abs(stroke.volume_error_percent)
+            for stroke in session.stroke_results
+            if math.isfinite(stroke.volume_error_percent)
+        ]
+        mean_abs_error_percent = (
+            sum(finite_abs_errors) / len(finite_abs_errors)
+            if finite_abs_errors
+            else None
+        )
+        max_abs_error_percent = max(finite_abs_errors) if finite_abs_errors else None
+        total_source_switch_count = sum(
+            max(0, stroke.source_switch_count)
+            for stroke in session.stroke_results
+        )
         note_preview = " ".join(session.operator_note.split())
         if len(note_preview) > 96:
             note_preview = f"{note_preview[:93]}..."
@@ -374,6 +438,10 @@ class FlowVerificationPersistence:
             out_of_target_count=out_of_target_count,
             incomplete_count=incomplete_count,
             note_preview=note_preview,
+            stroke_count=len(session.stroke_results),
+            mean_abs_error_percent=mean_abs_error_percent,
+            max_abs_error_percent=max_abs_error_percent,
+            total_source_switch_count=total_source_switch_count,
         )
 
     def _latest_path(self) -> Path | None:
@@ -386,6 +454,47 @@ class FlowVerificationPersistence:
         if not self._base_dir.exists():
             return []
         return sorted(self._base_dir.glob("flow_verification_*.json"))
+
+
+def compare_verification_summaries(
+    current: FlowVerificationLatestSummary,
+    previous: FlowVerificationLatestSummary | None,
+) -> list[str]:
+    if previous is None:
+        return ["No older verification session is available for comparison."]
+
+    lines = [
+        f"Compared with {previous.completed_at_iso or previous.session_id}:",
+        f"Overall result: {previous.result} -> {current.result}",
+    ]
+    if current.mean_abs_error_percent is not None and previous.mean_abs_error_percent is not None:
+        delta = current.mean_abs_error_percent - previous.mean_abs_error_percent
+        lines.append(
+            "Mean abs volume error: "
+            f"{previous.mean_abs_error_percent:0.2f}% -> {current.mean_abs_error_percent:0.2f}% "
+            f"({delta:+0.2f} pt)"
+        )
+    if current.max_abs_error_percent is not None and previous.max_abs_error_percent is not None:
+        delta = current.max_abs_error_percent - previous.max_abs_error_percent
+        lines.append(
+            "Max abs volume error: "
+            f"{previous.max_abs_error_percent:0.2f}% -> {current.max_abs_error_percent:0.2f}% "
+            f"({delta:+0.2f} pt)"
+        )
+    if current.out_of_target_count != previous.out_of_target_count:
+        lines.append(
+            f"Out-of-target strokes: {previous.out_of_target_count} -> {current.out_of_target_count}"
+        )
+    if current.incomplete_count != previous.incomplete_count:
+        lines.append(f"Incomplete/skipped strokes: {previous.incomplete_count} -> {current.incomplete_count}")
+    if current.total_source_switch_count != previous.total_source_switch_count:
+        lines.append(
+            "Source switches: "
+            f"{previous.total_source_switch_count} -> {current.total_source_switch_count}"
+        )
+    if len(lines) == 2:
+        lines.append("No material summary-level change was detected.")
+    return lines
 
 
 class FlowVerificationController(QObject):
@@ -995,3 +1104,9 @@ def _optional_float(value: Any) -> float | None:
     except (TypeError, ValueError):
         return None
     return parsed if math.isfinite(parsed) else None
+
+
+def _csv_float(value: float | None) -> str:
+    if value is None or not math.isfinite(value):
+        return ""
+    return f"{value:.6f}"

@@ -259,7 +259,9 @@ protocol fixture、GUI session probe、wired / BLE smoke、flow probe、timing p
 - `P1-UX-001` は Settings nav に `Engineering / Tools` を追加し、O2 calibration を `Device`、Flow Verification / Characterization / diagnostics を tools page へ分離する first slice を完了した
 - `P1-UX-003` は `tools/gui_layout_smoke.py` により tall desktop / default / Windows common / compact HD / narrow lab sizes を offscreen で固定した。metric cards / toolbar は compact height、plot splitter は minimum height から tall window で伸びる挙動を確認する
 - `P2-DATA-001` は Recording panel に latest CSV summary、`Open Folder`、`Copy CSV Path` を追加し、recording stop 後の確認導線を短くする first slice を完了した
-- 次に進めるなら `P2-HIST-001` verification / characterization history comparison、または `P2-LOG-001` warning / event log filter and export が、実機完成待ち期間でも価値を出しやすい
+- `P2-LOG-001` は Warning / Event Log に severity filter、text search、visible copy、CSV export、visible / total count summary を追加し、debug / user report の再現性を上げる first slice を完了した
+- `P2-HIST-001` は Flow Verification history に mean / max error comparison と summary CSV export を追加し、Flow Characterization history に polarity / peak / rough gain comparison と summary CSV export を追加する first slice を完了した
+- 次に進めるなら `P2-MAINT-001` GUI module split、または配布前提の `P3-REL-001` packaging / release note 整備が、次の立ち止まりポイントとして自然である
 
 ## 7. 今は深追いしないこと
 
