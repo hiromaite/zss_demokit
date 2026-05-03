@@ -5,6 +5,8 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include "board/BoardConfig.h"
+
 namespace zss::services {
 
 namespace {
@@ -29,6 +31,11 @@ const char* levelToString(LogLevel level) {
 }  // namespace
 
 void Logger::begin(unsigned long baudrate) {
+#if defined(ARDUINO_ARCH_ESP32) && defined(ARDUINO_USB_MODE) && ARDUINO_USB_MODE && \
+    defined(ARDUINO_USB_CDC_ON_BOOT) && ARDUINO_USB_CDC_ON_BOOT
+    Serial.setTxBufferSize(zss::board::kSerialTxBufferSize);
+    Serial.setTxTimeoutMs(zss::board::kSerialTxTimeoutMs);
+#endif
     Serial.begin(baudrate);
 }
 

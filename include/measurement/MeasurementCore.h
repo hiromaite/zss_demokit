@@ -17,10 +17,16 @@ class MeasurementCore {
     bool lastReadSucceeded() const;
     bool externalAdcAvailable() const;
     bool differentialPressureAvailable() const;
+    bool differentialPressureLowRangeAvailable() const;
+    bool differentialPressureHighRangeAvailable() const;
+    bool differentialPressureRawChannelsAvailable() const;
     bool differentialPressureHealthy() const;
     const char* lastError() const;
     const char* differentialPressureLastError() const;
+    const char* differentialPressureLowRangeLastError() const;
+    const char* differentialPressureHighRangeLastError() const;
     const DifferentialPressureMeasurements& latestDifferentialPressureMeasurements() const;
+    const AcquisitionTiming& latestAcquisitionTiming() const;
 
   private:
     AdcFrontend& adc_frontend_;
@@ -28,6 +34,7 @@ class MeasurementCore {
     bool initialized_ = false;
     bool differential_pressure_available_ = false;
     DifferentialPressureMeasurements latest_differential_pressure_measurements_{};
+    AcquisitionTiming latest_acquisition_timing_{};
 };
 
 }  // namespace zss::measurement

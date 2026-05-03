@@ -22,6 +22,7 @@ from ble_protocol import (  # noqa: E402
     decode_ble_capabilities_packet,
     decode_ble_event_packet,
     decode_ble_status_snapshot,
+    decode_ble_telemetry_batch_packet,
     decode_ble_telemetry_packet,
 )
 from controllers import RecordingController  # noqa: E402
@@ -41,6 +42,7 @@ FLOAT_TOLERANCE = 1e-6
 
 BLE_DECODERS = {
     "ble_telemetry": decode_ble_telemetry_packet,
+    "ble_telemetry_batch": decode_ble_telemetry_batch_packet,
     "ble_status": decode_ble_status_snapshot,
     "ble_capabilities": decode_ble_capabilities_packet,
     "ble_event": decode_ble_event_packet,
@@ -222,6 +224,16 @@ def build_point(payload: dict[str, Any]) -> TelemetryPoint:
         status_flags=int(payload["status_flags"]),
         zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
         heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
+        zirconia_ip_voltage_v=(
+            float(payload["zirconia_ip_voltage_v"])
+            if payload.get("zirconia_ip_voltage_v") not in (None, "")
+            else None
+        ),
+        internal_voltage_v=(
+            float(payload["internal_voltage_v"])
+            if payload.get("internal_voltage_v") not in (None, "")
+            else None
+        ),
         differential_pressure_selected_pa=(
             float(payload["differential_pressure_selected_pa"])
             if payload.get("differential_pressure_selected_pa") not in (None, "")

@@ -69,6 +69,8 @@
 | `differential_pressure_selected_pa` | `float32` | `Pa` | Yes | Canonical differential pressure selected by device-side selector |
 | `differential_pressure_low_range_pa` | `float32` | `Pa` | Optional | Raw low-range differential pressure (`SDP810`) for diagnostics |
 | `differential_pressure_high_range_pa` | `float32` | `Pa` | Optional | Raw high-range differential pressure (`SDP811`) for diagnostics |
+| `zirconia_ip_voltage_v` | `float32` | `V` | Optional | Service / engineering diagnostic measurement; typically wired-first |
+| `internal_voltage_v` | `float32` | `V` | Optional | Service / engineering diagnostic measurement; may be unavailable depending on board config |
 
 ### 4.2 GUI-Derived Display Fields
 
@@ -114,6 +116,8 @@ TelemetrySample
     differential_pressure_selected_pa
     differential_pressure_low_range_pa?
     differential_pressure_high_range_pa?
+    zirconia_ip_voltage_v?
+    internal_voltage_v?
   derived_values:
     flow_rate_lpm
 ```
@@ -221,7 +225,9 @@ binary transport 上では、一部の項目が code / bit field に符号化さ
 | `3` | `differential_pressure_selected_pa` |
 | `4` | `differential_pressure_low_range_pa` |
 | `5` | `differential_pressure_high_range_pa` |
-| `2, 6..15` | `reserved` |
+| `6` | `zirconia_ip_voltage_v` |
+| `7` | `internal_voltage_v` |
+| `2, 8..15` | `reserved` |
 
 ### 9.3 Logical-to-Wire Mapping Notes
 
@@ -240,12 +246,17 @@ binary transport 上では、一部の項目が code / bit field に符号化さ
 | `zirconia_output_voltage_v` | Required | Required | Common display item |
 | `heater_rtd_resistance_ohm` | Required | Required | Common display item |
 | `differential_pressure_selected_pa` | Required | Required | GUI computes flow rate from this canonical field |
-| `differential_pressure_low_range_pa` | Optional / usually omitted | Optional | Diagnostic field; typically available on wired only |
-| `differential_pressure_high_range_pa` | Optional / usually omitted | Optional | Diagnostic field; typically available on wired only |
+| `differential_pressure_low_range_pa` | Optional via BLE batch schema v2 | Optional | Diagnostic field; omitted from legacy BLE single-sample/status packets |
+| `differential_pressure_high_range_pa` | Optional via BLE batch schema v2 | Optional | Diagnostic field; omitted from legacy BLE single-sample/status packets |
+| `zirconia_ip_voltage_v` | Optional / usually omitted | Optional | Service / engineering diagnostic field; wired-first |
+| `internal_voltage_v` | Optional / usually omitted | Optional | Service / engineering diagnostic field; may depend on board config |
 | `flow_rate_lpm` | GUI-derived | GUI-derived | Not canonical transport field |
 | `get_capabilities` | Required | Required | Common logical command |
 | `get_status` | Required | Required | Common logical command |
 | `set_pump_state` | Required | Required | Common logical command |
+
+Differential-pressure raw fields are independent diagnostic fields.
+If only one SDP81x sensor is detected, capabilities and telemetry may advertise only that raw channel while still publishing `differential_pressure_selected_pa`.
 
 ## 11. Open Questions
 

@@ -33,6 +33,8 @@ class Sdp8xxSensor {
     bool writeCommand(uint16_t command);
     bool startContinuousMeasurement();
     bool stopContinuousMeasurement();
+    bool readFullSample(Sdp8xxReading& reading);
+    bool readPressureSample(Sdp8xxReading& reading);
     bool readWords(uint8_t byte_count, uint8_t* buffer);
     bool validateWordCrc(const uint8_t* data) const;
     uint8_t computeCrc(const uint8_t* data, size_t length) const;
@@ -46,6 +48,8 @@ class Sdp8xxSensor {
     bool healthy_ = false;
     uint32_t product_number_ = 0u;
     uint64_t serial_number_ = 0u;
+    float scale_factor_pa_ = 0.0f;
+    float latest_temperature_c_ = 0.0f;
     char last_error_[96] = {};
 };
 

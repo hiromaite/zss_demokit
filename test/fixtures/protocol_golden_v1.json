@@ -5,7 +5,7 @@
     {
       "id": "ble_telemetry_nominal",
       "kind": "ble_telemetry",
-      "raw_hex": "0100010034120000030000000000203f0000f1420000a03f50000b0000000000",
+      "raw_hex": "0100010034120000030000000000203f0000f1420000a03f0a000b0000000000",
       "firmware_case": true,
       "expected": {
         "protocol_version": "1.0",
@@ -16,16 +16,71 @@
         "zirconia_output_voltage_v": 0.625,
         "heater_rtd_resistance_ohm": 120.5,
         "differential_pressure_selected_pa": 1.25,
-        "nominal_sample_period_ms": 80,
+        "nominal_sample_period_ms": 10,
         "telemetry_field_bits": 11,
         "diagnostic_bits": 0,
         "pump_on": true
       }
     },
     {
+      "id": "ble_telemetry_batch_three_samples",
+      "kind": "ble_telemetry_batch",
+      "raw_hex": "0100020300010000a08601000a003b0000000000030000000000203f0000f1420000a03fae47a13f9a99993f10270000030000000000403f0000f2420000c03f5c8fc23f48e1ba3f204e0000020000000000003f0000ee42000080bf5c8f82bf333373bf",
+      "expected": [
+        {
+          "protocol_version": "1.0",
+          "batch_schema_version": 2,
+          "sequence": 256,
+          "status_flags": 3,
+          "zirconia_output_voltage_v": 0.625,
+          "heater_rtd_resistance_ohm": 120.5,
+          "differential_pressure_selected_pa": 1.25,
+          "differential_pressure_low_range_pa": 1.26,
+          "differential_pressure_high_range_pa": 1.2,
+          "nominal_sample_period_ms": 10,
+          "telemetry_field_bits": 59,
+          "device_sample_tick_us": 100000,
+          "pump_on": true,
+          "heater_power_on": false
+        },
+        {
+          "protocol_version": "1.0",
+          "batch_schema_version": 2,
+          "sequence": 257,
+          "status_flags": 3,
+          "zirconia_output_voltage_v": 0.75,
+          "heater_rtd_resistance_ohm": 121.0,
+          "differential_pressure_selected_pa": 1.5,
+          "differential_pressure_low_range_pa": 1.52,
+          "differential_pressure_high_range_pa": 1.46,
+          "nominal_sample_period_ms": 10,
+          "telemetry_field_bits": 59,
+          "device_sample_tick_us": 110000,
+          "pump_on": true,
+          "heater_power_on": false
+        },
+        {
+          "protocol_version": "1.0",
+          "batch_schema_version": 2,
+          "sequence": 258,
+          "status_flags": 2,
+          "zirconia_output_voltage_v": 0.5,
+          "heater_rtd_resistance_ohm": 119.0,
+          "differential_pressure_selected_pa": -1.0,
+          "differential_pressure_low_range_pa": -1.02,
+          "differential_pressure_high_range_pa": -0.95,
+          "nominal_sample_period_ms": 10,
+          "telemetry_field_bits": 59,
+          "device_sample_tick_us": 120000,
+          "pump_on": false,
+          "heater_power_on": false
+        }
+      ]
+    },
+    {
       "id": "ble_status_fault",
       "kind": "ble_status",
-      "raw_hex": "01000100351200001600000050000b00e17a143e0080c5423d0ad73e",
+      "raw_hex": "0100010035120000160000000a000b00e17a143e0080c5423d0ad73e",
       "firmware_case": true,
       "expected": {
         "protocol_version": "1.0",
@@ -37,7 +92,7 @@
         "zirconia_output_voltage_v": 0.145,
         "heater_rtd_resistance_ohm": 98.75,
         "differential_pressure_selected_pa": 0.42,
-        "nominal_sample_period_ms": 80,
+        "nominal_sample_period_ms": 10,
         "telemetry_field_bits": 11,
         "pump_on": false
       }
@@ -45,7 +100,7 @@
     {
       "id": "ble_capabilities_ble",
       "kind": "ble_capabilities",
-      "raw_hex": "01000101010001001f00030050000200200000000f000000",
+      "raw_hex": "01000101010001001f0003000a0002009c0000001f000000",
       "firmware_case": true,
       "expected": {
         "protocol_version": "1.0",
@@ -68,10 +123,10 @@
           "zirconia_output_voltage_v",
           "heater_rtd_resistance_ohm"
         ],
-        "nominal_sample_period_ms": 80,
+        "nominal_sample_period_ms": 10,
         "status_flag_schema_version": 2,
-        "max_payload_bytes": 32,
-        "feature_bits": 15
+        "max_payload_bytes": 156,
+        "feature_bits": 31
       }
     },
     {
@@ -301,6 +356,8 @@
         "0",
         "0.712500",
         "119.250000",
+        "",
+        "",
         "1.500000",
         "SDP810",
         "1.500000",

@@ -28,7 +28,7 @@
 
 ## 3. BLE 識別子
 
-- BLE の device name と既存 UUID は、可能な限り維持する
+- BLE UUID は維持し、advertising name は operator-facing な `GasSensor-Proto` を優先する。移行期間は GUI / probe 側で legacy `M5STAMP-MONITOR*` も受け入れる
 
 理由:
 
@@ -119,6 +119,7 @@ v1 の解釈:
 - `Flow Rate` のような表示寄りの換算値は GUI 側計算を第一候補とする
 - transport では `selected_differential_pressure_pa` を canonical measurement として送る
 - raw `SDP810 / SDP811` 値は diagnostic field として扱い、transport ごとに availability が違ってよい
+- `zirconia_ip_voltage_v` と `internal_voltage_v` も service / engineering diagnostics として optional field 化し、transport / board config ごとに availability が違ってよい
 - v1 実装では `dummy_selected_dp_orifice_v1` を使い、`selected_differential_pressure_pa -> signed flow_rate_lpm` の placeholder を採用する
 
 placeholder formula:
@@ -248,3 +249,31 @@ flow_rate_lpm =
 - `Retry`, `Accept and continue`, `Skip` を全 step の標準操作として許可する
 - dual-SDP 固有の挙動は `selected source`, `source switch count`, raw SDP values を diagnostics として見える化する
 - formal model calibration, coefficient fitting, strict compliance gate は後続フェーズへ分離する
+
+## 23. Operator Surface and Engineering Tools
+
+- 通常測定で使う surface は、connection、pump、recording、metric cards、plot、warning summary に絞る
+- raw SDP values、diagnostic bits、service voltages、flow characterization、verification history などは `Engineering / Tools` 側に寄せる
+- engineering 情報は隠しすぎないが、通常操作の primary path を圧迫しない
+- BLE / Wired で availability が異なる optional diagnostics は、空欄や `--` だけでなく「その transport では未提供」と分かる表示へ近づける
+- Settings は単なる preference dialog として肥大化させず、calibration / verification / characterization は tool workflow として整理する
+
+理由:
+
+- beta2 相当までに機能が増え、Settings 内に operator action と engineering action が混在し始めている
+- 現場 operator は短い導線で測定したい一方、hardware bring-up では raw diagnostics と履歴比較が重要になる
+- 2 つの利用者像を同じ画面密度で扱うと、通常操作の迷いと diagnostic 情報の不足が同時に起きやすい
+
+## 24. No-Hardware Development Period
+
+- 実機操作ができない期間は、bundle ごとに branch を分け、実機不要の設計・静的検証・offscreen smoke・host-side probe logic を進める
+- 実機や Windows packaged app が必要な検証は `USER_TEST_REQUIRED` として文書化し、merge gate で明示的に扱う
+- serial 接続は `port open` と `protocol handshake` を別状態として扱う
+- sampling / jitter の議論では、host receive interval と device-side sample tick interval を分離して判断する
+- BLE high-rate 対応は v1 compatibility を壊さず、capability gated batch extension として検討する
+
+理由:
+
+- Windows serial、pump noise、sampling jitter、plot smoothness は、実機環境がないと最終判定できない
+- 一方で、接続状態管理、probe 強化、plot logic、architecture note はこの端末だけでも安全に前進できる
+- branch を分けることで、後から user 実機テスト結果に応じて bundle 単位で merge / retry / abandon を判断できる

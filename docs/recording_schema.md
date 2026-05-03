@@ -67,7 +67,7 @@ session_20260408_153000.partial.csv
 # derived_metric_policy=dummy_selected_dp_orifice_v1
 # source_endpoint=BLE:M5STAMP-MONITOR
 # notes=
-host_received_at_iso,host_received_at_unix_ms,mode,transport_type,sequence,sequence_gap,inter_arrival_ms,host_inter_arrival_ms,device_inter_arrival_ms,device_sample_tick_us,nominal_sample_period_ms,status_flags_hex,pump_state,zirconia_output_voltage_v,heater_rtd_resistance_ohm,differential_pressure_selected_pa,differential_pressure_selected_source,differential_pressure_low_range_pa,differential_pressure_high_range_pa,flow_rate_lpm
+host_received_at_iso,host_received_at_unix_ms,mode,transport_type,sequence,sequence_gap,inter_arrival_ms,host_inter_arrival_ms,device_inter_arrival_ms,device_sample_tick_us,nominal_sample_period_ms,status_flags_hex,pump_state,heater_power_state,zirconia_output_voltage_v,heater_rtd_resistance_ohm,zirconia_ip_voltage_v,internal_voltage_v,differential_pressure_selected_pa,differential_pressure_selected_source,differential_pressure_low_range_pa,differential_pressure_high_range_pa,flow_rate_lpm
 ```
 
 ## 5. Required Header Metadata Keys
@@ -108,8 +108,11 @@ device_sample_tick_us
 nominal_sample_period_ms
 status_flags_hex
 pump_state
+heater_power_state
 zirconia_output_voltage_v
 heater_rtd_resistance_ohm
+zirconia_ip_voltage_v
+internal_voltage_v
 differential_pressure_selected_pa
 differential_pressure_selected_source
 differential_pressure_low_range_pa
@@ -134,8 +137,11 @@ flow_rate_lpm
 | `nominal_sample_period_ms` | `uint16` | ms | Recommended | Expected sample period |
 | `status_flags_hex` | `string` | hex | Yes | Status flags as zero-padded hex |
 | `pump_state` | `uint8` | - | Yes | `1` when pump on, otherwise `0` |
+| `heater_power_state` | `uint8` | - | Yes | `1` when heater power on, otherwise `0` |
 | `zirconia_output_voltage_v` | `float32` | V | Yes | Canonical measurement |
 | `heater_rtd_resistance_ohm` | `float32` | Ohm | Yes | Canonical measurement |
+| `zirconia_ip_voltage_v` | `float32` | V | Optional | Service / engineering diagnostic measurement; blank when unavailable |
+| `internal_voltage_v` | `float32` | V | Optional | Service / engineering diagnostic measurement; blank when unavailable |
 | `differential_pressure_selected_pa` | `float32` | Pa | Yes | Canonical differential pressure selected by device |
 | `differential_pressure_selected_source` | `string` | - | Optional | Which differential pressure sensor contributed the selected value, e.g. `SDP810` / `SDP811` |
 | `differential_pressure_low_range_pa` | `float32` | Pa | Optional | Raw low-range differential pressure; blank when unavailable |
@@ -183,6 +189,7 @@ flow_rate_lpm
 - v1 の core measurement は基本空欄にしない
 - 取得不能時は空欄ではなく warning を伴う fallback 値使用を避け、可能ならその行を記録しないか fault 状態で扱う
 - raw diagnostic field (`differential_pressure_low_range_pa`, `differential_pressure_high_range_pa`) は transport に存在しない場合のみ空欄としてよい
+- service diagnostic field (`zirconia_ip_voltage_v`, `internal_voltage_v`) は transport / board config に存在しない場合のみ空欄としてよい
 - timing diagnostic field (`device_inter_arrival_ms`, `device_sample_tick_us`) は transport に存在しない場合のみ空欄としてよい
 - `differential_pressure_selected_source` は raw diagnostic field が存在しない transport では空欄としてよい
 
@@ -201,9 +208,9 @@ flow_rate_lpm = sign(differential_pressure_selected_pa) * (1.0 * sqrt(abs(differ
 ## 8. Example Rows
 
 ```csv
-2026-04-08T15:30:00.100+09:00,1775639400100,BLE,ble,100,0,,,,50,0x00000001,1,0.640,123.4,1.250,,,,11.180340
-2026-04-08T15:30:00.150+09:00,1775639400150,BLE,ble,101,0,50.0,50.0,,,50,0x00000001,1,0.642,123.5,1.252,,,,11.189281
-2026-04-08T15:30:00.260+09:00,1775639400260,Wired,serial,103,1,50.0,110.0,50.0,5541200,50,0x00000021,1,0.641,123.6,1.255,SDP810,1.240,1.270,11.202678
+2026-04-08T15:30:00.100+09:00,1775639400100,BLE,ble,100,0,,,,50,0x00000001,1,0,0.640,123.4,,,1.250,,,,11.180340
+2026-04-08T15:30:00.150+09:00,1775639400150,BLE,ble,101,0,50.0,50.0,,,50,0x00000001,1,0,0.642,123.5,,,1.252,,,,11.189281
+2026-04-08T15:30:00.260+09:00,1775639400260,Wired,serial,103,1,50.0,110.0,50.0,5541200,50,0x00000021,1,0,0.641,123.6,0.913,,1.255,SDP810,1.240,1.270,11.202678
 ```
 
 解釈:

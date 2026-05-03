@@ -32,6 +32,7 @@ TELEMETRY_CHARACTERISTIC_UUID = "00002A58-0000-1000-8000-00805F9B34FB"
 STATUS_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10001"
 CAPABILITIES_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10002"
 EVENT_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10003"
+TELEMETRY_BATCH_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10004"
 
 
 @dataclass
@@ -39,7 +40,7 @@ class FakePeripheralState:
     sequence: int = 0
     pump_on: bool = False
     heater_power_on: bool = False
-    nominal_sample_period_ms: int = 80
+    nominal_sample_period_ms: int = 10
 
 
 _FAKE_PERIPHERALS: dict[str, FakePeripheralState] = {}
@@ -71,11 +72,12 @@ def build_capabilities_packet(state: FakePeripheralState) -> bytes:
         [
             bytes([1, 0, 1, 1, 1, 0, 1, 0]),
             _write_u16le(0x001F),
-            _write_u16le(0x0007),
+            _write_u16le(0x000B),
             _write_u16le(state.nominal_sample_period_ms),
             _write_u16le(2),
-            _write_u16le(32),
-            _write_u32le(0x0000000F),
+            _write_u16le(156),
+            _write_u16le(0),
+            _write_u32le(0x0000001F),
         ]
     )
 
@@ -87,7 +89,7 @@ def build_status_packet(state: FakePeripheralState) -> bytes:
             _write_u32le(state.sequence),
             _write_u32le(_status_flags(state)),
             _write_u16le(state.nominal_sample_period_ms),
-            _write_u16le(0x0007),
+            _write_u16le(0x000B),
             _write_f32le(0.64),
             _write_f32le(121.5),
             _write_f32le(1.18 if not state.pump_on else 1.24),
@@ -105,10 +107,34 @@ def build_telemetry_packet(state: FakePeripheralState) -> bytes:
             _write_f32le(121.5 + (state.sequence % 3) * 0.1),
             _write_f32le(1.18 if not state.pump_on else 1.24),
             _write_u16le(state.nominal_sample_period_ms),
-            _write_u16le(0x0007),
+            _write_u16le(0x000B),
             _write_u32le(0),
         ]
     )
+
+
+def build_telemetry_batch_packet(state: FakePeripheralState, sample_count: int = 5) -> bytes:
+    first_sequence = state.sequence + 1
+    first_tick_us = first_sequence * state.nominal_sample_period_ms * 1000
+    payload = bytearray()
+    payload.extend(bytes([1, 0, 2, sample_count]))
+    payload.extend(_write_u32le(first_sequence))
+    payload.extend(_write_u32le(first_tick_us))
+    payload.extend(_write_u16le(state.nominal_sample_period_ms))
+    payload.extend(_write_u16le(0x003B))
+    for index in range(sample_count):
+        state.sequence += 1
+        selected_dp = 1.18 if not state.pump_on else 1.24
+        low_range_dp = selected_dp + (state.sequence % 4) * 0.02
+        high_range_dp = selected_dp - (state.sequence % 3) * 0.03
+        payload.extend(_write_u32le(index * state.nominal_sample_period_ms * 1000))
+        payload.extend(_write_u32le(_status_flags(state)))
+        payload.extend(_write_f32le(0.64 + (state.sequence % 5) * 0.001))
+        payload.extend(_write_f32le(121.5 + (state.sequence % 3) * 0.1))
+        payload.extend(_write_f32le(selected_dp))
+        payload.extend(_write_f32le(low_range_dp))
+        payload.extend(_write_f32le(high_range_dp))
+    return bytes(payload)
 
 
 def build_event_packet(event_code: int, severity: int, sequence: int, detail_u32: int) -> bytes:
@@ -151,14 +177,14 @@ class FakeBleakClient:
 
     async def start_notify(self, uuid: str, callback) -> None:
         self._notify_callbacks[uuid] = callback
-        if uuid == TELEMETRY_CHARACTERISTIC_UUID and self._telemetry_task is None:
+        if uuid in (TELEMETRY_CHARACTERISTIC_UUID, TELEMETRY_BATCH_CHARACTERISTIC_UUID) and self._telemetry_task is None:
             self._telemetry_task = asyncio.create_task(self._run_telemetry())
         if uuid == EVENT_CHARACTERISTIC_UUID:
             callback(uuid, bytearray(build_event_packet(0x01, 0, self._state.sequence, 0)))
 
     async def stop_notify(self, uuid: str) -> None:
         self._notify_callbacks.pop(uuid, None)
-        if uuid == TELEMETRY_CHARACTERISTIC_UUID and self._telemetry_task is not None:
+        if uuid in (TELEMETRY_CHARACTERISTIC_UUID, TELEMETRY_BATCH_CHARACTERISTIC_UUID) and self._telemetry_task is not None:
             self._telemetry_task.cancel()
             try:
                 await self._telemetry_task
@@ -200,9 +226,15 @@ class FakeBleakClient:
 
     async def _run_telemetry(self) -> None:
         while self.is_connected:
-            self._state.sequence += 1
+            batch_callback = self._notify_callbacks.get(TELEMETRY_BATCH_CHARACTERISTIC_UUID)
+            if batch_callback is not None:
+                batch_callback(TELEMETRY_BATCH_CHARACTERISTIC_UUID, bytearray(build_telemetry_batch_packet(self._state)))
+                await asyncio.sleep(0.05)
+                continue
+
             callback = self._notify_callbacks.get(TELEMETRY_CHARACTERISTIC_UUID)
             if callback is not None:
+                self._state.sequence += 1
                 callback(TELEMETRY_CHARACTERISTIC_UUID, bytearray(build_telemetry_packet(self._state)))
             await asyncio.sleep(self._state.nominal_sample_period_ms / 1000.0)
 
@@ -226,25 +258,31 @@ def main() -> int:
     try:
         app = QCoreApplication([])
         backend = MockBackend(BLE_MODE)
-        backend._ble_discovered_devices = {"M5STAMP-MONITOR": "FAKE-UUID-001"}
+        backend._ble_discovered_devices = {"GasSensor-Proto": "FAKE-UUID-001"}
 
         connection_events: list[tuple[bool, str]] = []
         capabilities_events: list[dict[str, object]] = []
         status_events: list[dict[str, object]] = []
         telemetry_sequences: list[int] = []
+        telemetry_raw_pairs: list[tuple[float | None, float | None]] = []
         logs: list[tuple[str, str]] = []
 
         backend.connection_changed.connect(lambda connected, identifier: connection_events.append((connected, identifier)))
         backend.capabilities_changed.connect(lambda payload: capabilities_events.append(payload))
         backend.status_changed.connect(lambda payload: status_events.append(payload))
         backend.telemetry_generated.connect(lambda point: telemetry_sequences.append(int(point.sequence)))
+        backend.telemetry_generated.connect(
+            lambda point: telemetry_raw_pairs.append(
+                (point.differential_pressure_low_range_pa, point.differential_pressure_high_range_pa)
+            )
+        )
         backend.log_generated.connect(lambda severity, message: logs.append((severity, message)))
 
-        QTimer.singleShot(0, lambda: backend.connect_device("M5STAMP-MONITOR"))
+        QTimer.singleShot(0, lambda: backend.connect_device("GasSensor-Proto"))
         QTimer.singleShot(500, lambda: backend.set_pump_state(True))
         QTimer.singleShot(900, lambda: backend.set_heater_power_state(True))
         QTimer.singleShot(1700, backend.disconnect_device)
-        QTimer.singleShot(2500, lambda: backend.connect_device("M5STAMP-MONITOR"))
+        QTimer.singleShot(2500, lambda: backend.connect_device("GasSensor-Proto"))
         QTimer.singleShot(3000, lambda: backend.set_heater_power_state(False))
         QTimer.singleShot(3400, lambda: backend.set_pump_state(False))
         QTimer.singleShot(3900, backend.ping)
@@ -264,6 +302,8 @@ def main() -> int:
             raise AssertionError(f"expected telemetry across reconnects, got {telemetry_sequences}")
         if telemetry_sequences != sorted(telemetry_sequences):
             raise AssertionError(f"telemetry sequence is not monotonic: {telemetry_sequences}")
+        if not any(low is not None and high is not None for low, high in telemetry_raw_pairs):
+            raise AssertionError(f"expected raw SDP values in BLE batch telemetry, got {telemetry_raw_pairs[:5]}")
         if not any(str(payload.get("pump_state")) == "ON" for payload in status_events):
             raise AssertionError(f"expected at least one pump ON status update, got {status_events}")
         if not any(str(payload.get("pump_state")) == "OFF" for payload in status_events):

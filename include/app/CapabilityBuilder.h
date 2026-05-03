@@ -29,7 +29,10 @@ class CapabilityBuilder {
         transport::TransportKind transport_kind,
         uint16_t nominal_sample_period_ms,
         bool advertise_differential_pressure_selected = false,
-        bool advertise_differential_pressure_raw_channels = false);
+        bool advertise_differential_pressure_low_range = false,
+        bool advertise_differential_pressure_high_range = false,
+        bool advertise_zirconia_ip_voltage = false,
+        bool advertise_internal_voltage = false);
 };
 
 }  // namespace zss::app

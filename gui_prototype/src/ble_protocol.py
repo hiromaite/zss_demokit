@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import struct
 
 from protocol_constants import (
@@ -16,6 +17,8 @@ from protocol_constants import (
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED,
+    TELEMETRY_FIELD_INTERNAL_VOLTAGE,
+    TELEMETRY_FIELD_ZIRCONIA_IP_VOLTAGE,
     TELEMETRY_FIELDS,
     TRANSPORT_BLE,
     TRANSPORT_TYPE_CODE_BLE,
@@ -47,6 +50,72 @@ def decode_ble_telemetry_packet(data: bytes) -> dict[str, object]:
         "pump_on": (struct.unpack_from("<I", data, 8)[0] & STATUS_FLAG_PUMP_ON) != 0,
         "heater_power_on": (struct.unpack_from("<I", data, 8)[0] & STATUS_FLAG_HEATER_POWER_ON) != 0,
     }
+
+
+def decode_ble_telemetry_batch_packet(data: bytes) -> list[dict[str, object]]:
+    header_size = 16
+    if len(data) < header_size:
+        raise ValueError(f"Expected at least {header_size}-byte BLE batch packet, got {len(data)} bytes")
+
+    batch_schema_version = data[2]
+    if batch_schema_version == 1:
+        sample_size = 20
+    elif batch_schema_version == 2:
+        sample_size = 28
+    else:
+        raise ValueError(f"Unsupported BLE telemetry batch schema version {batch_schema_version}")
+
+    sample_count = data[3]
+    expected_size = header_size + (sample_count * sample_size)
+    if len(data) != expected_size:
+        raise ValueError(
+            f"Expected {expected_size}-byte BLE batch packet for {sample_count} sample(s), got {len(data)} bytes"
+        )
+    if sample_count == 0:
+        return []
+
+    protocol_version = f"{data[0]}.{data[1]}"
+    first_sequence = struct.unpack_from("<I", data, 4)[0]
+    first_sample_tick_us = struct.unpack_from("<I", data, 8)[0]
+    nominal_sample_period_ms = struct.unpack_from("<H", data, 12)[0]
+    telemetry_field_bits = struct.unpack_from("<H", data, 14)[0]
+    packets: list[dict[str, object]] = []
+    for index in range(sample_count):
+        offset = header_size + (index * sample_size)
+        sample_tick_delta_us = struct.unpack_from("<I", data, offset)[0]
+        status_flags = struct.unpack_from("<I", data, offset + 4)[0]
+        flow_raw = struct.unpack_from("<f", data, offset + 16)[0]
+        differential_pressure_selected_pa = None
+        if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED and math.isfinite(flow_raw):
+            differential_pressure_selected_pa = flow_raw
+        differential_pressure_low_range_pa = None
+        differential_pressure_high_range_pa = None
+        if batch_schema_version >= 2:
+            low_range_raw = struct.unpack_from("<f", data, offset + 20)[0]
+            high_range_raw = struct.unpack_from("<f", data, offset + 24)[0]
+            if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE and math.isfinite(low_range_raw):
+                differential_pressure_low_range_pa = low_range_raw
+            if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE and math.isfinite(high_range_raw):
+                differential_pressure_high_range_pa = high_range_raw
+        packets.append(
+            {
+                "protocol_version": protocol_version,
+                "batch_schema_version": batch_schema_version,
+                "sequence": first_sequence + index,
+                "status_flags": status_flags,
+                "zirconia_output_voltage_v": struct.unpack_from("<f", data, offset + 8)[0],
+                "heater_rtd_resistance_ohm": struct.unpack_from("<f", data, offset + 12)[0],
+                "nominal_sample_period_ms": nominal_sample_period_ms,
+                "telemetry_field_bits": telemetry_field_bits,
+                "differential_pressure_selected_pa": differential_pressure_selected_pa,
+                "differential_pressure_low_range_pa": differential_pressure_low_range_pa,
+                "differential_pressure_high_range_pa": differential_pressure_high_range_pa,
+                "device_sample_tick_us": (first_sample_tick_us + sample_tick_delta_us) & 0xFFFFFFFF,
+                "pump_on": (status_flags & STATUS_FLAG_PUMP_ON) != 0,
+                "heater_power_on": (status_flags & STATUS_FLAG_HEATER_POWER_ON) != 0,
+            }
+        )
+    return packets
 
 
 def decode_ble_status_snapshot(data: bytes) -> dict[str, object]:
@@ -108,6 +177,10 @@ def decode_ble_capabilities_packet(data: bytes) -> dict[str, object]:
         telemetry_fields.append(TELEMETRY_FIELDS[3])
     if telemetry_field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE:
         telemetry_fields.append(TELEMETRY_FIELDS[4])
+    if telemetry_field_bits & TELEMETRY_FIELD_ZIRCONIA_IP_VOLTAGE:
+        telemetry_fields.append(TELEMETRY_FIELDS[5])
+    if telemetry_field_bits & TELEMETRY_FIELD_INTERNAL_VOLTAGE:
+        telemetry_fields.append(TELEMETRY_FIELDS[6])
 
     device_type = "unknown"
     if device_type_code == DEVICE_TYPE_CODE_ZIRCONIA_SENSOR:

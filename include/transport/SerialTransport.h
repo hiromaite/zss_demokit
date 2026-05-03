@@ -5,6 +5,7 @@
 
 #include "app/CommandProcessor.h"
 #include "board/BoardConfig.h"
+#include "measurement/SensorData.h"
 #include "protocol/PayloadBuilders.h"
 
 namespace zss::transport {
@@ -20,7 +21,13 @@ class SerialTransport {
     void publishCapabilities(const protocol::CapabilitiesPayloadV1& payload, uint32_t request_id = 0);
     void publishEvent(const protocol::EventPayloadV1& payload, uint32_t request_id = 0);
     void publishCommandAck(const protocol::CommandAckPayloadV1& payload, uint32_t request_id);
-    void publishTimingDiagnostic(uint32_t sequence, uint32_t sample_tick_us);
+    void publishTimingDiagnostic(
+        uint32_t sequence,
+        uint32_t sample_tick_us,
+        uint32_t acquisition_duration_us,
+        uint32_t telemetry_publish_duration_us,
+        uint32_t scheduler_lateness_us,
+        const measurement::AcquisitionTiming& acquisition_timing);
 
   private:
     using PendingCommand = app::CommandRequest;
@@ -31,7 +38,7 @@ class SerialTransport {
     bool tryDecodeFrame();
     void discardBytes(size_t count);
     void markSessionActive();
-    void writeFrame(
+    bool writeFrame(
         protocol::WiredMessageType message_type,
         uint32_t sequence,
         uint32_t request_id,
@@ -44,6 +51,7 @@ class SerialTransport {
     bool session_active_ = false;
     bool logger_silenced_ = false;
     uint32_t published_telemetry_count_ = 0;
+    uint32_t dropped_tx_frame_count_ = 0;
     bool has_pending_command_ = false;
     PendingCommand pending_command_{};
     uint32_t pending_request_id_ = 0;

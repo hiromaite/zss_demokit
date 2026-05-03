@@ -6,6 +6,7 @@
 #include <BLEServer.h>
 #include <BLEUtils.h>
 
+#include <math.h>
 #include <string.h>
 
 #include "board/BoardConfig.h"
@@ -25,6 +26,7 @@ BLECharacteristic* g_telemetry_characteristic = nullptr;
 BLECharacteristic* g_status_characteristic = nullptr;
 BLECharacteristic* g_capabilities_characteristic = nullptr;
 BLECharacteristic* g_event_characteristic = nullptr;
+BLECharacteristic* g_telemetry_batch_characteristic = nullptr;
 BleTransport* g_transport_instance = nullptr;
 
 void writeU16Le(uint8_t* out, uint16_t value) {
@@ -43,6 +45,22 @@ void writeFloat32Le(uint8_t* out, float value) {
     uint32_t raw = 0;
     memcpy(&raw, &value, sizeof(raw));
     writeU32Le(out, raw);
+}
+
+uint16_t bleV1SingleSampleTelemetryFieldBits(uint16_t telemetry_field_bits) {
+    return telemetry_field_bits & protocol::kBleV1SingleSampleTelemetryFieldBitsMask;
+}
+
+uint16_t bleTelemetryBatchFieldBits(const app::SampleFrame* frames, size_t count) {
+    uint16_t field_bits = 0u;
+    for (size_t index = 0u; index < count; ++index) {
+        field_bits |= frames[index].telemetry.telemetry_field_bits;
+    }
+    return field_bits & protocol::kBleTelemetryBatchFieldBitsMask;
+}
+
+float optionalBatchFloat(uint16_t sample_field_bits, uint16_t field_mask, float value) {
+    return (sample_field_bits & field_mask) != 0u ? value : NAN;
 }
 
 class BleServerCallbacks final : public BLEServerCallbacks {
@@ -92,6 +110,7 @@ bool BleTransport::begin() {
 
     g_transport_instance = this;
     BLEDevice::init(protocol::kBleDeviceName);
+    BLEDevice::setMTU(board::kBlePreferredMtuBytes);
 
     g_server = BLEDevice::createServer();
     if (g_server == nullptr) {
@@ -121,12 +140,16 @@ bool BleTransport::begin() {
     g_event_characteristic = g_extension_service->createCharacteristic(
         protocol::kBleEventCharacteristicUuid,
         BLECharacteristic::PROPERTY_NOTIFY);
+    g_telemetry_batch_characteristic = g_extension_service->createCharacteristic(
+        protocol::kBleTelemetryBatchCharacteristicUuid,
+        BLECharacteristic::PROPERTY_NOTIFY);
 
     if (g_control_characteristic == nullptr ||
         g_telemetry_characteristic == nullptr ||
         g_status_characteristic == nullptr ||
         g_capabilities_characteristic == nullptr ||
-        g_event_characteristic == nullptr) {
+        g_event_characteristic == nullptr ||
+        g_telemetry_batch_characteristic == nullptr) {
         return false;
     }
 
@@ -134,6 +157,7 @@ bool BleTransport::begin() {
     g_telemetry_characteristic->addDescriptor(new BLE2902());
     g_status_characteristic->addDescriptor(new BLE2902());
     g_event_characteristic->addDescriptor(new BLE2902());
+    g_telemetry_batch_characteristic->addDescriptor(new BLE2902());
 
     g_control_service->start();
     g_monitoring_service->start();
@@ -232,6 +256,13 @@ void BleTransport::publishTelemetry(const protocol::TelemetryPayloadV1& payload)
         return;
     }
 
+    const uint32_t now_ms = millis();
+    if (last_single_telemetry_notify_ms_ != 0u &&
+        now_ms - last_single_telemetry_notify_ms_ < board::kBleSingleTelemetryNotifyIntervalMs) {
+        return;
+    }
+    last_single_telemetry_notify_ms_ = now_ms;
+
     uint8_t encoded_payload[protocol::kBleTelemetryPacketSize]{};
     encoded_payload[0] = payload.protocol_version_major;
     encoded_payload[1] = payload.protocol_version_minor;
@@ -243,12 +274,75 @@ void BleTransport::publishTelemetry(const protocol::TelemetryPayloadV1& payload)
     writeFloat32Le(encoded_payload + 16, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(encoded_payload + 20, payload.differential_pressure_selected_pa);
     writeU16Le(encoded_payload + 24, payload.nominal_sample_period_ms);
-    writeU16Le(encoded_payload + 26, payload.telemetry_field_bits);
+    writeU16Le(
+        encoded_payload + 26,
+        bleV1SingleSampleTelemetryFieldBits(payload.telemetry_field_bits));
     writeU32Le(encoded_payload + 28, payload.diagnostic_bits);
 
     g_telemetry_characteristic->setValue(encoded_payload, sizeof(encoded_payload));
     g_telemetry_characteristic->notify();
     published_telemetry_count_ += 1u;
+}
+
+bool BleTransport::publishTelemetryBatch(const app::SampleFrame* frames, size_t count) {
+    if (!connected_ || g_telemetry_batch_characteristic == nullptr || frames == nullptr || count == 0u) {
+        return false;
+    }
+    if (count > protocol::kBleTelemetryBatchMaxSamples) {
+        count = protocol::kBleTelemetryBatchMaxSamples;
+    }
+
+    uint8_t encoded_payload[protocol::kBleTelemetryBatchMaxPacketSize]{};
+    const auto& first = frames[0].telemetry;
+    const uint32_t first_sample_tick_us = frames[0].sample_tick_us;
+    const uint16_t field_bits =
+        bleTelemetryBatchFieldBits(frames, count);
+    encoded_payload[0] = first.protocol_version_major;
+    encoded_payload[1] = first.protocol_version_minor;
+    encoded_payload[2] = 2u;
+    encoded_payload[3] = static_cast<uint8_t>(count);
+    writeU32Le(encoded_payload + 4, first.sequence);
+    writeU32Le(encoded_payload + 8, first_sample_tick_us);
+    writeU16Le(encoded_payload + 12, first.nominal_sample_period_ms);
+    writeU16Le(encoded_payload + 14, field_bits);
+
+    for (size_t index = 0u; index < count; ++index) {
+        const auto& frame = frames[index];
+        const auto& telemetry = frame.telemetry;
+        uint8_t* sample = encoded_payload +
+            protocol::kBleTelemetryBatchHeaderSize +
+            (index * protocol::kBleTelemetryBatchSampleSize);
+        writeU32Le(sample + 0, frame.sample_tick_us - first_sample_tick_us);
+        writeU32Le(sample + 4, telemetry.status_flags);
+        writeFloat32Le(sample + 8, telemetry.zirconia_output_voltage_v);
+        writeFloat32Le(sample + 12, telemetry.heater_rtd_resistance_ohm);
+        writeFloat32Le(
+            sample + 16,
+            optionalBatchFloat(
+                telemetry.telemetry_field_bits,
+                protocol::kTelemetryFieldDifferentialPressureSelectedMask,
+                telemetry.differential_pressure_selected_pa));
+        writeFloat32Le(
+            sample + 20,
+            optionalBatchFloat(
+                telemetry.telemetry_field_bits,
+                protocol::kTelemetryFieldDifferentialPressureLowRangeMask,
+                telemetry.differential_pressure_low_range_pa));
+        writeFloat32Le(
+            sample + 24,
+            optionalBatchFloat(
+                telemetry.telemetry_field_bits,
+                protocol::kTelemetryFieldDifferentialPressureHighRangeMask,
+                telemetry.differential_pressure_high_range_pa));
+    }
+
+    const size_t packet_size =
+        protocol::kBleTelemetryBatchHeaderSize +
+        (count * protocol::kBleTelemetryBatchSampleSize);
+    g_telemetry_batch_characteristic->setValue(encoded_payload, packet_size);
+    g_telemetry_batch_characteristic->notify();
+    published_batch_count_ += 1u;
+    return true;
 }
 
 void BleTransport::publishStatusSnapshot(const protocol::StatusSnapshotPayloadV1& payload) {
@@ -264,7 +358,9 @@ void BleTransport::publishStatusSnapshot(const protocol::StatusSnapshotPayloadV1
     writeU32Le(encoded_payload + 4, payload.sequence);
     writeU32Le(encoded_payload + 8, payload.status_flags);
     writeU16Le(encoded_payload + 12, payload.nominal_sample_period_ms);
-    writeU16Le(encoded_payload + 14, payload.telemetry_field_bits);
+    writeU16Le(
+        encoded_payload + 14,
+        bleV1SingleSampleTelemetryFieldBits(payload.telemetry_field_bits));
     writeFloat32Le(encoded_payload + 16, payload.zirconia_output_voltage_v);
     writeFloat32Le(encoded_payload + 20, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(encoded_payload + 24, payload.differential_pressure_selected_pa);

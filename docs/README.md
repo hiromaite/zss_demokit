@@ -51,6 +51,14 @@ GUI / firmware / integration 関連の文書は、`gui_prototype/` と top-level
   - parity restore と新規拡張機能の実装順、PoC、依存関係の計画
 - `flow_verification_plan_v1.md`
   - ATS/ERS / ISO を踏まえた guided flow verification の導線、状態遷移、保存モデルの設計
+- `system_usability_review_v1.md`
+  - 現時点の GUI / firmware / system を usability と提供価値の観点で再確認した優先順位レビュー
+- `active_development_bundles_v1.md`
+  - 2026-05-02 時点の課題群を bundle / branch 単位に分けた実装・検証計画
+- `sampling_architecture_v1.md`
+  - 100 Hz sampling、device-side timing、BLE batch 化へ進む前の task ownership / ring buffer / payload budget 設計
+- `sampling_ble_flow_integration_plan_v1.md`
+  - `fw-acquisition-scheduler`、Serial/BLE parity、BLE batch、flow baseline を段階統合するための実行計画
 - `implementation_backlog_v1.md`
   - GUI / firmware / integration を含む実装バックログとマイルストーン
 - `firmware_implementation_plan_v1.md`
@@ -75,11 +83,15 @@ GUI / firmware / integration 関連の文書は、`gui_prototype/` と top-level
 9. `legacy_current_feature_matrix.md` で旧資産との差分と未回収機能を確認する
 10. `feature_extension_plan_v1.md` で次フェーズの機能追加計画を確認する
 11. `flow_verification_plan_v1.md` で guided verification の UX と state model を確認する
-12. `firmware_implementation_plan_v1.md` で firmware の骨格を確認する
-13. `implementation_backlog_v1.md` で着手順と依存関係を確認する
-14. `firmware_worktree_plan_v1.md` でこの worktree での branch 運用と次候補を確認する
-15. `validation_checklist_v1.md` で現段階の検証対象を確認する
-16. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
+12. `system_usability_review_v1.md` で current system の UX / usability 優先順位を確認する
+13. `active_development_bundles_v1.md` で現在の bundle / branch 計画を確認する
+14. `sampling_architecture_v1.md` で sampling / BLE batch の次段設計を確認する
+15. `sampling_ble_flow_integration_plan_v1.md` で現在の統合順、parity方針、BLE batch / flow baseline の進め方を確認する
+16. `firmware_implementation_plan_v1.md` で firmware の骨格を確認する
+17. `implementation_backlog_v1.md` で着手順と依存関係を確認する
+18. `firmware_worktree_plan_v1.md` でこの worktree での branch 運用と次候補を確認する
+19. `validation_checklist_v1.md` で現段階の検証対象を確認する
+20. `windows_beta_smoke_checklist_v1.md` で Windows packaging / smoke の流れを確認する
 
 ## 運用メモ
 

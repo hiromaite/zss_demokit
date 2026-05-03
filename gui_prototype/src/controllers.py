@@ -19,6 +19,7 @@ from protocol_constants import (
     derive_flow_rate_lpm_from_selected_differential_pressure_pa,
     format_status_flags,
     infer_differential_pressure_selected_source,
+    nominal_sample_period_ms_for_mode,
 )
 from recording_io import create_recording_paths, write_csv_header
 
@@ -52,11 +53,13 @@ class WarningController:
 
 class ConnectionController(QObject):
     connection_changed = Signal(bool, str)
+    connection_phase_changed = Signal(str, str)
     status_changed = Signal(object)
     capabilities_changed = Signal(object)
     telemetry_received = Signal(object)
     log_generated = Signal(str, str)
     ble_devices_discovered = Signal(list)
+    ble_scan_phase_changed = Signal(str)
     ports_discovered = Signal(list)
 
     def __init__(self, backend: QObject, parent: QObject | None = None) -> None:
@@ -70,11 +73,13 @@ class ConnectionController(QObject):
 
     def _bind_backend(self) -> None:
         self._backend.connection_changed.connect(self.connection_changed)
+        self._backend.connection_phase_changed.connect(self.connection_phase_changed)
         self._backend.status_changed.connect(self.status_changed)
         self._backend.capabilities_changed.connect(self.capabilities_changed)
         self._backend.telemetry_generated.connect(self.telemetry_received)
         self._backend.log_generated.connect(self.log_generated)
         self._backend.ble_devices_discovered.connect(self.ble_devices_discovered)
+        self._backend.ble_scan_phase_changed.connect(self.ble_scan_phase_changed)
         self._backend.ports_discovered.connect(self.ports_discovered)
 
     def is_connected(self) -> bool:
@@ -124,15 +129,20 @@ class PlotController:
         self.flow_rate_values: deque[float] = deque()
         self.last_sequence: int | None = None
         self.plot_sequence_origin: int | None = None
+        self.latest_elapsed_seconds: float | None = None
+        self.latest_host_received_at: datetime | None = None
         self.sequence_gap_total = 0
         self.x_follow_enabled = True
         self.manual_y_ranges: dict[str, tuple[float, float]] = {}
+        self.render_revision = 0
 
     def append_sample(self, point: TelemetryPoint) -> dict[str, object]:
         if self.plot_sequence_origin is None:
             self.plot_sequence_origin = point.sequence
 
         elapsed = ((point.sequence - self.plot_sequence_origin) * point.nominal_sample_period_ms) / 1000.0
+        self.latest_elapsed_seconds = elapsed
+        self.latest_host_received_at = point.host_received_at
         differential_pressure_selected_pa = point.differential_pressure_selected_pa
         flow_rate = derive_flow_rate_lpm_from_selected_differential_pressure_pa(
             differential_pressure_selected_pa,
@@ -152,6 +162,7 @@ class PlotController:
             sequence_gap = max(0, point.sequence - self.last_sequence - 1)
             self.sequence_gap_total += sequence_gap
         self.last_sequence = point.sequence
+        self.render_revision += 1
 
         return {
             "elapsed_seconds": elapsed,
@@ -168,8 +179,11 @@ class PlotController:
         self.flow_rate_values.clear()
         self.last_sequence = None
         self.plot_sequence_origin = None
+        self.latest_elapsed_seconds = None
+        self.latest_host_received_at = None
         self.sequence_gap_total = 0
         self.x_follow_enabled = True
+        self.render_revision += 1
 
     def history_duration_s(self) -> float:
         if len(self.time_values) < 2:
@@ -192,6 +206,7 @@ class PlotController:
                 "series": {"zirconia": [], "heater": [], "flow": []},
                 "xmin": 0.0,
                 "xmax": 0.0,
+                "revision": self.render_revision,
             }
 
         span_map = {"30 s": 30.0, "2 min": 120.0, "10 min": 600.0}
@@ -203,8 +218,9 @@ class PlotController:
             xmax = x_latest
             x_values, zirconia_values, heater_values, flow_values = self._extract_visible_series()
         else:
-            xmax = x_latest
-            xmin = max(0.0, xmax - span)
+            follow_elapsed = max(x_latest, self._current_follow_elapsed())
+            xmax = max(span, follow_elapsed)
+            xmin = xmax - span
             x_values, zirconia_values, heater_values, flow_values = self._extract_visible_series(cutoff=xmin)
 
         x_values, zirconia_values, heater_values, flow_values = self._downsample_series(
@@ -224,6 +240,7 @@ class PlotController:
             },
             "xmin": xmin,
             "xmax": xmax,
+            "revision": self.render_revision,
         }
 
     def set_manual_y_range(self, plot_key: str, y_min: float, y_max: float) -> None:
@@ -231,6 +248,12 @@ class PlotController:
 
     def manual_y_range_for(self, plot_key: str) -> tuple[float, float] | None:
         return self.manual_y_ranges.get(plot_key)
+
+    def _current_follow_elapsed(self) -> float:
+        if self.latest_elapsed_seconds is None or self.latest_host_received_at is None:
+            return self.time_values[-1]
+        elapsed_since_sample = max(0.0, (datetime.now() - self.latest_host_received_at).total_seconds())
+        return self.latest_elapsed_seconds + elapsed_since_sample
 
     def _trim_history(self, latest_elapsed: float) -> None:
         cutoff = latest_elapsed - self.history_window_s
@@ -302,7 +325,7 @@ class PlotController:
 class TelemetryHealthMonitor:
     def __init__(self, mode: str, nominal_sample_period_ms: int | None = None) -> None:
         self.mode = mode
-        self.nominal_sample_period_ms = nominal_sample_period_ms or (80 if mode == BLE_MODE else 10)
+        self.nominal_sample_period_ms = nominal_sample_period_ms or nominal_sample_period_ms_for_mode(mode)
         self.reset()
 
     def reset(self) -> None:
@@ -316,7 +339,7 @@ class TelemetryHealthMonitor:
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
-        self.nominal_sample_period_ms = 80 if mode == BLE_MODE else 10
+        self.nominal_sample_period_ms = nominal_sample_period_ms_for_mode(mode)
         self.reset()
 
     def update_nominal_sample_period(self, nominal_sample_period_ms: int | str) -> None:
@@ -392,7 +415,7 @@ class TelemetryHealthMonitor:
 class TelemetrySessionStats:
     def __init__(self, mode: str, nominal_sample_period_ms: int | None = None) -> None:
         self.mode = mode
-        self.nominal_sample_period_ms = nominal_sample_period_ms or (80 if mode == BLE_MODE else 10)
+        self.nominal_sample_period_ms = nominal_sample_period_ms or nominal_sample_period_ms_for_mode(mode)
         self.reset()
 
     def reset(self) -> None:
@@ -412,7 +435,7 @@ class TelemetrySessionStats:
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
-        self.nominal_sample_period_ms = 80 if mode == BLE_MODE else 10
+        self.nominal_sample_period_ms = nominal_sample_period_ms_for_mode(mode)
         self.reset()
 
     def update_nominal_sample_period(self, nominal_sample_period_ms: int | str) -> None:
@@ -602,6 +625,16 @@ class RecordingController:
             str(1 if (point.status_flags & STATUS_FLAG_HEATER_POWER_ON) != 0 else 0),
             f"{point.zirconia_output_voltage_v:.6f}",
             f"{point.heater_rtd_resistance_ohm:.6f}",
+            (
+                f"{point.zirconia_ip_voltage_v:.6f}"
+                if point.zirconia_ip_voltage_v is not None
+                else ""
+            ),
+            (
+                f"{point.internal_voltage_v:.6f}"
+                if point.internal_voltage_v is not None
+                else ""
+            ),
             (
                 f"{point.differential_pressure_selected_pa:.6f}"
                 if point.differential_pressure_selected_pa is not None

@@ -519,6 +519,10 @@ else:
   `SDP810 low-range raw` と `SDP811 high-range raw` が no-flow baseline で finite に取得できた
 - GUI 側も offscreen live connection で `flow_detail=SDP811: ... Pa / SDP810: ... Pa` を確認し、
   hardware 組み上げ中の raw channel 可視化導線は成立した
+- service / engineering visibility の first slice として、wired-first diagnostics に
+  `zirconia_ip_voltage_v` と `internal_voltage_v` を追加し、`Device Status` と CSV へ配線する
+- `internal_voltage_v` は optional diagnostic field とし、current board config で internal ADC pin が
+  disabled の場合は unavailable のままでよい
 - operator-facing hardening として、selected differential pressure の source (`SDP810` / `SDP811`) を
   GUI detail と CSV から追えるようにする
 - software planning として、`Flow Verification` は `Settings > Device` から起動する guided wizard として設計する
@@ -528,6 +532,12 @@ else:
 - 詳細設計は `flow_verification_plan_v1.md` を参照する
 - first implementation slice として、`FlowVerificationController`, `FlowVerificationDialog`, JSON persistence, `Settings > Device` entry を追加した
 - follow-up slice として、`Show Latest Details` 導線と latest saved session summary dialog を追加し、saved JSON を operator が見返せるようにした
+- non-hardware polish として、`Show History` 導線、recent verification summary preview、review guidance message を追加し、PoC セッションの比較と振り返りをしやすくした
+- hardware-complete 後の selector tuning へ進む前段として、開発用 `Flow Characterization (PoC)` wizard を追加する
+- characterization は `Zero Baseline`, `Small Exhale`, `Small Inhale`, `Maximum Exhale`, `Maximum Inhale` を operator button で手動 capture し、
+  raw `SDP810 / SDP811 / selected differential pressure` を JSON と CSV に保存する
+- 保存時には極性 hint、low/high sign consistency、`SDP810` の review handoff band (`90-110 Pa`) に対する到達状況を summary 化し、
+  センサー極性確認と high-range 切替閾値検討の入力データにする
 - offscreen smoke により controller-only capture path、settings entry、dialog skeleton、latest details dialog の起動を確認した
 
 ## 9. まとめて実装すべき単位

@@ -6,6 +6,7 @@
 #include "app/AppState.h"
 #include "app/CapabilityBuilder.h"
 #include "app/CommandProcessor.h"
+#include "app/SampleFrameRingBuffer.h"
 #include "board/BoardConfig.h"
 #include "measurement/AdcFrontend.h"
 #include "measurement/DifferentialPressureFrontend.h"
@@ -37,9 +38,12 @@ zss::app::CommandProcessor g_command_processor(
     g_heater_power_controller);
 zss::transport::BleTransport g_ble_transport;
 zss::transport::SerialTransport g_serial_transport;
+zss::app::SampleFrameRingBuffer<zss::board::kSampleFrameRingCapacity> g_sample_frames;
 
-uint32_t g_next_sample_deadline_ms = 0;
+uint32_t g_next_sample_deadline_us = 0;
 uint32_t g_last_summary_log_ms = 0;
+uint32_t g_last_ble_batch_publish_ms = 0;
+uint32_t g_ble_batch_last_sequence = 0;
 bool g_measurement_core_ready = false;
 bool g_ble_transport_ready = false;
 bool g_serial_transport_ready = false;
@@ -47,6 +51,11 @@ bool g_serial_transport_ready = false;
 constexpr uint8_t kEventSeverityInfo = 0;
 constexpr uint8_t kEventSeverityWarn = 1;
 constexpr uint8_t kEventSeverityError = 2;
+constexpr uint32_t kNonCriticalServiceGuardUs = 3000u;
+
+const char* fallbackErrorText(const char* message) {
+    return message != nullptr && message[0] != '\0' ? message : "no detail";
+}
 
 uint32_t warningMaskFromStatusFlags(uint32_t status_flags) {
     return status_flags &
@@ -129,12 +138,18 @@ void logCapabilitiesPreview() {
         zss::transport::TransportKind::Ble,
         zss::board::kBleNominalSamplePeriodMs,
         g_measurement_core.differentialPressureAvailable(),
+        false,
+        false,
+        false,
         false);
     const auto serial_capabilities = zss::app::CapabilityBuilder::build(
         zss::transport::TransportKind::Serial,
         zss::board::kWiredNominalSamplePeriodMs,
         g_measurement_core.differentialPressureAvailable(),
-        g_measurement_core.differentialPressureAvailable());
+        g_measurement_core.differentialPressureLowRangeAvailable(),
+        g_measurement_core.differentialPressureHighRangeAvailable(),
+        true,
+        zss::board::kLegacyInputAdcPin >= 0);
 
     const auto ble_payload = zss::protocol::buildCapabilitiesPayload(ble_capabilities);
     const auto serial_payload = zss::protocol::buildCapabilitiesPayload(serial_capabilities);
@@ -155,10 +170,28 @@ void logCapabilitiesPreview() {
 
 void logDifferentialPressureFrontendStatus() {
     if (g_measurement_core.differentialPressureAvailable()) {
+        const bool low_available = g_measurement_core.differentialPressureLowRangeAvailable();
+        const bool high_available = g_measurement_core.differentialPressureHighRangeAvailable();
         zss::services::Logger::log(
             zss::services::LogLevel::Info,
             "Boot",
-            "Dual-SDP frontend initialized.");
+            "SDP frontend initialized: low=%u high=%u.",
+            static_cast<unsigned>(low_available),
+            static_cast<unsigned>(high_available));
+        if (!low_available) {
+            zss::services::Logger::log(
+                zss::services::LogLevel::Warn,
+                "Boot",
+                "SDP810-125Pa unavailable. Check connection or sensor health: %s",
+                fallbackErrorText(g_measurement_core.differentialPressureLowRangeLastError()));
+        }
+        if (!high_available) {
+            zss::services::Logger::log(
+                zss::services::LogLevel::Warn,
+                "Boot",
+                "SDP811-500Pa unavailable. Check connection or sensor health: %s",
+                fallbackErrorText(g_measurement_core.differentialPressureHighRangeLastError()));
+        }
         return;
     }
 
@@ -166,7 +199,17 @@ void logDifferentialPressureFrontendStatus() {
         zss::services::LogLevel::Warn,
         "Boot",
         "Dual-SDP frontend unavailable: %s",
-        g_measurement_core.differentialPressureLastError());
+        fallbackErrorText(g_measurement_core.differentialPressureLastError()));
+    zss::services::Logger::log(
+        zss::services::LogLevel::Warn,
+        "Boot",
+        "SDP810-125Pa unavailable. Check connection or sensor health: %s",
+        fallbackErrorText(g_measurement_core.differentialPressureLowRangeLastError()));
+    zss::services::Logger::log(
+        zss::services::LogLevel::Warn,
+        "Boot",
+        "SDP811-500Pa unavailable. Check connection or sensor health: %s",
+        fallbackErrorText(g_measurement_core.differentialPressureHighRangeLastError()));
 }
 
 uint16_t selectNominalSamplePeriodMs() {
@@ -179,14 +222,41 @@ uint16_t selectNominalSamplePeriodMs() {
     return zss::board::kDefaultNominalSamplePeriodMs;
 }
 
-void updateSamplingCadenceForActiveTransport(uint32_t now_ms) {
+uint32_t nominalSamplePeriodUs() {
+    return static_cast<uint32_t>(g_app_state.nominalSamplePeriodMs()) * 1000u;
+}
+
+bool nextSampleDeadlineIsNear(uint32_t now_us) {
+    if (g_next_sample_deadline_us == 0u) {
+        return false;
+    }
+    const int32_t time_until_deadline_us =
+        static_cast<int32_t>(g_next_sample_deadline_us - now_us);
+    return time_until_deadline_us > 0 &&
+           static_cast<uint32_t>(time_until_deadline_us) <= kNonCriticalServiceGuardUs;
+}
+
+void waitUntilNextSampleDeadline() {
+    while (g_next_sample_deadline_us != 0u) {
+        const int32_t time_until_deadline_us =
+            static_cast<int32_t>(g_next_sample_deadline_us - micros());
+        if (time_until_deadline_us <= 0) {
+            return;
+        }
+        if (time_until_deadline_us > 250) {
+            delayMicroseconds(100);
+        }
+    }
+}
+
+void updateSamplingCadenceForActiveTransport(uint32_t now_us) {
     const uint16_t target_period_ms = selectNominalSamplePeriodMs();
     if (target_period_ms == g_app_state.nominalSamplePeriodMs()) {
         return;
     }
 
     g_app_state.setNominalSamplePeriodMs(target_period_ms);
-    g_next_sample_deadline_ms = now_ms + target_period_ms;
+    g_next_sample_deadline_us = now_us + (static_cast<uint32_t>(target_period_ms) * 1000u);
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Timing",
@@ -194,23 +264,27 @@ void updateSamplingCadenceForActiveTransport(uint32_t now_ms) {
         static_cast<unsigned>(target_period_ms));
 }
 
-void runSamplingStep(uint32_t now_ms) {
-    if (g_next_sample_deadline_ms == 0) {
-        g_next_sample_deadline_ms = now_ms + g_app_state.nominalSamplePeriodMs();
+void runSamplingStep(uint32_t now_us) {
+    const uint32_t nominal_period_us = nominalSamplePeriodUs();
+    if (nominal_period_us == 0u) {
         return;
     }
 
-    if (static_cast<int32_t>(now_ms - g_next_sample_deadline_ms) < 0) {
+    if (g_next_sample_deadline_us == 0) {
+        g_next_sample_deadline_us = now_us + nominal_period_us;
+        return;
+    }
+
+    if (static_cast<int32_t>(now_us - g_next_sample_deadline_us) < 0) {
         return;
     }
 
     const uint32_t previous_status_flags = g_app_state.statusFlags();
-    const uint32_t nominal_period_ms = g_app_state.nominalSamplePeriodMs();
     const uint32_t sample_started_us = micros();
-    const uint32_t lateness_ms = now_ms - g_next_sample_deadline_ms;
-    const uint32_t missed_intervals = nominal_period_ms == 0 ? 0u : (lateness_ms / nominal_period_ms);
+    const uint32_t scheduler_lateness_us = sample_started_us - g_next_sample_deadline_us;
+    const uint32_t missed_intervals = scheduler_lateness_us / nominal_period_us;
     const bool overrun =
-        lateness_ms > zss::board::kSamplingOverrunToleranceMs ||
+        scheduler_lateness_us > (zss::board::kSamplingOverrunToleranceMs * 1000u) ||
         missed_intervals > 0u;
 
     g_app_state.setStatusFlag(zss::protocol::kStatusFlagSamplingOverrunMask, overrun);
@@ -219,9 +293,10 @@ void runSamplingStep(uint32_t now_ms) {
         g_app_state.incrementSampleOverrunCount(missed_intervals + 1u);
     }
 
-    g_next_sample_deadline_ms += (missed_intervals + 1u) * nominal_period_ms;
+    g_next_sample_deadline_us += (missed_intervals + 1u) * nominal_period_us;
 
     const auto measurements = g_measurement_core.acquire();
+    const uint32_t acquisition_duration_us = micros() - sample_started_us;
     const auto& differential_pressure = g_measurement_core.latestDifferentialPressureMeasurements();
     auto canonical_measurements = measurements;
     updateDiagnosticBits();
@@ -242,12 +317,16 @@ void runSamplingStep(uint32_t now_ms) {
         canonical_measurements.differential_pressure_selected_pa = NAN;
         g_app_state.clearDifferentialPressureSelectedPa();
     }
-    if (g_measurement_core.differentialPressureHealthy() &&
-        isfinite(differential_pressure.low_range_differential_pressure_pa) &&
-        isfinite(differential_pressure.high_range_differential_pressure_pa)) {
+    const bool has_low_range_dp = g_measurement_core.differentialPressureHealthy() &&
+        isfinite(differential_pressure.low_range_differential_pressure_pa);
+    const bool has_high_range_dp = g_measurement_core.differentialPressureHealthy() &&
+        isfinite(differential_pressure.high_range_differential_pressure_pa);
+    if (has_low_range_dp || has_high_range_dp) {
         g_app_state.setDifferentialPressureRawPa(
             differential_pressure.low_range_differential_pressure_pa,
-            differential_pressure.high_range_differential_pressure_pa);
+            has_low_range_dp,
+            differential_pressure.high_range_differential_pressure_pa,
+            has_high_range_dp);
     } else {
         g_app_state.clearDifferentialPressureRawPa();
     }
@@ -258,9 +337,50 @@ void runSamplingStep(uint32_t now_ms) {
 
     g_app_state.setDiagnosticBit(zss::protocol::kDiagnosticBitTelemetryPublishedMask, true);
     const auto telemetry_payload = zss::protocol::buildTelemetryPayload(g_app_state);
+    zss::app::SampleFrame sample_frame{};
+    sample_frame.telemetry = telemetry_payload;
+    sample_frame.sample_tick_us = sample_started_us;
+    sample_frame.acquisition_duration_us = acquisition_duration_us;
+    sample_frame.scheduler_lateness_us = scheduler_lateness_us;
+    sample_frame.acquisition_timing = g_measurement_core.latestAcquisitionTiming();
+    g_sample_frames.push(sample_frame);
+
+    const uint32_t telemetry_publish_started_us = micros();
     g_ble_transport.publishTelemetry(telemetry_payload);
     g_serial_transport.publishTelemetry(telemetry_payload);
-    g_serial_transport.publishTimingDiagnostic(sequence, sample_started_us);
+    const uint32_t publish_now_ms = millis();
+    if (g_ble_transport.isConnected()) {
+        if (publish_now_ms - g_last_ble_batch_publish_ms >=
+            zss::board::kBleTelemetryBatchNotifyIntervalMs) {
+            zss::app::SampleFrame batch_frames[zss::protocol::kBleTelemetryBatchMaxSamples]{};
+            const size_t pending_batch_count = g_sample_frames.countSince(g_ble_batch_last_sequence);
+            const size_t batch_count = g_sample_frames.copySince(
+                g_ble_batch_last_sequence,
+                batch_frames,
+                zss::protocol::kBleTelemetryBatchMaxSamples);
+            if (batch_count > 0u && g_ble_transport.publishTelemetryBatch(batch_frames, batch_count)) {
+                g_ble_batch_last_sequence =
+                    batch_frames[batch_count - 1u].telemetry.sequence;
+                if (pending_batch_count > batch_count) {
+                    g_last_ble_batch_publish_ms =
+                        publish_now_ms - zss::board::kBleTelemetryBatchNotifyIntervalMs;
+                } else {
+                    g_last_ble_batch_publish_ms = publish_now_ms;
+                }
+            }
+        }
+    } else {
+        g_ble_batch_last_sequence = telemetry_payload.sequence;
+        g_last_ble_batch_publish_ms = publish_now_ms;
+    }
+    const uint32_t telemetry_publish_duration_us = micros() - telemetry_publish_started_us;
+    g_serial_transport.publishTimingDiagnostic(
+        sequence,
+        sample_started_us,
+        acquisition_duration_us,
+        telemetry_publish_duration_us,
+        scheduler_lateness_us,
+        g_measurement_core.latestAcquisitionTiming());
 }
 
 void emitSummaryLog(uint32_t now_ms) {
@@ -275,9 +395,10 @@ void emitSummaryLog(uint32_t now_ms) {
     zss::services::Logger::log(
         zss::services::LogLevel::Info,
         "Sample",
-        "seq=%lu Vip=%.3fV Vout=%.3fV RTD=%.1fOhm DpSel=%.2fPa Dp125=%.2fPa Dp500=%.2fPa DpLow=%u flags=0x%08lX diag=0x%08lX overruns=%lu",
+        "seq=%lu Vip=%.3fV Vin=%.3fV Vout=%.3fV RTD=%.1fOhm DpMeas=%.2fPa DpSel=%.2fPa Dp125=%.2fPa Dp500=%.2fPa DpLow=%u flags=0x%08lX diag=0x%08lX overruns=%lu",
         static_cast<unsigned long>(g_app_state.latestSequence()),
         measurements.zirconia_ip_voltage_v,
+        measurements.internal_voltage_v,
         measurements.zirconia_output_voltage_v,
         measurements.heater_rtd_resistance_ohm,
         measurements.differential_pressure_selected_pa,
@@ -340,6 +461,9 @@ void setup() {
         zss::transport::TransportKind::Ble,
         zss::board::kBleNominalSamplePeriodMs,
         g_measurement_core.differentialPressureAvailable(),
+        false,
+        false,
+        false,
         false);
     g_ble_transport.publishCapabilities(
         zss::protocol::buildCapabilitiesPayload(ble_capabilities));
@@ -380,6 +504,15 @@ void setup() {
 }
 
 void loop() {
+    uint32_t now_us = micros();
+    updateSamplingCadenceForActiveTransport(now_us);
+    if (nextSampleDeadlineIsNear(now_us)) {
+        waitUntilNextSampleDeadline();
+        runSamplingStep(micros());
+    } else {
+        runSamplingStep(now_us);
+    }
+
     g_ble_transport.update();
     g_serial_transport.update();
     g_app_state.setTransportSessionActive(g_serial_transport.isConnected() || g_ble_transport.isConnected());
@@ -418,7 +551,12 @@ void loop() {
                             : g_app_state.nominalSamplePeriodMs(),
                         g_measurement_core.differentialPressureAvailable(),
                         transport_kind == zss::transport::TransportKind::Serial &&
-                            g_measurement_core.differentialPressureAvailable());
+                            g_measurement_core.differentialPressureLowRangeAvailable(),
+                        transport_kind == zss::transport::TransportKind::Serial &&
+                            g_measurement_core.differentialPressureHighRangeAvailable(),
+                        transport_kind == zss::transport::TransportKind::Serial,
+                        transport_kind == zss::transport::TransportKind::Serial &&
+                            zss::board::kLegacyInputAdcPin >= 0);
                     if constexpr (std::is_same_v<std::decay_t<decltype(transport)>, zss::transport::SerialTransport>) {
                         transport.publishCapabilities(
                             zss::protocol::buildCapabilitiesPayload(capabilities),
@@ -467,8 +605,6 @@ void loop() {
     }
 
     const uint32_t now_ms = millis();
-    updateSamplingCadenceForActiveTransport(now_ms);
-    runSamplingStep(now_ms);
     updateStatusLedContext();
     g_status_led.tick(now_ms);
     emitSummaryLog(now_ms);

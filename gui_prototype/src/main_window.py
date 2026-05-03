@@ -38,11 +38,20 @@ from controllers import (
     TelemetrySessionStats,
     WarningController,
 )
-from dialogs import FlowVerificationDetailsDialog, FlowVerificationDialog, ModeSwitchDialog, SettingsDialog
+from dialogs import (
+    FlowCharacterizationDialog,
+    FlowVerificationDetailsDialog,
+    FlowVerificationDialog,
+    FlowVerificationHistoryDialog,
+    ModeSwitchDialog,
+    SettingsDialog,
+)
+from flow_characterization import FlowCharacterizationController, FlowCharacterizationPersistence
 from flow_verification import FlowVerificationController, FlowVerificationPersistence
 from mock_backend import MockBackend, TelemetryPoint
 from mock_backend import PREFERRED_BLE_NAME_PREFIXES, PREFERRED_WIRED_PORT_TOKENS
 from protocol_constants import (
+    BLE_FEATURE_TELEMETRY_BATCH,
     BLE_MODE,
     STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_PUMP_ON,
@@ -53,6 +62,10 @@ from protocol_constants import (
 )
 from settings_store import SettingsStore
 from theme import COLORS
+
+
+FLOW_DEFAULT_Y_RANGE_LPM = (-5.0, 5.0)
+O2_DEFAULT_Y_RANGE_PERCENT = (0.0, 25.0)
 
 
 def _panel(title: str, hint: str | None = None, object_name: str = "PanelCard") -> tuple[QFrame, QVBoxLayout]:
@@ -308,10 +321,18 @@ class MainWindow(QMainWindow):
         self._csv_flush_timer.timeout.connect(self._flush_csv)
         self._ignore_manual_range_signal = False
         self._viewbox_to_plot_key: dict[object, str] = {}
+        self._secondary_y_views: dict[str, pg.ViewBox] = {}
+        self._last_plot_data_key: tuple[object, ...] | None = None
         self._active_plot_key = self._plot_key_from_label(self.app_settings.plot.selected_plot)
         self._pending_mode_switch_target: str | None = None
+        self._ble_scan_in_progress = False
+        self._ble_auto_connect_attempted = False
         self._latest_low_range_differential_pressure_pa: float | None = None
         self._latest_high_range_differential_pressure_pa: float | None = None
+        self._latest_zirconia_ip_voltage_v: float | None = None
+        self._latest_internal_voltage_v: float | None = None
+        self._ble_batch_supported = False
+        self._ble_legacy_cadence_warning_emitted = False
 
         self._build_ui()
         self._bind_controllers()
@@ -385,11 +406,11 @@ class MainWindow(QMainWindow):
         row = QHBoxLayout()
         row.setSpacing(8)
         self.ble_device_selector = QComboBox()
-        self.ble_device_selector.addItem("M5STAMP-MONITOR")
+        self.ble_device_selector.addItem("GasSensor-Proto")
         row.addWidget(self.ble_device_selector, 1)
         self.ble_scan_button = QPushButton("Scan")
         self.ble_scan_button.setObjectName("SecondaryButton")
-        self.ble_scan_button.clicked.connect(self.connection_controller.scan_ble_devices)
+        self.ble_scan_button.clicked.connect(self._scan_ble_devices_from_ui)
         self.ble_connect_button = QPushButton("Connect")
         self.ble_connect_button.setObjectName("PrimaryButton")
         self.ble_connect_button.clicked.connect(self._toggle_connection)
@@ -438,6 +459,8 @@ class MainWindow(QMainWindow):
         self.firmware_value = QLabel("--")
         self.protocol_value = QLabel("--")
         self.gap_value = QLabel("0")
+        self.zirconia_ip_value = QLabel("--")
+        self.internal_voltage_value = QLabel("--")
 
         rows = [
             ("Pump State", self.pump_state_value),
@@ -448,6 +471,8 @@ class MainWindow(QMainWindow):
             ("Firmware", self.firmware_value),
             ("Protocol", self.protocol_value),
             ("Sequence Gaps", self.gap_value),
+            ("Zirconia Ip", self.zirconia_ip_value),
+            ("Internal Voltage", self.internal_voltage_value),
         ]
         for row_index, (name, value_label) in enumerate(rows):
             grid.addWidget(QLabel(name), row_index, 0)
@@ -596,6 +621,7 @@ class MainWindow(QMainWindow):
                 self._session_start_time,
             ),
             "left": PlotInteractionAxisItem("left", "sensor", "y", self._handle_plot_user_interaction),
+            "right": PlotInteractionAxisItem("right", "sensor_o2", "y", self._handle_plot_user_interaction),
         }
         sensor_plot = pg.PlotWidget(viewBox=sensor_view_box, axisItems=sensor_axis_items)
         self._configure_plot_widget(sensor_plot)
@@ -612,13 +638,14 @@ class MainWindow(QMainWindow):
         sensor_curve.setSkipFiniteCheck(True)
 
         self.sensor_secondary_view = pg.ViewBox()
-        self.sensor_secondary_view.setMouseEnabled(x=False, y=False)
+        self.sensor_secondary_view.setMouseEnabled(x=False, y=True)
         sensor_plot.scene().addItem(self.sensor_secondary_view)
         sensor_plot.getPlotItem().getAxis("right").linkToView(self.sensor_secondary_view)
         self.sensor_secondary_view.setXLink(sensor_plot.getPlotItem().vb)
         self.sensor_secondary_curve = pg.PlotCurveItem(pen=pg.mkPen(color="#B5781A", width=2.0))
         self.sensor_secondary_curve.setSkipFiniteCheck(True)
         self.sensor_secondary_view.addItem(self.sensor_secondary_curve)
+        self._secondary_y_views["sensor_o2"] = self.sensor_secondary_view
         sensor_legend.addItem(self.sensor_secondary_curve, "O2")
         self.sensor_secondary_legend_item = sensor_legend.items[-1]
         sensor_plot.getPlotItem().vb.sigResized.connect(self._update_sensor_secondary_geometry)
@@ -641,6 +668,12 @@ class MainWindow(QMainWindow):
                 self._session_start_time,
             ),
             "left": PlotInteractionAxisItem("left", "heater", "y", self._handle_plot_user_interaction),
+            "right": PlotInteractionAxisItem(
+                "right",
+                "heater_zirconia",
+                "y",
+                self._handle_plot_user_interaction,
+            ),
         }
         heater_plot = pg.PlotWidget(viewBox=heater_view_box, axisItems=heater_axis_items)
         self._configure_plot_widget(heater_plot)
@@ -657,13 +690,14 @@ class MainWindow(QMainWindow):
         heater_curve.setSkipFiniteCheck(True)
 
         self.heater_secondary_view = pg.ViewBox()
-        self.heater_secondary_view.setMouseEnabled(x=False, y=False)
+        self.heater_secondary_view.setMouseEnabled(x=False, y=True)
         heater_plot.scene().addItem(self.heater_secondary_view)
         heater_plot.getPlotItem().getAxis("right").linkToView(self.heater_secondary_view)
         self.heater_secondary_view.setXLink(heater_plot.getPlotItem().vb)
         self.heater_secondary_curve = pg.PlotCurveItem(pen=pg.mkPen(color="#315C8C", width=2.0))
         self.heater_secondary_curve.setSkipFiniteCheck(True)
         self.heater_secondary_view.addItem(self.heater_secondary_curve)
+        self._secondary_y_views["heater_zirconia"] = self.heater_secondary_view
         heater_legend.addItem(self.heater_secondary_curve, "Zirconia")
         self.heater_secondary_legend_item = heater_legend.items[-1]
         heater_plot.getPlotItem().vb.sigResized.connect(self._update_heater_secondary_geometry)
@@ -673,6 +707,7 @@ class MainWindow(QMainWindow):
         self.plot_curves["heater"] = heater_curve
 
         self.plot_widgets["heater"].setXLink(self.plot_widgets["sensor"])
+        self._apply_default_plot_ranges()
         QTimer.singleShot(0, self._apply_plot_splitter_sizes)
 
         log_frame = CollapsiblePanel(
@@ -693,11 +728,13 @@ class MainWindow(QMainWindow):
 
     def _bind_controllers(self) -> None:
         self.connection_controller.connection_changed.connect(self._on_connection_changed)
+        self.connection_controller.connection_phase_changed.connect(self._on_connection_phase_changed)
         self.connection_controller.status_changed.connect(self._on_status_changed)
         self.connection_controller.capabilities_changed.connect(self._on_capabilities_changed)
         self.connection_controller.telemetry_received.connect(self._on_telemetry)
         self.connection_controller.log_generated.connect(self._append_log)
         self.connection_controller.ble_devices_discovered.connect(self._on_ble_devices_discovered)
+        self.connection_controller.ble_scan_phase_changed.connect(self._on_ble_scan_phase_changed)
         self.connection_controller.ports_discovered.connect(self._on_ports_discovered)
 
     def _apply_persisted_preferences(self) -> None:
@@ -745,11 +782,16 @@ class MainWindow(QMainWindow):
                 plot = self.plot_widgets[plot_key]
                 plot.enableAutoRange(axis="y", enable=False)
                 plot.setYRange(y_range[0], y_range[1], padding=0.02)
+            elif plot_key in self._secondary_y_views:
+                view = self._secondary_y_views[plot_key]
+                view.enableAutoRange(axis="y", enable=False)
+                view.setYRange(y_range[0], y_range[1], padding=0.02)
         self._update_axis_labels()
         self._update_sensor_secondary_visibility()
 
     def _prime_mode_specific_lists(self) -> None:
         if self.mode == BLE_MODE:
+            self._ble_auto_connect_attempted = False
             self.ble_device_selector.clear()
             self.ble_device_selector.addItem("Scanning for compatible BLE device...")
             self.ble_device_selector.setEnabled(False)
@@ -767,35 +809,64 @@ class MainWindow(QMainWindow):
         self.connection_stack.setCurrentIndex(0 if self.mode == BLE_MODE else 1)
 
     def _sync_connection_controls(self) -> None:
-        connected = self.connection_controller.is_connected()
-        connect_text = "Disconnect" if connected else "Connect"
+        phase = self.ui_state.connection.phase
+        connected = self.connection_controller.is_connected() and phase == "connected"
+        connection_busy = phase in {"connecting", "handshaking", "disconnecting"}
+        ble_scan_busy = self.mode == BLE_MODE and self._ble_scan_in_progress
+        busy = connection_busy or ble_scan_busy
+        if ble_scan_busy:
+            connect_text = "Scanning..."
+        elif phase == "connecting":
+            connect_text = "Connecting..."
+        elif phase == "handshaking":
+            connect_text = "Handshake..."
+        elif phase == "disconnecting":
+            connect_text = "Disconnecting..."
+        else:
+            connect_text = "Disconnect" if connected else "Connect"
         ble_available = self._has_expected_ble_selection()
         wired_available = self._has_expected_wired_selection()
         self.ble_connect_button.setText(connect_text)
         self.wired_connect_button.setText(connect_text)
-        self.ble_connect_button.setEnabled(connected or ble_available)
-        self.wired_connect_button.setEnabled(connected or wired_available)
-        self.ble_device_selector.setEnabled((not connected) and ble_available)
-        self.ble_scan_button.setEnabled(not connected)
-        self.port_selector.setEnabled((not connected) and wired_available)
-        self.refresh_ports_button.setEnabled(not connected)
+        self.ble_connect_button.setEnabled((not busy) and (connected or ble_available))
+        self.wired_connect_button.setEnabled((not busy) and (connected or wired_available))
+        self.ble_device_selector.setEnabled((not busy) and (not connected) and ble_available)
+        self.ble_scan_button.setEnabled((not busy) and (not connected))
+        self.ble_scan_button.setText("Scanning..." if ble_scan_busy else "Scan")
+        self.port_selector.setEnabled((not busy) and (not connected) and wired_available)
+        self.refresh_ports_button.setEnabled((not busy) and (not connected))
 
     def _toggle_connection(self) -> None:
         if self.connection_controller.is_connected():
             self.ui_state.connection.phase = "disconnecting"
+            self._sync_connection_controls()
             self.connection_controller.disconnect_device()
             return
         if self.mode == BLE_MODE:
-            identifier = self.ble_device_selector.currentText().strip() or "M5STAMP-MONITOR"
+            identifier = self.ble_device_selector.currentText().strip() or "GasSensor-Proto"
         else:
             identifier = self.port_selector.currentText() or "Prototype-Port"
         self.ui_state.connection.phase = "connecting"
+        self.transport_state_value.setText("Connecting")
+        self._sync_connection_controls()
         self.connection_controller.connect_device(identifier)
 
+    def _scan_ble_devices_from_ui(self) -> None:
+        self._ble_auto_connect_attempted = False
+        self.connection_controller.scan_ble_devices()
+
     def _on_connection_changed(self, connected: bool, identifier: str) -> None:
-        self.ui_state.connection.phase = "connected" if connected else "disconnected"
+        had_plot_samples = bool(self.plot_controller.time_values)
+        if connected:
+            self._ble_legacy_cadence_warning_emitted = False
+            if self.mode != WIRED_MODE or self.ui_state.connection.phase not in {"connecting", "handshaking"}:
+                self.ui_state.connection.phase = "connected"
+        else:
+            self.ui_state.connection.phase = "disconnected"
+            self._ble_batch_supported = False
+            self._ble_legacy_cadence_warning_emitted = False
         self.ui_state.connection.identifier = identifier if connected else "Disconnected"
-        self.transport_state_value.setText("Connected" if connected else "Disconnected")
+        self.transport_state_value.setText(self._connection_phase_label(self.ui_state.connection.phase))
         self._sync_connection_controls()
         self._sync_pump_toggle()
         self._sync_heater_toggle()
@@ -805,12 +876,26 @@ class MainWindow(QMainWindow):
             self._append_log(severity, message)
         if not connected:
             self._stop_recording()
-            self._latest_low_range_differential_pressure_pa = None
-            self._latest_high_range_differential_pressure_pa = None
+            self._clear_plot_buffers()
+            self._refresh_metric_cards({})
+            if had_plot_samples:
+                self._append_log("info", "Cleared plot data after disconnect.")
             if self._pending_mode_switch_target is not None:
                 pending_target = self._pending_mode_switch_target
                 self._pending_mode_switch_target = None
                 self._complete_mode_switch(pending_target)
+        self._sync_recording_controls()
+
+    def _on_connection_phase_changed(self, phase: str, identifier: str) -> None:
+        self.ui_state.connection.phase = phase
+        if phase == "disconnected":
+            self.ui_state.connection.identifier = "Disconnected"
+        elif identifier:
+            self.ui_state.connection.identifier = identifier
+        self.transport_state_value.setText(self._connection_phase_label(phase))
+        self._sync_connection_controls()
+        self._sync_pump_toggle()
+        self._sync_heater_toggle()
         self._sync_recording_controls()
 
     def _on_status_changed(self, payload: dict) -> None:
@@ -826,11 +911,19 @@ class MainWindow(QMainWindow):
         self.ui_state.session_metadata.nominal_sample_period_ms = str(payload["nominal_sample_period_ms"])
         self.telemetry_health_monitor.update_nominal_sample_period(payload["nominal_sample_period_ms"])
         self.telemetry_session_stats.update_nominal_sample_period(payload["nominal_sample_period_ms"])
+        self._latest_zirconia_ip_voltage_v = payload.get("zirconia_ip_voltage_v")
+        self._latest_internal_voltage_v = payload.get("internal_voltage_v")
+        self._update_service_visibility_labels()
         self._sync_pump_toggle()
         self._sync_heater_toggle()
 
     def _on_capabilities_changed(self, payload: dict) -> None:
         nominal = payload["nominal_sample_period_ms"]
+        feature_bits = int(payload.get("feature_bits", 0))
+        self._ble_batch_supported = (
+            self.mode == BLE_MODE and
+            (feature_bits & BLE_FEATURE_TELEMETRY_BATCH) != 0
+        )
         self.sample_period_value.setText(f"{nominal} ms")
         self.firmware_value.setText(str(payload["firmware_version"]))
         self.protocol_value.setText(str(payload["protocol_version"]))
@@ -840,16 +933,43 @@ class MainWindow(QMainWindow):
         self.ui_state.session_metadata.transport_type = str(payload.get("transport_type", transport_type_for_mode(self.mode)))
         self.telemetry_health_monitor.update_nominal_sample_period(nominal)
         self.telemetry_session_stats.update_nominal_sample_period(nominal)
+        if self.mode == BLE_MODE:
+            if self._ble_batch_supported:
+                self._append_log("info", "BLE telemetry batch is advertised by the device.")
+            else:
+                self._append_log(
+                    "warn",
+                    "BLE telemetry batch is not advertised by this device. "
+                    "Recording will use legacy BLE notification cadence rather than 10 ms samples.",
+                )
 
     def _on_ble_devices_discovered(self, devices: list[str]) -> None:
         current = self.ble_device_selector.currentText()
         self.ble_device_selector.clear()
         if devices:
             self.ble_device_selector.addItems(devices)
-            preferred_index = max(0, self.ble_device_selector.findText(current))
+            auto_target = self._first_expected_ble_device(devices)
+            preferred_index = self.ble_device_selector.findText(auto_target or current)
+            preferred_index = max(0, preferred_index)
             self.ble_device_selector.setCurrentIndex(preferred_index)
+            if auto_target is not None and self._should_auto_connect_ble():
+                self._ble_auto_connect_attempted = True
+                self._append_log("info", f"Auto-connecting to preferred BLE device {auto_target}.")
+                self.ui_state.connection.phase = "connecting"
+                self.transport_state_value.setText("Connecting")
+                self._sync_connection_controls()
+                QTimer.singleShot(0, lambda target=auto_target: self.connection_controller.connect_device(target))
         else:
             self.ble_device_selector.addItem("No compatible BLE device detected")
+        self._sync_connection_controls()
+
+    def _on_ble_scan_phase_changed(self, phase: str) -> None:
+        self._ble_scan_in_progress = phase == "scanning"
+        if self._ble_scan_in_progress:
+            self.ble_scan_button.setText("Scanning...")
+            self.ble_device_selector.setEnabled(False)
+        else:
+            self.ble_scan_button.setText("Scan")
         self._sync_connection_controls()
 
     def _on_ports_discovered(self, ports: list[str]) -> None:
@@ -870,10 +990,24 @@ class MainWindow(QMainWindow):
         self.gap_value.setText(str(plot_update["sequence_gap_total"]))
         self._latest_low_range_differential_pressure_pa = point.differential_pressure_low_range_pa
         self._latest_high_range_differential_pressure_pa = point.differential_pressure_high_range_pa
+        self._latest_zirconia_ip_voltage_v = point.zirconia_ip_voltage_v
+        self._latest_internal_voltage_v = point.internal_voltage_v
+        self._update_service_visibility_labels()
         for severity, message in self.telemetry_health_monitor.on_telemetry(point):
             self._append_log(severity, message)
 
         if self.recording_controller.is_recording:
+            if (
+                self.mode == BLE_MODE and
+                point.nominal_sample_period_ms > 10 and
+                not self._ble_legacy_cadence_warning_emitted
+            ):
+                self._ble_legacy_cadence_warning_emitted = True
+                self._append_log(
+                    "warn",
+                    f"Recording BLE telemetry at {point.nominal_sample_period_ms} ms cadence. "
+                    "10 ms CSV rows require BLE batch-capable firmware and an active batch subscription.",
+                )
             self.recording_controller.append_row(
                 point=point,
                 mode=self.mode,
@@ -892,7 +1026,8 @@ class MainWindow(QMainWindow):
         self._sync_heater_toggle()
 
     def _refresh_plots(self) -> None:
-        render_data = self.plot_controller.render_data(self.time_span_combo.currentText())
+        time_span = self.time_span_combo.currentText()
+        render_data = self.plot_controller.render_data(time_span)
         x_values = render_data["x_values"]
         if not x_values:
             return
@@ -900,20 +1035,29 @@ class MainWindow(QMainWindow):
         flow_values = render_data["series"]["flow"]
         zirconia_values = render_data["series"]["zirconia"]
         heater_values = render_data["series"]["heater"]
-        o2_values = self._build_o2_series(zirconia_values)
+        data_key = (
+            render_data["revision"],
+            time_span,
+            self.app_settings.o2.air_calibration_voltage_v,
+            self.app_settings.o2.zero_reference_voltage_v,
+            self.app_settings.o2.ambient_reference_percent,
+            self.app_settings.o2.invert_polarity,
+        )
+        if data_key != self._last_plot_data_key:
+            o2_values = self._build_o2_series(zirconia_values)
 
-        self.plot_curves["sensor"].setData(x_values, flow_values)
-        if o2_values is None:
-            self.sensor_secondary_curve.setData([], [])
-        else:
-            self.sensor_secondary_curve.setData(x_values, o2_values)
-        self._update_sensor_secondary_visibility()
+            self.plot_curves["sensor"].setData(x_values, flow_values)
+            if o2_values is None:
+                self.sensor_secondary_curve.setData([], [])
+            else:
+                self.sensor_secondary_curve.setData(x_values, o2_values)
+            self._update_sensor_secondary_visibility()
 
-        self.plot_curves["heater"].setData(x_values, render_data["series"]["heater"])
-        self.heater_secondary_curve.setData(x_values, zirconia_values)
+            self.plot_curves["heater"].setData(x_values, heater_values)
+            self.heater_secondary_curve.setData(x_values, zirconia_values)
+        self._last_plot_data_key = data_key
         if self.plot_controller.x_follow_enabled:
             self._set_plot_x_range(render_data["xmin"], render_data["xmax"])
-        self._update_axis_labels()
 
     def _update_axis_labels(self) -> None:
         label = "Elapsed time" if self._current_axis_mode() == "Relative" else "Clock time"
@@ -944,12 +1088,12 @@ class MainWindow(QMainWindow):
 
     def _reset_plot_view(self) -> None:
         self.plot_controller.x_follow_enabled = True
-        self.plot_controller.manual_y_ranges.pop("sensor", None)
-        self.plot_controller.manual_y_ranges.pop("heater", None)
-        self.plot_widgets["sensor"].enableAutoRange(axis="y", enable=self.auto_scale_check.isChecked())
-        self.sensor_secondary_view.enableAutoRange(axis="y", enable=True)
+        for plot_key in ["sensor", "sensor_o2", "heater", "heater_zirconia"]:
+            self.plot_controller.manual_y_ranges.pop(plot_key, None)
+        self._apply_default_plot_ranges()
         self.plot_widgets["heater"].enableAutoRange(axis="y", enable=self.auto_scale_check.isChecked())
         self.heater_secondary_view.enableAutoRange(axis="y", enable=True)
+        self._last_plot_data_key = None
         self._refresh_plots()
         self._persist_current_settings()
 
@@ -958,7 +1102,7 @@ class MainWindow(QMainWindow):
             return
         self._ignore_manual_range_signal = True
         try:
-            self.plot_widgets["sensor"].setXRange(xmin, xmax, padding=0.02)
+            self.plot_widgets["sensor"].setXRange(xmin, xmax, padding=0.0)
         finally:
             self._ignore_manual_range_signal = False
 
@@ -982,15 +1126,17 @@ class MainWindow(QMainWindow):
             self.plot_controller.x_follow_enabled = False
 
         if plot_key is not None:
-            self._active_plot_key = plot_key
+            self._active_plot_key = self._primary_plot_key(plot_key)
 
-        if y_changed and plot_key is not None and plot_key in self.plot_widgets:
+        if y_changed and plot_key is not None:
             if self.auto_scale_check.isChecked():
                 self.auto_scale_check.blockSignals(True)
                 self.auto_scale_check.setChecked(False)
                 self.auto_scale_check.blockSignals(False)
-            _, y_range = self.plot_widgets[plot_key].getViewBox().viewRange()
-            self.plot_controller.set_manual_y_range(plot_key, y_range[0], y_range[1])
+            view = self._y_range_view_for_plot_key(plot_key)
+            if view is not None:
+                _, y_range = view.viewRange()
+                self.plot_controller.set_manual_y_range(plot_key, y_range[0], y_range[1])
 
         self._persist_current_settings()
 
@@ -1042,6 +1188,11 @@ class MainWindow(QMainWindow):
         if not self._has_expected_connected_device():
             self._append_log("warn", "Connect to a device before starting recording.")
             return
+        if self.mode == BLE_MODE and not self._ble_batch_supported:
+            self._append_log(
+                "warn",
+                "Starting BLE recording without advertised batch support; CSV may not contain 10 ms samples.",
+            )
 
         try:
             self.recording_controller.start(
@@ -1152,7 +1303,9 @@ class MainWindow(QMainWindow):
             connection_identifier=self.ui_state.connection.identifier,
             current_zirconia_voltage_v=current_zirconia_voltage_v,
             flow_verification_summary=self._latest_flow_verification_summary(),
+            flow_verification_recent_summaries=self._recent_flow_verification_summaries(),
             flow_verification_available=self._has_expected_connected_device(),
+            flow_characterization_available=self._has_expected_connected_device(),
             parent=self,
         )
         dialog.device_action_requested.connect(self._handle_settings_device_action)
@@ -1162,13 +1315,21 @@ class MainWindow(QMainWindow):
         requested_mode = dialog.requested_mode
         flow_verification_requested = dialog.flow_verification_requested
         flow_verification_details_requested = dialog.flow_verification_details_requested
+        flow_verification_history_requested = dialog.flow_verification_history_requested
+        flow_characterization_requested = dialog.flow_characterization_requested
         previous_o2_air_calibration_voltage_v = self.app_settings.o2.air_calibration_voltage_v
         previous_o2_calibrated_at_iso = self.app_settings.o2.calibrated_at_iso
+        if flow_verification_history_requested:
+            self._open_flow_verification_history_dialog()
+            return
         if flow_verification_details_requested:
             self._open_flow_verification_details_dialog()
             return
         if flow_verification_requested:
             self._open_flow_verification_dialog()
+            return
+        if flow_characterization_requested:
+            self._open_flow_characterization_dialog()
             return
         self._apply_dialog_settings(dialog)
         if requested_mode == previous_mode:
@@ -1198,6 +1359,11 @@ class MainWindow(QMainWindow):
                 "info",
                 "Flow verification request was staged, but reconnect in the new mode before starting it.",
             )
+        if flow_characterization_requested:
+            self._append_log(
+                "info",
+                "Flow characterization request was staged, but reconnect in the new mode before starting it.",
+            )
         self._switch_mode(requested_mode)
 
     def _switch_mode(self, new_mode: str) -> None:
@@ -1213,6 +1379,9 @@ class MainWindow(QMainWindow):
         self._stop_recording()
         self.mode = new_mode
         self.ui_state.mode = new_mode
+        if new_mode != BLE_MODE:
+            self._ble_scan_in_progress = False
+            self._ble_auto_connect_attempted = False
         self.app_settings.last_mode = new_mode
         self.telemetry_health_monitor.set_mode(new_mode)
         self.connection_controller.set_mode(new_mode)
@@ -1243,11 +1412,17 @@ class MainWindow(QMainWindow):
     def _flow_verification_persistence(self) -> FlowVerificationPersistence:
         return FlowVerificationPersistence(self._current_recording_directory())
 
+    def _flow_characterization_persistence(self) -> FlowCharacterizationPersistence:
+        return FlowCharacterizationPersistence(self._current_recording_directory())
+
     def _latest_flow_verification_summary(self):
         return self._flow_verification_persistence().load_latest_summary()
 
     def _latest_flow_verification_session(self):
         return self._flow_verification_persistence().load_latest_session()
+
+    def _recent_flow_verification_summaries(self):
+        return self._flow_verification_persistence().list_recent_summaries(limit=5)
 
     def _open_flow_verification_dialog(self) -> None:
         if not self._has_expected_connected_device():
@@ -1295,16 +1470,69 @@ class MainWindow(QMainWindow):
         dialog = FlowVerificationDetailsDialog(session, session_path=session_path, parent=self)
         dialog.exec()
 
+    def _open_flow_verification_history_dialog(self) -> None:
+        persistence = self._flow_verification_persistence()
+        summaries = persistence.list_recent_summaries(limit=12)
+        if not summaries:
+            self._append_log("warn", "No saved flow verification history is available yet.")
+            return
+        dialog = FlowVerificationHistoryDialog(summaries, persistence, parent=self)
+        dialog.exec()
+
+    def _open_flow_characterization_dialog(self) -> None:
+        if not self._has_expected_connected_device():
+            self._append_log("warn", "Connect to an expected device before starting flow characterization.")
+            return
+
+        controller = FlowCharacterizationController(
+            mode=self.mode,
+            transport_type=transport_type_for_mode(self.mode),
+            device_identifier=self.ui_state.connection.identifier,
+            firmware_version="" if self.firmware_value.text() == "--" else self.firmware_value.text(),
+            protocol_version="" if self.protocol_value.text() == "--" else self.protocol_value.text(),
+            parent=self,
+        )
+        persistence = self._flow_characterization_persistence()
+        controller.on_connection_changed(
+            self.connection_controller.is_connected(),
+            self.ui_state.connection.identifier,
+        )
+        self.connection_controller.telemetry_received.connect(controller.on_telemetry)
+        self.connection_controller.connection_changed.connect(controller.on_connection_changed)
+        try:
+            dialog = FlowCharacterizationDialog(controller, persistence, parent=self)
+            if self.mode == BLE_MODE:
+                self._append_log(
+                    "warn",
+                    "Flow characterization opened in BLE mode. Wired mode is still recommended for hardware bring-up; BLE raw SDP810 / SDP811 fields require batch-capable firmware.",
+                )
+            if dialog.exec() == QDialog.DialogCode.Accepted and dialog.saved_session_result is not None:
+                self._append_log(
+                    "info",
+                    f"Flow characterization saved: {dialog.saved_session_result.json_path}",
+                )
+                self._append_log(
+                    "info",
+                    f"Flow characterization samples saved: {dialog.saved_session_result.csv_path}",
+                )
+        finally:
+            self.connection_controller.telemetry_received.disconnect(controller.on_telemetry)
+            self.connection_controller.connection_changed.disconnect(controller.on_connection_changed)
+
     def _clear_plot_buffers(self) -> None:
         self.plot_controller.clear()
         self.gap_value.setText("0")
         self._session_started = datetime.now()
         self._latest_low_range_differential_pressure_pa = None
         self._latest_high_range_differential_pressure_pa = None
+        self._latest_zirconia_ip_voltage_v = None
+        self._latest_internal_voltage_v = None
+        self._update_service_visibility_labels()
         for curve in self.plot_curves.values():
             curve.setData([], [])
         self.sensor_secondary_curve.setData([], [])
         self.heater_secondary_curve.setData([], [])
+        self._last_plot_data_key = None
 
     def _refresh_metric_cards(self, metrics: dict[str, float] | None = None, point: TelemetryPoint | None = None) -> None:
         metrics = metrics or self.plot_controller.metric_snapshot()
@@ -1389,6 +1617,16 @@ class MainWindow(QMainWindow):
             f"O2 ambient-air calibration updated at {current_air_calibration_voltage_v:0.3f} V ({timestamp_text}).",
         )
 
+    def _update_service_visibility_labels(self) -> None:
+        self.zirconia_ip_value.setText(self._format_optional_voltage(self._latest_zirconia_ip_voltage_v))
+        self.internal_voltage_value.setText(self._format_optional_voltage(self._latest_internal_voltage_v))
+
+    @staticmethod
+    def _format_optional_voltage(value: float | None) -> str:
+        if value is None or not math.isfinite(value):
+            return "--"
+        return f"{value:0.3f} V"
+
     def closeEvent(self, event) -> None:  # type: ignore[override]
         self._stop_recording()
         self.connection_controller.disconnect_device()
@@ -1427,6 +1665,16 @@ class MainWindow(QMainWindow):
         plot.getPlotItem().getAxis("left").setPen(QColor(COLORS["muted"]))
         plot.getPlotItem().getAxis("bottom").setPen(QColor(COLORS["muted"]))
 
+    def _apply_default_plot_ranges(self) -> None:
+        if "sensor" in self.plot_widgets:
+            sensor_plot = self.plot_widgets["sensor"]
+            sensor_plot.enableAutoRange(axis="y", enable=False)
+            sensor_plot.setYRange(*FLOW_DEFAULT_Y_RANGE_LPM, padding=0.0)
+        if "sensor_o2" in self._secondary_y_views:
+            sensor_o2_view = self._secondary_y_views["sensor_o2"]
+            sensor_o2_view.enableAutoRange(axis="y", enable=False)
+            sensor_o2_view.setYRange(*O2_DEFAULT_Y_RANGE_PERCENT, padding=0.0)
+
     def _update_sensor_secondary_geometry(self) -> None:
         plot = self.plot_widgets.get("sensor")
         if plot is None:
@@ -1451,14 +1699,40 @@ class MainWindow(QMainWindow):
         return "heater" if label == "Zirconia / Heater" else "sensor"
 
     def _plot_label_for_key(self, plot_key: str) -> str:
-        return "Zirconia / Heater" if plot_key == "heater" else "Flow / O2"
+        return "Zirconia / Heater" if self._primary_plot_key(plot_key) == "heater" else "Flow / O2"
+
+    @staticmethod
+    def _primary_plot_key(plot_key: str) -> str:
+        if plot_key.startswith("heater"):
+            return "heater"
+        return "sensor"
+
+    def _y_range_view_for_plot_key(self, plot_key: str) -> pg.ViewBox | None:
+        if plot_key in self.plot_widgets:
+            return self.plot_widgets[plot_key].getViewBox()
+        return self._secondary_y_views.get(plot_key)
 
     def _is_expected_ble_identifier(self, identifier: str) -> bool:
         return any(identifier.startswith(prefix) for prefix in PREFERRED_BLE_NAME_PREFIXES)
 
+    def _first_expected_ble_device(self, devices: list[str]) -> str | None:
+        return next((device for device in devices if self._is_expected_ble_identifier(device)), None)
+
+    def _should_auto_connect_ble(self) -> bool:
+        return (
+            self.mode == BLE_MODE
+            and not self._ble_auto_connect_attempted
+            and not self.connection_controller.is_connected()
+            and self.ui_state.connection.phase in {"disconnected", "failed"}
+        )
+
     def _is_expected_wired_identifier(self, identifier: str) -> bool:
-        haystack = identifier.lower()
-        return any(token in haystack for token in PREFERRED_WIRED_PORT_TOKENS)
+        normalized = identifier.strip()
+        haystack = normalized.lower()
+        if any(token in haystack for token in PREFERRED_WIRED_PORT_TOKENS):
+            return True
+        uppercase = normalized.upper()
+        return uppercase.startswith("COM") and uppercase[3:].isdigit()
 
     def _is_expected_identifier_for_mode(self, mode: str, identifier: str) -> bool:
         if not identifier or identifier == "Disconnected":
@@ -1474,10 +1748,26 @@ class MainWindow(QMainWindow):
         return self._is_expected_wired_identifier(self.port_selector.currentText().strip())
 
     def _has_expected_connected_device(self) -> bool:
-        return self.connection_controller.is_connected() and self._is_expected_identifier_for_mode(
-            self.mode,
-            self.ui_state.connection.identifier,
+        return (
+            self.connection_controller.is_connected()
+            and self.ui_state.connection.phase == "connected"
+            and self._is_expected_identifier_for_mode(
+                self.mode,
+                self.ui_state.connection.identifier,
+            )
         )
+
+    @staticmethod
+    def _connection_phase_label(phase: str) -> str:
+        labels = {
+            "connected": "Connected",
+            "connecting": "Connecting",
+            "handshaking": "Handshake",
+            "disconnecting": "Disconnecting",
+            "failed": "Connection failed",
+            "disconnected": "Disconnected",
+        }
+        return labels.get(phase, phase.title())
 
     def _build_o2_series(self, zirconia_values: list[float]) -> list[float] | None:
         if self.app_settings.o2.air_calibration_voltage_v is None:

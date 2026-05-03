@@ -262,12 +262,17 @@ class VerificationSession:
 
 @dataclass(frozen=True)
 class FlowVerificationLatestSummary:
+    session_id: str
     result: str
     completed_at_iso: str
     criterion_version: str
     exhalation_result: str
     inhalation_result: str
     path: str
+    advisory_count: int
+    out_of_target_count: int
+    incomplete_count: int
+    note_preview: str
 
 
 @dataclass
@@ -309,34 +314,78 @@ class FlowVerificationPersistence:
         latest = self.load_latest_session()
         if latest is None:
             return None
-        return FlowVerificationLatestSummary(
-            result=latest.overall_result or "unknown",
-            completed_at_iso=latest.completed_at_iso,
-            criterion_version=latest.criterion_version,
-            exhalation_result=latest.exhalation_result,
-            inhalation_result=latest.inhalation_result,
-            path=str(self._latest_path() or ""),
-        )
+        return self._build_summary(latest, self._latest_path())
 
     def load_latest_session(self) -> VerificationSession | None:
         latest = self._latest_path()
-        if latest is None:
+        return self.load_session(latest)
+
+    def load_session(self, path: Path | None) -> VerificationSession | None:
+        if path is None:
             return None
         try:
-            payload = json.loads(latest.read_text(encoding="utf-8"))
+            payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             return None
         if not isinstance(payload, dict):
             return None
         return VerificationSession.from_dict(payload)
 
+    def list_recent_summaries(self, *, limit: int = 5) -> list[FlowVerificationLatestSummary]:
+        summaries: list[FlowVerificationLatestSummary] = []
+        for path in reversed(self._candidate_paths()):
+            session = self.load_session(path)
+            if session is None:
+                continue
+            summary = self._build_summary(session, path)
+            if summary is not None:
+                summaries.append(summary)
+            if len(summaries) >= limit:
+                break
+        return summaries
+
+    def _build_summary(
+        self,
+        session: VerificationSession,
+        path: Path | None,
+    ) -> FlowVerificationLatestSummary | None:
+        advisory_count = 0
+        out_of_target_count = 0
+        incomplete_count = 0
+        for stroke in session.stroke_results:
+            if stroke.result_status == "advisory":
+                advisory_count += 1
+            elif stroke.result_status == "out_of_target":
+                out_of_target_count += 1
+            elif stroke.result_status in {"incomplete", "skipped"}:
+                incomplete_count += 1
+        note_preview = " ".join(session.operator_note.split())
+        if len(note_preview) > 96:
+            note_preview = f"{note_preview[:93]}..."
+        return FlowVerificationLatestSummary(
+            session_id=session.session_id,
+            result=session.overall_result or "unknown",
+            completed_at_iso=session.completed_at_iso,
+            criterion_version=session.criterion_version,
+            exhalation_result=session.exhalation_result,
+            inhalation_result=session.inhalation_result,
+            path=str(path or ""),
+            advisory_count=advisory_count,
+            out_of_target_count=out_of_target_count,
+            incomplete_count=incomplete_count,
+            note_preview=note_preview,
+        )
+
     def _latest_path(self) -> Path | None:
-        if not self._base_dir.exists():
-            return None
-        candidates = sorted(self._base_dir.glob("flow_verification_*.json"))
+        candidates = self._candidate_paths()
         if not candidates:
             return None
         return candidates[-1]
+
+    def _candidate_paths(self) -> list[Path]:
+        if not self._base_dir.exists():
+            return []
+        return sorted(self._base_dir.glob("flow_verification_*.json"))
 
 
 class FlowVerificationController(QObject):
@@ -565,6 +614,7 @@ class FlowVerificationController(QObject):
             "exhalation_result": self._aggregate_section_result("exhalation"),
             "inhalation_result": self._aggregate_section_result("inhalation"),
             "overall_result": self._aggregate_overall_result(),
+            "review_guidance": self._review_guidance_message(),
             "can_back": self.step_index > 0,
             "can_retry": step.kind in {"zero", "stroke"},
             "can_skip": step.kind in {"zero", "stroke"},
@@ -862,6 +912,28 @@ class FlowVerificationController(QObject):
         if inhalation_result == "incomplete":
             return "incomplete"
         return "pass"
+
+    def _review_guidance_message(self) -> str:
+        overall = self._aggregate_overall_result()
+        if overall == "pass":
+            return (
+                "All captured strokes look usable for this PoC session. "
+                "You can save this run as a clean reference."
+            )
+        if overall == "pass_with_advisory":
+            return (
+                "Some strokes include advisories, but the session can still be useful. "
+                "Save it if you want to compare this behavior later."
+            )
+        if overall == "fail":
+            return (
+                "One or more primary exhalation strokes are out of target. "
+                "You may still save this session for design work, or retry selected steps first."
+            )
+        return (
+            "Some required strokes are missing, skipped, or incomplete. "
+            "You can still save this session as a PoC note if it is informative."
+        )
 
     @staticmethod
     def _mean(values: list[float]) -> float | None:

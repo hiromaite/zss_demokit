@@ -82,29 +82,40 @@ void SerialTransport::publishTelemetry(const protocol::TelemetryPayloadV1& paylo
         (payload.telemetry_field_bits &
          (protocol::kTelemetryFieldDifferentialPressureLowRangeMask |
           protocol::kTelemetryFieldDifferentialPressureHighRangeMask)) != 0u;
+    const bool has_service_visibility =
+        (payload.telemetry_field_bits &
+         (protocol::kTelemetryFieldZirconiaIpVoltageMask |
+          protocol::kTelemetryFieldInternalVoltageMask)) != 0u;
     const size_t payload_size =
-        has_raw_channels
-            ? protocol::kWiredTelemetryPayloadExtendedSize
-            : protocol::kWiredTelemetryPayloadSize;
-    uint8_t encoded_payload[protocol::kWiredTelemetryPayloadExtendedSize]{};
+        has_service_visibility
+            ? protocol::kWiredTelemetryPayloadDiagnosticSize
+            : (has_raw_channels
+                   ? protocol::kWiredTelemetryPayloadExtendedSize
+                   : protocol::kWiredTelemetryPayloadSize);
+    uint8_t encoded_payload[protocol::kWiredTelemetryPayloadDiagnosticSize]{};
     writeU32Le(encoded_payload + 0, payload.status_flags);
     writeU16Le(encoded_payload + 4, payload.nominal_sample_period_ms);
     writeU16Le(encoded_payload + 6, payload.telemetry_field_bits);
     writeFloat32Le(encoded_payload + 8, payload.zirconia_output_voltage_v);
     writeFloat32Le(encoded_payload + 12, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(encoded_payload + 16, payload.differential_pressure_selected_pa);
-    if (has_raw_channels) {
+    if (has_raw_channels || has_service_visibility) {
         writeFloat32Le(encoded_payload + 20, payload.differential_pressure_low_range_pa);
         writeFloat32Le(encoded_payload + 24, payload.differential_pressure_high_range_pa);
     }
+    if (has_service_visibility) {
+        writeFloat32Le(encoded_payload + 28, payload.zirconia_ip_voltage_v);
+        writeFloat32Le(encoded_payload + 32, payload.internal_voltage_v);
+    }
 
-    writeFrame(
+    if (writeFrame(
         protocol::WiredMessageType::TelemetrySample,
         payload.sequence,
         0,
         encoded_payload,
-        payload_size);
-    published_telemetry_count_ += 1u;
+        payload_size)) {
+        published_telemetry_count_ += 1u;
+    }
 }
 
 void SerialTransport::publishStatusSnapshot(const protocol::StatusSnapshotPayloadV1& payload, uint32_t request_id) {
@@ -116,20 +127,30 @@ void SerialTransport::publishStatusSnapshot(const protocol::StatusSnapshotPayloa
         (payload.telemetry_field_bits &
          (protocol::kTelemetryFieldDifferentialPressureLowRangeMask |
           protocol::kTelemetryFieldDifferentialPressureHighRangeMask)) != 0u;
+    const bool has_service_visibility =
+        (payload.telemetry_field_bits &
+         (protocol::kTelemetryFieldZirconiaIpVoltageMask |
+          protocol::kTelemetryFieldInternalVoltageMask)) != 0u;
     const size_t payload_size =
-        has_raw_channels
-            ? protocol::kWiredStatusSnapshotPayloadExtendedSize
-            : protocol::kWiredStatusSnapshotPayloadSize;
-    uint8_t encoded_payload[protocol::kWiredStatusSnapshotPayloadExtendedSize]{};
+        has_service_visibility
+            ? protocol::kWiredStatusSnapshotPayloadDiagnosticSize
+            : (has_raw_channels
+                   ? protocol::kWiredStatusSnapshotPayloadExtendedSize
+                   : protocol::kWiredStatusSnapshotPayloadSize);
+    uint8_t encoded_payload[protocol::kWiredStatusSnapshotPayloadDiagnosticSize]{};
     writeU32Le(encoded_payload + 0, payload.status_flags);
     writeU16Le(encoded_payload + 4, payload.nominal_sample_period_ms);
     writeU16Le(encoded_payload + 6, payload.telemetry_field_bits);
     writeFloat32Le(encoded_payload + 8, payload.zirconia_output_voltage_v);
     writeFloat32Le(encoded_payload + 12, payload.heater_rtd_resistance_ohm);
     writeFloat32Le(encoded_payload + 16, payload.differential_pressure_selected_pa);
-    if (has_raw_channels) {
+    if (has_raw_channels || has_service_visibility) {
         writeFloat32Le(encoded_payload + 20, payload.differential_pressure_low_range_pa);
         writeFloat32Le(encoded_payload + 24, payload.differential_pressure_high_range_pa);
+    }
+    if (has_service_visibility) {
+        writeFloat32Le(encoded_payload + 28, payload.zirconia_ip_voltage_v);
+        writeFloat32Le(encoded_payload + 32, payload.internal_voltage_v);
     }
 
     writeFrame(
@@ -205,13 +226,29 @@ void SerialTransport::publishCommandAck(const protocol::CommandAckPayloadV1& pay
         sizeof(encoded_payload));
 }
 
-void SerialTransport::publishTimingDiagnostic(uint32_t sequence, uint32_t sample_tick_us) {
+void SerialTransport::publishTimingDiagnostic(
+    uint32_t sequence,
+    uint32_t sample_tick_us,
+    uint32_t acquisition_duration_us,
+    uint32_t telemetry_publish_duration_us,
+    uint32_t scheduler_lateness_us,
+    const measurement::AcquisitionTiming& acquisition_timing) {
     if (!session_active_) {
         return;
     }
 
     uint8_t encoded_payload[protocol::kWiredTimingDiagnosticPayloadSize]{};
     writeU32Le(encoded_payload + 0, sample_tick_us);
+    writeU32Le(encoded_payload + 4, acquisition_duration_us);
+    writeU32Le(encoded_payload + 8, telemetry_publish_duration_us);
+    writeU32Le(encoded_payload + 12, scheduler_lateness_us);
+    writeU32Le(encoded_payload + 16, acquisition_timing.adc_total_duration_us);
+    writeU32Le(encoded_payload + 20, acquisition_timing.differential_pressure_total_duration_us);
+    writeU32Le(encoded_payload + 24, acquisition_timing.ads_ch0_duration_us);
+    writeU32Le(encoded_payload + 28, acquisition_timing.ads_ch1_duration_us);
+    writeU32Le(encoded_payload + 32, acquisition_timing.ads_ch2_duration_us);
+    writeU32Le(encoded_payload + 36, acquisition_timing.sdp_low_range_duration_us);
+    writeU32Le(encoded_payload + 40, acquisition_timing.sdp_high_range_duration_us);
 
     writeFrame(
         protocol::WiredMessageType::TimingDiagnostic,
@@ -315,7 +352,7 @@ void SerialTransport::markSessionActive() {
     silenceTextLoggerIfNeeded();
 }
 
-void SerialTransport::writeFrame(
+bool SerialTransport::writeFrame(
     protocol::WiredMessageType message_type,
     uint32_t sequence,
     uint32_t request_id,
@@ -341,7 +378,18 @@ void SerialTransport::writeFrame(
     writeU16Le(frame + protocol::kWiredHeaderSize + payload_length, crc);
 
     const size_t total_frame_size = protocol::kWiredHeaderSize + payload_length + 2;
-    Serial.write(frame, total_frame_size);
+    const int available = Serial.availableForWrite();
+    if (available >= 0 && static_cast<size_t>(available) < total_frame_size) {
+        dropped_tx_frame_count_ += 1u;
+        return false;
+    }
+
+    const size_t written = Serial.write(frame, total_frame_size);
+    if (written != total_frame_size) {
+        dropped_tx_frame_count_ += 1u;
+        return false;
+    }
+    return true;
 }
 
 uint16_t SerialTransport::computeCrcCcittFalse(const uint8_t* data, size_t length) {

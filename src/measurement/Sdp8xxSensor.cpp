@@ -14,7 +14,8 @@ constexpr uint16_t kStartContinuousDifferentialPressureAverageTillReadCommand = 
 constexpr uint16_t kStopContinuousMeasurementCommand = 0x3FF9;
 constexpr uint16_t kReadProductIdentifierCommandPart1 = 0x367C;
 constexpr uint16_t kReadProductIdentifierCommandPart2 = 0xE102;
-constexpr uint8_t kContinuousSampleReadLengthBytes = 9;
+constexpr uint8_t kFullSampleReadLengthBytes = 9;
+constexpr uint8_t kPressureSampleReadLengthBytes = 3;
 constexpr uint8_t kProductAndSerialReadLengthBytes = 18;
 constexpr uint16_t kSensorWarmupDelayMs = 20;
 constexpr uint16_t kSensorStopToIdleDelayUs = 700;
@@ -74,7 +75,7 @@ bool Sdp8xxSensor::begin() {
     delay(kSensorWarmupDelayMs);
 
     Sdp8xxReading reading{};
-    if (!readSample(reading)) {
+    if (!readFullSample(reading)) {
         return false;
     }
 
@@ -84,12 +85,19 @@ bool Sdp8xxSensor::begin() {
 }
 
 bool Sdp8xxSensor::readSample(Sdp8xxReading& reading) {
-    uint8_t buffer[kContinuousSampleReadLengthBytes] = {};
-    if (!readWords(kContinuousSampleReadLengthBytes, buffer)) {
+    if (scale_factor_pa_ > 0.0f) {
+        return readPressureSample(reading);
+    }
+    return readFullSample(reading);
+}
+
+bool Sdp8xxSensor::readFullSample(Sdp8xxReading& reading) {
+    uint8_t buffer[kFullSampleReadLengthBytes] = {};
+    if (!readWords(kFullSampleReadLengthBytes, buffer)) {
         return false;
     }
 
-    for (uint8_t offset = 0; offset < kContinuousSampleReadLengthBytes; offset += 3) {
+    for (uint8_t offset = 0; offset < kFullSampleReadLengthBytes; offset += 3) {
         if (!validateWordCrc(&buffer[offset])) {
             char message[96];
             snprintf(message, sizeof(message), "%s CRC mismatch", label_);
@@ -114,9 +122,12 @@ bool Sdp8xxSensor::readSample(Sdp8xxReading& reading) {
         return false;
     }
 
-    reading.scale_factor_pa = static_cast<float>(scale_factor);
+    scale_factor_pa_ = static_cast<float>(scale_factor);
+    latest_temperature_c_ = static_cast<float>(raw_temperature) / kTemperatureScaleFactor;
+
+    reading.scale_factor_pa = scale_factor_pa_;
     reading.differential_pressure_pa = static_cast<float>(raw_pressure) / reading.scale_factor_pa;
-    reading.temperature_c = static_cast<float>(raw_temperature) / kTemperatureScaleFactor;
+    reading.temperature_c = latest_temperature_c_;
     reading.valid = isfinite(reading.differential_pressure_pa) && isfinite(reading.temperature_c);
 
     healthy_ = reading.valid;
@@ -125,6 +136,47 @@ bool Sdp8xxSensor::readSample(Sdp8xxReading& reading) {
     } else {
         char message[96];
         snprintf(message, sizeof(message), "%s sample invalid", label_);
+        setError(message);
+    }
+    return healthy_;
+}
+
+bool Sdp8xxSensor::readPressureSample(Sdp8xxReading& reading) {
+    if (scale_factor_pa_ <= 0.0f) {
+        char message[96];
+        snprintf(message, sizeof(message), "%s scale not initialized", label_);
+        setError(message);
+        healthy_ = false;
+        return false;
+    }
+
+    uint8_t buffer[kPressureSampleReadLengthBytes] = {};
+    if (!readWords(kPressureSampleReadLengthBytes, buffer)) {
+        return false;
+    }
+
+    if (!validateWordCrc(buffer)) {
+        char message[96];
+        snprintf(message, sizeof(message), "%s pressure CRC mismatch", label_);
+        setError(message);
+        healthy_ = false;
+        return false;
+    }
+
+    const int16_t raw_pressure =
+        static_cast<int16_t>((static_cast<uint16_t>(buffer[0]) << 8u) | buffer[1]);
+
+    reading.scale_factor_pa = scale_factor_pa_;
+    reading.differential_pressure_pa = static_cast<float>(raw_pressure) / reading.scale_factor_pa;
+    reading.temperature_c = latest_temperature_c_;
+    reading.valid = isfinite(reading.differential_pressure_pa);
+
+    healthy_ = reading.valid;
+    if (healthy_) {
+        clearError();
+    } else {
+        char message[96];
+        snprintf(message, sizeof(message), "%s pressure sample invalid", label_);
         setError(message);
     }
     return healthy_;

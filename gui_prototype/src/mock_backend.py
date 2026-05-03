@@ -14,9 +14,11 @@ from ble_protocol import (
     decode_ble_capabilities_packet,
     decode_ble_event_packet,
     decode_ble_status_snapshot,
+    decode_ble_telemetry_batch_packet,
     decode_ble_telemetry_packet,
 )
 from protocol_constants import (
+    BLE_FEATURE_TELEMETRY_BATCH,
     BLE_MODE,
     BLE_OPCODE_GET_CAPABILITIES,
     BLE_OPCODE_GET_STATUS,
@@ -78,9 +80,13 @@ BLE_TELEMETRY_CHARACTERISTIC_UUID = "00002A58-0000-1000-8000-00805F9B34FB"
 BLE_STATUS_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10001"
 BLE_CAPABILITIES_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10002"
 BLE_EVENT_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10003"
-PREFERRED_BLE_NAME_PREFIXES = ("M5STAMP-MONITOR",)
+BLE_TELEMETRY_BATCH_CHARACTERISTIC_UUID = "8B1F1001-5C4B-47C1-A742-9D6617B10004"
+PREFERRED_BLE_NAME_PREFIXES = ("GasSensor-Proto", "M5STAMP-MONITOR")
 PREFERRED_WIRED_PORT_TOKENS = ("usbmodem", "usbserial", "tty.usb", "cu.usb")
 BLE_SCAN_TIMEOUT_S = 2.5
+WIRED_HANDSHAKE_INITIAL_DELAY_MS = 1200
+WIRED_HANDSHAKE_RETRY_INTERVAL_MS = 500
+WIRED_HANDSHAKE_TIMEOUT_S = 8.0
 
 
 @dataclass
@@ -91,6 +97,8 @@ class TelemetryPoint:
     status_flags: int
     zirconia_output_voltage_v: float
     heater_rtd_resistance_ohm: float
+    zirconia_ip_voltage_v: float | None = None
+    internal_voltage_v: float | None = None
     differential_pressure_selected_pa: float | None = None
     differential_pressure_low_range_pa: float | None = None
     differential_pressure_high_range_pa: float | None = None
@@ -100,10 +108,12 @@ class TelemetryPoint:
 class MockBackend(QObject):
     telemetry_generated = Signal(object)
     connection_changed = Signal(bool, str)
+    connection_phase_changed = Signal(str, str)
     status_changed = Signal(object)
     capabilities_changed = Signal(object)
     log_generated = Signal(str, str)
     ble_devices_discovered = Signal(list)
+    ble_scan_phase_changed = Signal(str)
     ports_discovered = Signal(list)
 
     def __init__(self, mode: str, parent: QObject | None = None) -> None:
@@ -125,15 +135,21 @@ class MockBackend(QObject):
         self._wired_poll_timer = QTimer(self)
         self._wired_poll_timer.setInterval(5)
         self._wired_poll_timer.timeout.connect(self._poll_wired_serial)
+        self._wired_handshake_timer = QTimer(self)
+        self._wired_handshake_timer.setInterval(WIRED_HANDSHAKE_RETRY_INTERVAL_MS)
+        self._wired_handshake_timer.timeout.connect(self._retry_wired_handshake)
         self._wired_serial = None
         self._wired_frame_buffer = WiredFrameBuffer()
         self._next_request_id = 1
         self._pending_requests: dict[int, str] = {}
         self._wired_received_capabilities = False
         self._wired_received_status = False
+        self._wired_handshake_started_monotonic = 0.0
+        self._wired_handshake_ready = False
         self._pending_wired_timing_diag: dict[int, int] = {}
 
         self._ble_discovered_devices: dict[str, str | None] = {}
+        self._ble_scan_in_progress = False
         self._ble_loop: asyncio.AbstractEventLoop | None = None
         self._ble_thread: threading.Thread | None = None
         self._ble_client: Any | None = None
@@ -142,6 +158,7 @@ class MockBackend(QObject):
         self._ble_status_notify_available = False
         self._ble_event_notify_available = False
         self._ble_capabilities_read_available = False
+        self._ble_batch_notify_available = False
         self._ble_last_status_received_monotonic = 0.0
         self._ble_status_request_nonce = 0
 
@@ -166,18 +183,25 @@ class MockBackend(QObject):
         if self._mode != BLE_MODE:
             self.ble_devices_discovered.emit([])
             return
+        if self._ble_scan_in_progress:
+            self.log_generated.emit("info", "BLE scan is already in progress.")
+            return
 
         if self._ble_discovered_devices:
             self.ble_devices_discovered.emit(list(self._ble_discovered_devices.keys()))
 
+        self._ble_scan_in_progress = True
+        self.ble_scan_phase_changed.emit("scanning")
         if BleakScanner is None:
             self._ble_discovered_devices = {
-                "M5STAMP-MONITOR": None,
+                "GasSensor-Proto": None,
                 "M5STAMP-MONITOR-LAB-B": None,
                 "ZSS-PROTOTYPE-NODE": None,
             }
             self.ble_devices_discovered.emit(list(self._ble_discovered_devices.keys()))
             self.log_generated.emit("warn", "BLE live scan is unavailable; using mock device list.")
+            self._ble_scan_in_progress = False
+            self.ble_scan_phase_changed.emit("idle")
             return
 
         threading.Thread(target=self._scan_ble_worker, daemon=True).start()
@@ -219,10 +243,12 @@ class MockBackend(QObject):
         self._connected_name = ""
         self._sample_timer.stop()
         self._wired_poll_timer.stop()
+        self._wired_handshake_timer.stop()
         self._pending_requests.clear()
         self._wired_frame_buffer.clear()
         self._wired_received_capabilities = False
         self._wired_received_status = False
+        self._wired_handshake_ready = False
 
         if self._wired_serial is not None:
             try:
@@ -232,6 +258,7 @@ class MockBackend(QObject):
             self._wired_serial = None
 
         self.connection_changed.emit(False, identifier)
+        self.connection_phase_changed.emit("disconnected", identifier)
         self.log_generated.emit("warn", f"Disconnected from {identifier}.")
 
     def set_pump_state(self, on: bool) -> None:
@@ -361,6 +388,7 @@ class MockBackend(QObject):
         self._ble_status_notify_available = False
         self._ble_event_notify_available = False
         self._ble_capabilities_read_available = False
+        self._ble_batch_notify_available = False
         self._ble_last_status_received_monotonic = 0.0
         self._ble_status_request_nonce = 0
 
@@ -411,6 +439,8 @@ class MockBackend(QObject):
             self._ble_discovered_devices = {}
             self.ble_devices_discovered.emit([])
             self.log_generated.emit("error", f"BLE scan failed: {exc}")
+            self._ble_scan_in_progress = False
+            self.ble_scan_phase_changed.emit("idle")
             return
 
         labels: list[str] = []
@@ -440,9 +470,12 @@ class MockBackend(QObject):
             )
         else:
             self.log_generated.emit("info", f"BLE scan completed with {len(labels)} device(s).")
+        self._ble_scan_in_progress = False
+        self.ble_scan_phase_changed.emit("idle")
 
     def _connect_mock_ble_device(self, identifier: str) -> None:
         self._ble_session_kind = "mock"
+        self.connection_phase_changed.emit("connecting", identifier)
         self._connected = True
         self._connected_name = identifier
         self._start_monotonic = time.monotonic()
@@ -450,6 +483,7 @@ class MockBackend(QObject):
         self._heater_power_on = False
         self._sample_timer.start()
         self.connection_changed.emit(True, identifier)
+        self.connection_phase_changed.emit("connected", identifier)
         self.log_generated.emit("info", f"Connected to {identifier} in mock BLE mode.")
         self.request_capabilities()
         self.request_status()
@@ -464,6 +498,7 @@ class MockBackend(QObject):
 
         self._ble_session_kind = "live"
         self._ble_disconnect_requested = False
+        self.connection_phase_changed.emit("connecting", identifier)
         self._ble_thread = threading.Thread(
             target=self._run_ble_session_thread,
             args=(identifier, target_identifier),
@@ -487,10 +522,17 @@ class MockBackend(QObject):
             self.log_generated.emit("error", f"BLE session failed: {exc}")
             if self._connected:
                 self._emit_ble_disconnected(identifier)
+            else:
+                self.connection_phase_changed.emit("failed", identifier)
         finally:
             self._ble_client = None
             self._ble_loop = None
             self._ble_thread = None
+            pending_tasks = [task for task in asyncio.all_tasks(loop) if not task.done()]
+            for task in pending_tasks:
+                task.cancel()
+            if pending_tasks:
+                loop.run_until_complete(asyncio.gather(*pending_tasks, return_exceptions=True))
             try:
                 loop.close()
             except Exception:
@@ -504,9 +546,8 @@ class MockBackend(QObject):
         self._connected_name = identifier
         self._start_monotonic = time.monotonic()
         self.connection_changed.emit(True, identifier)
+        self.connection_phase_changed.emit("connected", identifier)
         self.log_generated.emit("info", f"Connected to {identifier} over BLE.")
-
-        await client.start_notify(BLE_TELEMETRY_CHARACTERISTIC_UUID, self._on_ble_telemetry_notification)
 
         self._ble_status_notify_available = await self._start_ble_notify_if_available(
             BLE_STATUS_CHARACTERISTIC_UUID,
@@ -519,12 +560,37 @@ class MockBackend(QObject):
             "event",
         )
 
+        capabilities_payload: dict[str, object] | None = None
         try:
-            await self._ble_read_capabilities()
+            capabilities_payload = await self._ble_read_capabilities()
             self._ble_capabilities_read_available = True
         except Exception as exc:
             self._ble_capabilities_read_available = False
             self._emit_ble_degraded_capabilities(str(exc))
+
+        batch_supported = bool(
+            capabilities_payload is not None
+            and int(capabilities_payload.get("feature_bits", 0)) & BLE_FEATURE_TELEMETRY_BATCH
+        )
+        if batch_supported:
+            self._ble_batch_notify_available = await self._start_ble_notify_if_available(
+                BLE_TELEMETRY_BATCH_CHARACTERISTIC_UUID,
+                self._on_ble_telemetry_batch_notification,
+                "telemetry batch",
+            )
+        if self._ble_batch_notify_available:
+            self.log_generated.emit("info", "BLE telemetry batch notify enabled.")
+        else:
+            await client.start_notify(BLE_TELEMETRY_CHARACTERISTIC_UUID, self._on_ble_telemetry_notification)
+            feature_bits = int(capabilities_payload.get("feature_bits", 0)) if capabilities_payload is not None else 0
+            max_payload = int(capabilities_payload.get("max_payload_bytes", 0)) if capabilities_payload is not None else 0
+            nominal = int(capabilities_payload.get("nominal_sample_period_ms", 0)) if capabilities_payload is not None else 0
+            self.log_generated.emit(
+                "warn",
+                "BLE telemetry batch is not active; falling back to legacy telemetry notify. "
+                f"CSV/plot cadence will follow legacy notifications. "
+                f"cap_feature_bits=0x{feature_bits:08X} max_payload={max_payload} nominal_ms={nominal}",
+            )
 
         if self._ble_status_notify_available:
             await self._ble_write_opcode(BLE_OPCODE_GET_STATUS)
@@ -546,6 +612,7 @@ class MockBackend(QObject):
             for uuid in (
                 BLE_EVENT_CHARACTERISTIC_UUID,
                 BLE_STATUS_CHARACTERISTIC_UUID,
+                BLE_TELEMETRY_BATCH_CHARACTERISTIC_UUID,
                 BLE_TELEMETRY_CHARACTERISTIC_UUID,
             ):
                 try:
@@ -569,9 +636,9 @@ class MockBackend(QObject):
             self.log_generated.emit("warn", f"BLE {label} notify unavailable: {exc}")
             return False
 
-    async def _ble_read_capabilities(self) -> None:
+    async def _ble_read_capabilities(self) -> dict[str, object] | None:
         if self._ble_client is None:
-            return
+            return None
         capabilities_raw = await self._ble_client.read_gatt_char(BLE_CAPABILITIES_CHARACTERISTIC_UUID)
         payload = decode_ble_capabilities_packet(bytes(capabilities_raw))
         payload["derived_metric_policy"] = DERIVED_METRIC_POLICY_ID
@@ -580,6 +647,7 @@ class MockBackend(QObject):
         self._last_protocol_version = str(payload["protocol_version"])
         self.capabilities_changed.emit(payload)
         self.log_generated.emit("info", f"Capabilities loaded from {self._connected_name}.")
+        return payload
 
     async def _ble_read_status_snapshot(self) -> None:
         if self._ble_client is None:
@@ -638,9 +706,11 @@ class MockBackend(QObject):
         self._ble_status_notify_available = False
         self._ble_event_notify_available = False
         self._ble_capabilities_read_available = False
+        self._ble_batch_notify_available = False
         self._ble_last_status_received_monotonic = 0.0
         self._ble_status_request_nonce = 0
         self.connection_changed.emit(False, identifier)
+        self.connection_phase_changed.emit("disconnected", identifier)
         self.log_generated.emit("warn", f"Disconnected from {identifier}.")
 
     def _on_ble_telemetry_notification(self, _: Any, data: bytearray) -> None:
@@ -661,6 +731,8 @@ class MockBackend(QObject):
             status_flags=int(payload["status_flags"]),
             zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
             heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
+            zirconia_ip_voltage_v=None,
+            internal_voltage_v=None,
             differential_pressure_selected_pa=(
                 float(payload["differential_pressure_selected_pa"])
                 if payload.get("differential_pressure_selected_pa") is not None
@@ -670,6 +742,47 @@ class MockBackend(QObject):
             differential_pressure_high_range_pa=None,
         )
         self.telemetry_generated.emit(point)
+
+    def _on_ble_telemetry_batch_notification(self, _: Any, data: bytearray) -> None:
+        try:
+            packets = decode_ble_telemetry_batch_packet(bytes(data))
+        except Exception as exc:
+            self.log_generated.emit("warn", f"BLE telemetry batch decode failed: {exc}")
+            return
+
+        received_at = datetime.now()
+        for payload in packets:
+            self._pump_on = bool(payload["pump_on"])
+            self._heater_power_on = bool(payload.get("heater_power_on"))
+            self._warning_latched = bool(int(payload["status_flags"]) & STATUS_FLAG_TELEMETRY_RATE_WARNING)
+            self._last_protocol_version = str(payload["protocol_version"])
+            point = TelemetryPoint(
+                sequence=int(payload["sequence"]),
+                host_received_at=received_at,
+                nominal_sample_period_ms=int(payload["nominal_sample_period_ms"]),
+                status_flags=int(payload["status_flags"]),
+                zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
+                heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
+                zirconia_ip_voltage_v=None,
+                internal_voltage_v=None,
+                differential_pressure_selected_pa=(
+                    float(payload["differential_pressure_selected_pa"])
+                    if payload.get("differential_pressure_selected_pa") is not None
+                    else None
+                ),
+                differential_pressure_low_range_pa=(
+                    float(payload["differential_pressure_low_range_pa"])
+                    if payload.get("differential_pressure_low_range_pa") is not None
+                    else None
+                ),
+                differential_pressure_high_range_pa=(
+                    float(payload["differential_pressure_high_range_pa"])
+                    if payload.get("differential_pressure_high_range_pa") is not None
+                    else None
+                ),
+                device_sample_tick_us=int(payload["device_sample_tick_us"]),
+            )
+            self.telemetry_generated.emit(point)
 
     def _on_ble_status_notification(self, _: Any, data: bytearray) -> None:
         try:
@@ -712,10 +825,25 @@ class MockBackend(QObject):
             return
 
         try:
-            self._wired_serial = serial.Serial(identifier, WIRED_DEFAULT_BAUDRATE, timeout=0, write_timeout=0.25)
+            wired_serial = serial.Serial()
+            wired_serial.port = identifier
+            wired_serial.baudrate = WIRED_DEFAULT_BAUDRATE
+            wired_serial.timeout = 0
+            wired_serial.write_timeout = 0.25
+            wired_serial.dtr = False
+            wired_serial.rts = False
+            wired_serial.open()
+            wired_serial.dtr = False
+            wired_serial.rts = False
+            self._wired_serial = wired_serial
             self._wired_serial.reset_input_buffer()
             self._wired_serial.reset_output_buffer()
         except Exception as exc:
+            if self._wired_serial is not None:
+                try:
+                    self._wired_serial.close()
+                except Exception:
+                    pass
             self._wired_serial = None
             self.log_generated.emit("error", f"Could not open {identifier}: {exc}")
             return
@@ -732,20 +860,69 @@ class MockBackend(QObject):
         self._next_request_id = 1
         self._wired_received_capabilities = False
         self._wired_received_status = False
+        self._wired_handshake_started_monotonic = time.monotonic()
+        self._wired_handshake_ready = False
         self._pending_wired_timing_diag.clear()
         self._wired_poll_timer.start()
+        self._wired_handshake_timer.start()
         self.connection_changed.emit(True, identifier)
-        self.log_generated.emit("info", f"Connected to {identifier} using wired serial transport.")
-        QTimer.singleShot(300, self._bootstrap_wired_session)
-        QTimer.singleShot(700, self._bootstrap_wired_session)
+        self.connection_phase_changed.emit("handshaking", identifier)
+        self.log_generated.emit(
+            "info",
+            f"Opened {identifier}; waiting for wired protocol handshake.",
+        )
+        QTimer.singleShot(WIRED_HANDSHAKE_INITIAL_DELAY_MS, self._bootstrap_wired_session)
+        QTimer.singleShot(
+            WIRED_HANDSHAKE_INITIAL_DELAY_MS + WIRED_HANDSHAKE_RETRY_INTERVAL_MS,
+            self._bootstrap_wired_session,
+        )
 
     def _bootstrap_wired_session(self) -> None:
-        if not self._connected or self._mode != WIRED_MODE or self._wired_serial is None:
+        if (
+            not self._connected
+            or self._mode != WIRED_MODE
+            or self._wired_serial is None
+            or self._wired_handshake_ready
+        ):
             return
         if not self._wired_received_capabilities:
             self.request_capabilities()
         if not self._wired_received_status:
             self.request_status()
+
+    def _retry_wired_handshake(self) -> None:
+        if not self._connected or self._mode != WIRED_MODE or self._wired_serial is None:
+            self._wired_handshake_timer.stop()
+            return
+        if self._wired_handshake_ready:
+            self._wired_handshake_timer.stop()
+            return
+        if self._wired_received_capabilities or self._wired_received_status:
+            self._mark_wired_handshake_ready("status/capabilities")
+            return
+
+        elapsed_s = time.monotonic() - self._wired_handshake_started_monotonic
+        if elapsed_s * 1000.0 < WIRED_HANDSHAKE_INITIAL_DELAY_MS:
+            return
+        if elapsed_s >= WIRED_HANDSHAKE_TIMEOUT_S:
+            identifier = self._connected_name
+            self.log_generated.emit(
+                "error",
+                f"Wired protocol handshake timed out after {elapsed_s:0.1f} s on {identifier}.",
+            )
+            self.connection_phase_changed.emit("failed", identifier)
+            self.disconnect_device()
+            return
+
+        self._bootstrap_wired_session()
+
+    def _mark_wired_handshake_ready(self, reason: str) -> None:
+        if self._wired_handshake_ready or not self._connected or self._mode != WIRED_MODE:
+            return
+        self._wired_handshake_ready = True
+        self._wired_handshake_timer.stop()
+        self.connection_phase_changed.emit("connected", self._connected_name)
+        self.log_generated.emit("info", f"Wired protocol handshake established via {reason}.")
 
     def _send_wired_command(self, command_id: int, arg0_u32: int = 0) -> bool:
         if self._mode != WIRED_MODE or not self._connected or self._wired_serial is None:
@@ -797,6 +974,7 @@ class MockBackend(QObject):
             self._handle_wired_frame(frame)
 
         for point in pending_points:
+            self._mark_wired_handshake_ready("telemetry")
             device_sample_tick_us = self._pending_wired_timing_diag.pop(point.sequence, None)
             if device_sample_tick_us is not None:
                 point.device_sample_tick_us = device_sample_tick_us
@@ -814,6 +992,16 @@ class MockBackend(QObject):
             status_flags=int(payload["status_flags"]),
             zirconia_output_voltage_v=float(payload["zirconia_output_voltage_v"]),
             heater_rtd_resistance_ohm=float(payload["heater_rtd_resistance_ohm"]),
+            zirconia_ip_voltage_v=(
+                float(payload["zirconia_ip_voltage_v"])
+                if payload.get("zirconia_ip_voltage_v") is not None
+                else None
+            ),
+            internal_voltage_v=(
+                float(payload["internal_voltage_v"])
+                if payload.get("internal_voltage_v") is not None
+                else None
+            ),
             differential_pressure_selected_pa=(
                 float(payload["differential_pressure_selected_pa"])
                 if payload.get("differential_pressure_selected_pa") is not None
@@ -836,6 +1024,7 @@ class MockBackend(QObject):
 
         if frame.message_type == 0x01:
             point = self._decode_wired_telemetry_point(frame, datetime.now())
+            self._mark_wired_handshake_ready("telemetry")
             device_sample_tick_us = self._pending_wired_timing_diag.pop(point.sequence, None)
             if device_sample_tick_us is not None:
                 point.device_sample_tick_us = device_sample_tick_us
@@ -845,6 +1034,7 @@ class MockBackend(QObject):
         if frame.message_type == 0x02:
             payload = decode_status_snapshot(frame)
             self._wired_received_status = True
+            self._mark_wired_handshake_ready("status")
             self._pump_on = bool(payload["pump_on"])
             self._heater_power_on = bool(payload.get("heater_power_on"))
             self._warning_latched = bool(payload["status_flags"] & STATUS_FLAG_TELEMETRY_RATE_WARNING)
@@ -856,6 +1046,8 @@ class MockBackend(QObject):
                 "nominal_sample_period_ms": int(payload["nominal_sample_period_ms"]),
                 "firmware_version": self._last_firmware_version,
                 "protocol_version": self._last_protocol_version,
+                "zirconia_ip_voltage_v": payload.get("zirconia_ip_voltage_v"),
+                "internal_voltage_v": payload.get("internal_voltage_v"),
             }
             self.status_changed.emit(status)
             return
@@ -863,6 +1055,7 @@ class MockBackend(QObject):
         if frame.message_type == 0x03:
             payload = decode_capabilities(frame)
             self._wired_received_capabilities = True
+            self._mark_wired_handshake_ready("capabilities")
             self._last_firmware_version = str(payload["firmware_version"])
             self._last_protocol_version = str(payload["protocol_version"])
             payload["derived_metric_policy"] = DERIVED_METRIC_POLICY_ID
