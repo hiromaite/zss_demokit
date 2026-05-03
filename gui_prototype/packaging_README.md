@@ -14,6 +14,15 @@ The current package is a beta-quality `onedir` bundle. Windows 11 Pro source
 run, PyInstaller packaging, wired smoke, and BLE smoke have been confirmed by
 user testing for beta2.
 
+## Release Readiness Preflight
+
+Before building from a fresh checkout, verify that packaging metadata, icon
+assets, the PyInstaller spec, and release documents agree:
+
+```bash
+python tools/release_readiness_check.py
+```
+
 ## Build
 
 macOS / shell:
@@ -54,7 +63,7 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 - no code signing path yet
 - no updater path yet
 - generated icon is acceptable for beta but may still need art direction
-- release notes are still maintained through docs / commit history rather than
-  a formal packaged changelog
+- beta2 release notes are tracked in `docs/release_notes_beta2.md`; there is
+  no installer-integrated changelog yet
 - `onefile` packaging has not been selected; `onedir` remains the recommended
   beta default because startup is faster and debugging is easier

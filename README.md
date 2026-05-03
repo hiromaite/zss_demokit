@@ -70,11 +70,14 @@ Packaging:
 ```sh
 source .venv_gui_prototype/bin/activate
 pip install "pyinstaller>=6,<7"
+python tools/release_readiness_check.py
 pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec
 ```
 
 Packaging metadata is centralized in
-`gui_prototype/src/app_metadata.py`.
+`gui_prototype/src/app_metadata.py`. The current beta target is
+`0.1.0-beta.2` with distribution directory
+`dist/zss_demokit_gui_win64_beta2/`.
 
 ## Validation
 
@@ -125,6 +128,7 @@ Start with:
 - `docs/implementation_backlog_v1.md` for active backlog and milestone state.
 - `docs/validation_checklist_v1.md` for tested behavior.
 - `docs/project_organization_review_v1.md` for repository cleanup decisions.
+- `docs/release_notes_beta2.md` for the current beta package notes and known gaps.
 
 Some documents intentionally preserve historical planning context. When a
 document disagrees with current code, prefer the implementation, the active

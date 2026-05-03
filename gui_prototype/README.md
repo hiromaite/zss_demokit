@@ -44,7 +44,7 @@ pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec
 ```
 
 See `gui_prototype/packaging_README.md` for the current beta package name,
-metadata, known gaps, and Windows smoke path.
+metadata, release-readiness preflight, known gaps, and Windows smoke path.
 
 ## Useful Smoke Tools
 

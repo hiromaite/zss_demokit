@@ -52,6 +52,7 @@ Use these labels when reading or updating documents:
 | Document | Status | Purpose |
 | :--- | :--- | :--- |
 | `validation_checklist_v1.md` | `Validation Log` | GUI / firmware / integration checks and evidence |
+| `release_notes_beta2.md` | `Release` | Beta2 package notes, highlights, known gaps, and distribution checklist |
 | `windows_beta_smoke_checklist_v1.md` | `Release` | Windows packaging and user smoke checklist |
 
 ## Reference And Historical Context
@@ -94,8 +95,9 @@ For packaging / distribution:
 
 1. root `README.md`
 2. `gui_prototype/packaging_README.md`
-3. `windows_beta_smoke_checklist_v1.md`
-4. `validation_checklist_v1.md`
+3. `release_notes_beta2.md`
+4. `windows_beta_smoke_checklist_v1.md`
+5. `validation_checklist_v1.md`
 
 ## Update Policy
 

@@ -443,7 +443,10 @@
 - current beta packaging 方針は `onedir`, version `0.1.0-beta.2`, 配布名 `zss_demokit_gui_win64_beta2` とした
 - geometric first-pass icon を `tools/generate_app_icon.py` で生成し、`app_icon.png` / `app_icon.ico` を asset 化済み
 - Windows 11 Pro 上で packaging と packaged app 実行を確認し、`Wired` / `BLE` 両モードの smoke が通過
-- 残タスクは final art direction の要否判断と release 向け metadata / installer policy の最終化
+- 2026-05-03 release-readiness slice として、`docs/release_notes_beta2.md` と
+  `tools/release_readiness_check.py` を追加し、metadata / icon / PyInstaller spec /
+  release docs の整合を packaging 前に確認できるようにした
+- 残タスクは final art direction の要否判断、installer / signing / updater policy の最終化
 
 ### GUI-010. User Feedback Integration and UX Parity
 
@@ -1177,6 +1180,11 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - 2026-05-03 seventh slice として、Flow Verification / Flow Characterization history comparison を追加した。
   Verification は mean / max volume error、out-of-target / skipped、source switch の変化を比較し、Characterization は capture completion、polarity、low/high consistency、selected peak、rough gain の変化を比較する。
   どちらも history summary CSV export を持ち、hardware 完成後の調整判断材料を蓄積しやすくした
+- 2026-05-03 eighth slice として、GUI module split を進め、flow history dialogs、
+  event log panel、generic UI helpers、plot interaction helpers、dialog helpers を分離した
+- 2026-05-03 release-readiness slice として、beta2 release notes と release readiness
+  metadata / document smoke を追加した。installer / signing / updater は formal release 前の
+  separate decision として残す
 
 直近 bundle:
 

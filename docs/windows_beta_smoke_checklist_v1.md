@@ -20,7 +20,10 @@
 - virtual environment available for packaging
 - target hardware available:
   - one wired device
-  - one BLE device advertising as `M5STAMP-MONITOR`
+  - one BLE device advertising as `GasSensor-Proto`
+
+Legacy `M5STAMP-MONITOR*` names are still accepted during the device-name
+transition, but new smoke notes should prefer `GasSensor-Proto`.
 
 ## Build Steps
 
@@ -31,6 +34,7 @@ py -3.12 -m venv .venv_gui_prototype
 python -m pip install --upgrade pip
 pip install -r gui_prototype\requirements.txt
 pip install "pyinstaller>=6,<7"
+python tools\release_readiness_check.py
 pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 ```
 
@@ -64,7 +68,7 @@ Expected result:
 ## BLE Smoke
 
 1. Switch to `BLE` mode
-2. Scan and confirm `M5STAMP-MONITOR` is discovered
+2. Scan and confirm `GasSensor-Proto` is discovered
 3. Connect to the BLE device
 4. Confirm:
    - capabilities load
@@ -87,6 +91,7 @@ Expected result:
 - packaged app launches without immediate crash
 - `Wired` and `BLE` both complete their minimum smoke workflows
 - recording finalizes in both modes
+- `python tools\release_readiness_check.py` reports `release_readiness_check_ok`
 - no blocking packaging issue is discovered
 
 ## Current Result

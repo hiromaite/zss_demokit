@@ -52,6 +52,7 @@ python tools/<tool>.py
 | `flow_characterization_analyze.py` | Analyze saved flow characterization sessions |
 | `sampling_batch_budget.py` | Estimate BLE batch payload budget |
 | `generate_app_icon.py` | Generate beta GUI icon assets |
+| `release_readiness_check.py` | Check packaging metadata, icon assets, spec settings, and release-doc consistency |
 
 ## Notes
 
