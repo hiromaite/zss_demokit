@@ -1162,6 +1162,8 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - flow の最終 calibration / selector tuning は hardware completion 待ちであり、EXT-007 では UX と regression hardening を先行する
 - firmware の pump / heater safety interlock は実装済みだが、今後の regression protection として明示的に追跡する
 - 2026-05-02 の追加課題群は `active_development_bundles_v1.md` に bundle / branch 単位で整理し、実機確認ができない期間でも進められる作業から分岐開発する
+- 2026-05-03 first slice として、`tools/command_processor_smoke.py` で pump / heater interlock を host-side regression に固定し、
+  Device Status に raw SDP / service voltage / BLE batch availability label を追加した。次は plot pause / series visibility へ進む候補が高い
 
 直近 bundle:
 

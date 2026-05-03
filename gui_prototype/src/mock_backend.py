@@ -34,6 +34,8 @@ from protocol_constants import (
     STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_TELEMETRY_RATE_WARNING,
     SUPPORTED_COMMANDS,
+    TELEMETRY_FIELD_BITS,
+    TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED,
     TELEMETRY_FIELDS,
     WIRED_COMMAND_ID_GET_CAPABILITIES,
     WIRED_COMMAND_ID_GET_STATUS,
@@ -103,6 +105,7 @@ class TelemetryPoint:
     differential_pressure_low_range_pa: float | None = None
     differential_pressure_high_range_pa: float | None = None
     device_sample_tick_us: int | None = None
+    telemetry_field_bits: int = 0
 
 
 class MockBackend(QObject):
@@ -740,6 +743,7 @@ class MockBackend(QObject):
             ),
             differential_pressure_low_range_pa=None,
             differential_pressure_high_range_pa=None,
+            telemetry_field_bits=int(payload.get("telemetry_field_bits", 0)),
         )
         self.telemetry_generated.emit(point)
 
@@ -781,6 +785,7 @@ class MockBackend(QObject):
                     else None
                 ),
                 device_sample_tick_us=int(payload["device_sample_tick_us"]),
+                telemetry_field_bits=int(payload.get("telemetry_field_bits", 0)),
             )
             self.telemetry_generated.emit(point)
 
@@ -804,6 +809,7 @@ class MockBackend(QObject):
             "nominal_sample_period_ms": int(payload["nominal_sample_period_ms"]),
             "firmware_version": self._last_firmware_version,
             "protocol_version": self._last_protocol_version,
+            "telemetry_field_bits": int(payload.get("telemetry_field_bits", 0)),
         }
         self.status_changed.emit(status)
 
@@ -1017,6 +1023,7 @@ class MockBackend(QObject):
                 if payload.get("differential_pressure_high_range_pa") is not None
                 else None
             ),
+            telemetry_field_bits=int(payload.get("telemetry_field_bits", 0)),
         )
 
     def _handle_wired_frame(self, frame: WiredFrame) -> None:
@@ -1048,6 +1055,7 @@ class MockBackend(QObject):
                 "protocol_version": self._last_protocol_version,
                 "zirconia_ip_voltage_v": payload.get("zirconia_ip_voltage_v"),
                 "internal_voltage_v": payload.get("internal_voltage_v"),
+                "telemetry_field_bits": int(payload.get("telemetry_field_bits", 0)),
             }
             self.status_changed.emit(status)
             return
@@ -1102,6 +1110,7 @@ class MockBackend(QObject):
             "nominal_sample_period_ms": nominal,
             "firmware_version": FIRMWARE_VERSION_PLACEHOLDER,
             "protocol_version": PROTOCOL_VERSION_TEXT,
+            "telemetry_field_bits": TELEMETRY_FIELD_BITS | TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED,
         }
 
     @staticmethod
@@ -1178,6 +1187,7 @@ class MockBackend(QObject):
             zirconia_output_voltage_v=zirconia,
             heater_rtd_resistance_ohm=heater,
             differential_pressure_selected_pa=differential_pressure_selected_pa,
+            telemetry_field_bits=TELEMETRY_FIELD_BITS | TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED,
         )
 
         self.telemetry_generated.emit(point)

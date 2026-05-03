@@ -251,6 +251,12 @@ protocol fixture、GUI session probe、wired / BLE smoke、flow probe、timing p
 | `Engineering Tools` | Tools hub、Flow Verification / Characterization の IA 整理、history comparison | hardware completion までの準備価値が高い |
 | `Validation / Release` | Windows visual smoke、packaging checklist、known-gap update | 実装 stream と並行可能 |
 
+2026-05-03 update:
+
+- `P0-SAFE` は `tools/command_processor_smoke.py` により host-side regression として固定した
+- `P1-OBS-001` は Device Status の raw SDP / service voltage / BLE batch availability label と `tools/gui_observability_smoke.py` により first slice を完了した
+- 次に進めるなら `P1-UX-002` plot pause / series visibility toggle が、実機完成待ち期間でも価値を出しやすい
+
 ## 7. 今は深追いしないこと
 
 - flow の最終換算式、selector threshold、bidirectional threshold は、物理流路と gas-line 測定が揃うまで仮のままにする

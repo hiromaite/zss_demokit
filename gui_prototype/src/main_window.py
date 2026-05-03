@@ -55,6 +55,11 @@ from protocol_constants import (
     BLE_MODE,
     STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_PUMP_ON,
+    TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE,
+    TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE,
+    TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED,
+    TELEMETRY_FIELD_INTERNAL_VOLTAGE,
+    TELEMETRY_FIELD_ZIRCONIA_IP_VOLTAGE,
     WIRED_MODE,
     derive_o2_concentration_percent,
     infer_differential_pressure_selected_source,
@@ -331,6 +336,9 @@ class MainWindow(QMainWindow):
         self._latest_high_range_differential_pressure_pa: float | None = None
         self._latest_zirconia_ip_voltage_v: float | None = None
         self._latest_internal_voltage_v: float | None = None
+        self._latest_capability_telemetry_field_bits = 0
+        self._latest_telemetry_field_bits = 0
+        self._latest_feature_bits = 0
         self._ble_batch_supported = False
         self._ble_legacy_cadence_warning_emitted = False
 
@@ -461,6 +469,15 @@ class MainWindow(QMainWindow):
         self.gap_value = QLabel("0")
         self.zirconia_ip_value = QLabel("--")
         self.internal_voltage_value = QLabel("--")
+        self.raw_sdp_availability_value = QLabel("Not connected")
+        self.service_voltage_availability_value = QLabel("Not connected")
+        self.ble_batch_availability_value = QLabel("N/A")
+        for diagnostic_label in [
+            self.raw_sdp_availability_value,
+            self.service_voltage_availability_value,
+            self.ble_batch_availability_value,
+        ]:
+            diagnostic_label.setWordWrap(True)
 
         rows = [
             ("Pump State", self.pump_state_value),
@@ -473,6 +490,9 @@ class MainWindow(QMainWindow):
             ("Sequence Gaps", self.gap_value),
             ("Zirconia Ip", self.zirconia_ip_value),
             ("Internal Voltage", self.internal_voltage_value),
+            ("Raw SDP", self.raw_sdp_availability_value),
+            ("Service Voltages", self.service_voltage_availability_value),
+            ("BLE Batch", self.ble_batch_availability_value),
         ]
         for row_index, (name, value_label) in enumerate(rows):
             grid.addWidget(QLabel(name), row_index, 0)
@@ -865,8 +885,13 @@ class MainWindow(QMainWindow):
             self.ui_state.connection.phase = "disconnected"
             self._ble_batch_supported = False
             self._ble_legacy_cadence_warning_emitted = False
+            self._latest_capability_telemetry_field_bits = 0
+            self._latest_telemetry_field_bits = 0
+            self._latest_feature_bits = 0
         self.ui_state.connection.identifier = identifier if connected else "Disconnected"
         self.transport_state_value.setText(self._connection_phase_label(self.ui_state.connection.phase))
+        if not connected:
+            self._update_diagnostic_availability_labels()
         self._sync_connection_controls()
         self._sync_pump_toggle()
         self._sync_heater_toggle()
@@ -899,6 +924,9 @@ class MainWindow(QMainWindow):
         self._sync_recording_controls()
 
     def _on_status_changed(self, payload: dict) -> None:
+        telemetry_field_bits = int(payload.get("telemetry_field_bits", 0))
+        if telemetry_field_bits:
+            self._latest_telemetry_field_bits = telemetry_field_bits
         self.pump_state_value.setText(str(payload["pump_state"]))
         self.heater_power_state_value.setText(str(payload.get("heater_power_state", "OFF")))
         self.transport_state_value.setText(str(payload["transport_state"]))
@@ -920,6 +948,8 @@ class MainWindow(QMainWindow):
     def _on_capabilities_changed(self, payload: dict) -> None:
         nominal = payload["nominal_sample_period_ms"]
         feature_bits = int(payload.get("feature_bits", 0))
+        self._latest_feature_bits = feature_bits
+        self._latest_capability_telemetry_field_bits = int(payload.get("telemetry_field_bits", 0))
         self._ble_batch_supported = (
             self.mode == BLE_MODE and
             (feature_bits & BLE_FEATURE_TELEMETRY_BATCH) != 0
@@ -933,6 +963,7 @@ class MainWindow(QMainWindow):
         self.ui_state.session_metadata.transport_type = str(payload.get("transport_type", transport_type_for_mode(self.mode)))
         self.telemetry_health_monitor.update_nominal_sample_period(nominal)
         self.telemetry_session_stats.update_nominal_sample_period(nominal)
+        self._update_diagnostic_availability_labels()
         if self.mode == BLE_MODE:
             if self._ble_batch_supported:
                 self._append_log("info", "BLE telemetry batch is advertised by the device.")
@@ -988,6 +1019,8 @@ class MainWindow(QMainWindow):
         self.pump_state_value.setText("ON" if (point.status_flags & STATUS_FLAG_PUMP_ON) != 0 else "OFF")
         self.heater_power_state_value.setText("ON" if (point.status_flags & STATUS_FLAG_HEATER_POWER_ON) != 0 else "OFF")
         self.gap_value.setText(str(plot_update["sequence_gap_total"]))
+        if point.telemetry_field_bits:
+            self._latest_telemetry_field_bits = int(point.telemetry_field_bits)
         self._latest_low_range_differential_pressure_pa = point.differential_pressure_low_range_pa
         self._latest_high_range_differential_pressure_pa = point.differential_pressure_high_range_pa
         self._latest_zirconia_ip_voltage_v = point.zirconia_ip_voltage_v
@@ -1382,6 +1415,10 @@ class MainWindow(QMainWindow):
         if new_mode != BLE_MODE:
             self._ble_scan_in_progress = False
             self._ble_auto_connect_attempted = False
+        self._latest_capability_telemetry_field_bits = 0
+        self._latest_telemetry_field_bits = 0
+        self._latest_feature_bits = 0
+        self._ble_batch_supported = False
         self.app_settings.last_mode = new_mode
         self.telemetry_health_monitor.set_mode(new_mode)
         self.connection_controller.set_mode(new_mode)
@@ -1395,6 +1432,7 @@ class MainWindow(QMainWindow):
         self.metric_heater.set_value("--")
         self.metric_flow.set_value("--")
         self.metric_flow.set_detail("")
+        self._update_diagnostic_availability_labels()
         self._sync_pump_toggle()
         self._sync_heater_toggle()
         self._sync_recording_controls()
@@ -1575,6 +1613,8 @@ class MainWindow(QMainWindow):
                 f"SDP811: {high_range_differential_pressure_pa:+0.2f} Pa / "
                 f"SDP810: {low_range_differential_pressure_pa:+0.2f} Pa"
             )
+        elif selected_differential_pressure_pa is not None and math.isfinite(selected_differential_pressure_pa):
+            self.metric_flow.set_detail(self._format_flow_raw_unavailable_detail())
         else:
             self.metric_flow.set_detail("")
         self.metric_o2.set_value(self._format_o2_metric_value(zirconia_value))
@@ -1620,6 +1660,66 @@ class MainWindow(QMainWindow):
     def _update_service_visibility_labels(self) -> None:
         self.zirconia_ip_value.setText(self._format_optional_voltage(self._latest_zirconia_ip_voltage_v))
         self.internal_voltage_value.setText(self._format_optional_voltage(self._latest_internal_voltage_v))
+        self._update_diagnostic_availability_labels()
+
+    def _effective_telemetry_field_bits(self) -> int:
+        return self._latest_telemetry_field_bits or self._latest_capability_telemetry_field_bits
+
+    def _update_diagnostic_availability_labels(self) -> None:
+        field_bits = self._effective_telemetry_field_bits()
+        self.raw_sdp_availability_value.setText(self._format_raw_sdp_availability(field_bits))
+        self.service_voltage_availability_value.setText(self._format_service_voltage_availability(field_bits))
+        self.ble_batch_availability_value.setText(self._format_ble_batch_availability())
+
+    def _format_raw_sdp_availability(self, field_bits: int) -> str:
+        has_selected = (field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_SELECTED) != 0
+        has_low = (field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_LOW_RANGE) != 0
+        has_high = (field_bits & TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE) != 0
+        if has_low and has_high:
+            if self.mode == BLE_MODE:
+                return "Live via BLE batch: SDP811 / SDP810"
+            return "Live: SDP811 / SDP810"
+        if has_low or has_high:
+            names = []
+            if has_high:
+                names.append("SDP811")
+            if has_low:
+                names.append("SDP810")
+            return f"Partial: {' / '.join(names)}"
+        if has_selected:
+            if self.mode == BLE_MODE and not self._ble_batch_supported:
+                return "Selected DP only (legacy BLE)"
+            return "Selected DP only"
+        return "Not connected" if not self._has_expected_connected_device() else "Not advertised"
+
+    def _format_service_voltage_availability(self, field_bits: int) -> str:
+        has_ip = (field_bits & TELEMETRY_FIELD_ZIRCONIA_IP_VOLTAGE) != 0
+        has_internal = (field_bits & TELEMETRY_FIELD_INTERNAL_VOLTAGE) != 0
+        if has_ip and has_internal:
+            return "Live: zirconia Ip / internal"
+        if has_ip or has_internal:
+            return "Partial: zirconia Ip" if has_ip else "Partial: internal"
+        if self.mode == BLE_MODE:
+            return "Not provided by BLE"
+        return "Not connected" if not self._has_expected_connected_device() else "Not advertised"
+
+    def _format_ble_batch_availability(self) -> str:
+        if self.mode != BLE_MODE:
+            return "N/A (Wired)"
+        if self._ble_batch_supported:
+            return "Supported by device"
+        if (
+            self._latest_capability_telemetry_field_bits
+            or self._latest_feature_bits
+            or self._has_expected_connected_device()
+        ):
+            return "Not advertised; legacy cadence"
+        return "Unknown until capabilities"
+
+    def _format_flow_raw_unavailable_detail(self) -> str:
+        if self.mode == BLE_MODE and not self._ble_batch_supported:
+            return "Selected DP only; raw SDP requires BLE batch-capable firmware."
+        return "Raw SDP channels are not advertised by the current transport."
 
     @staticmethod
     def _format_optional_voltage(value: float | None) -> str:
