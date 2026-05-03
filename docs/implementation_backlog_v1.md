@@ -1166,6 +1166,8 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
   Device Status に raw SDP / service voltage / BLE batch availability label を追加した
 - 2026-05-03 second slice として、Plot Toolbar に `Pause Plot` と series visibility toggle を追加し、
   acquisition / recording を継続したまま operator が plot 表示だけを freeze / 整理できるようにした。次は Settings の Engineering / Tools 整理か Windows / low-resolution visual validation が候補
+- 2026-05-03 third slice として、Settings nav に `Engineering / Tools` を追加し、routine operator setting と engineering workflow を分離した。
+  `Device` は connection summary / O2 calibration に寄せ、Flow Verification / Characterization / on-demand diagnostics は tools page から起動する
 
 直近 bundle:
 

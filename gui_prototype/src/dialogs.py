@@ -196,7 +196,8 @@ class SettingsDialog(QDialog):
         title = QLabel("Settings")
         title.setObjectName("SectionTitle")
         copy = QLabel(
-            "These settings are persisted locally and restored when the app starts again."
+            "Operator-facing settings stay in General, Plot, Recording, and Device. "
+            "Diagnostics and development workflows live under Engineering / Tools."
         )
         copy.setObjectName("SectionHint")
         copy.setWordWrap(True)
@@ -210,7 +211,7 @@ class SettingsDialog(QDialog):
 
         self.nav = QListWidget()
         self.nav.setObjectName("SettingsNav")
-        for label in ["General", "Plot", "Recording", "Device", "About"]:
+        for label in ["General", "Plot", "Recording", "Device", "Engineering / Tools", "About"]:
             QListWidgetItem(label, self.nav)
         self.nav.setCurrentRow(0)
         shell.addWidget(self.nav, 0)
@@ -220,6 +221,7 @@ class SettingsDialog(QDialog):
         self.stack.addWidget(self._create_plot_page())
         self.stack.addWidget(self._create_recording_page())
         self.stack.addWidget(self._create_device_page())
+        self.stack.addWidget(self._create_engineering_tools_page())
         self.stack.addWidget(self._create_about_page())
         shell.addWidget(self.stack, 1)
 
@@ -391,34 +393,6 @@ class SettingsDialog(QDialog):
         summary_form.addRow("BLE identity policy", QLabel("Prefer GasSensor-Proto; accept legacy names"))
         layout.addWidget(summary_card)
 
-        action_card = QFrame()
-        action_card.setObjectName("AccentCard")
-        action_layout = QVBoxLayout(action_card)
-        action_title = QLabel("Device Actions")
-        action_title.setObjectName("SectionTitle")
-        action_hint = QLabel("Run on-demand commands from here so the main screen can stay compact.")
-        action_hint.setObjectName("SectionHint")
-        action_hint.setWordWrap(True)
-        action_layout.addWidget(action_title)
-        action_layout.addWidget(action_hint)
-
-        action_row = QHBoxLayout()
-        status_button = QPushButton("Get Status")
-        status_button.setObjectName("SecondaryButton")
-        status_button.clicked.connect(lambda: self.device_action_requested.emit("get_status"))
-        capabilities_button = QPushButton("Get Capabilities")
-        capabilities_button.setObjectName("SecondaryButton")
-        capabilities_button.clicked.connect(lambda: self.device_action_requested.emit("get_capabilities"))
-        ping_button = QPushButton("Ping")
-        ping_button.setObjectName("SecondaryButton")
-        ping_button.clicked.connect(lambda: self.device_action_requested.emit("ping"))
-        action_row.addWidget(status_button)
-        action_row.addWidget(capabilities_button)
-        action_row.addWidget(ping_button)
-        action_row.addStretch(1)
-        action_layout.addLayout(action_row)
-        layout.addWidget(action_card)
-
         calibration_card = QFrame()
         calibration_card.setObjectName("SurfaceCard")
         calibration_layout = QVBoxLayout(calibration_card)
@@ -457,6 +431,27 @@ class SettingsDialog(QDialog):
         layout.addWidget(calibration_card)
 
         self._refresh_o2_calibration_state()
+        layout.addStretch(1)
+        return page
+
+    def _create_engineering_tools_page(self) -> QWidget:
+        page, layout = self._page_wrapper()
+
+        overview_card = QFrame()
+        overview_card.setObjectName("AccentCard")
+        overview_layout = QVBoxLayout(overview_card)
+        overview_title = QLabel("Engineering / Tools")
+        overview_title.setObjectName("SectionTitle")
+        overview_hint = QLabel(
+            "Use this page for diagnostics, protocol checks, and flow-development workflows. "
+            "These tools are useful during bring-up, validation, and troubleshooting, "
+            "but are separated from routine operator settings."
+        )
+        overview_hint.setObjectName("SectionHint")
+        overview_hint.setWordWrap(True)
+        overview_layout.addWidget(overview_title)
+        overview_layout.addWidget(overview_hint)
+        layout.addWidget(overview_card)
 
         verification_card = QFrame()
         verification_card.setObjectName("AccentCard")
@@ -533,6 +528,42 @@ class SettingsDialog(QDialog):
         characterization_row.addStretch(1)
         characterization_layout.addLayout(characterization_row)
         layout.addWidget(characterization_card)
+
+        action_card = QFrame()
+        action_card.setObjectName("SurfaceCard")
+        action_layout = QVBoxLayout(action_card)
+        action_title = QLabel("Device Diagnostics")
+        action_title.setObjectName("SectionTitle")
+        action_hint = QLabel(
+            "Send on-demand status, capabilities, or ping requests without adding these controls back to the main screen."
+        )
+        action_hint.setObjectName("SectionHint")
+        action_hint.setWordWrap(True)
+        action_layout.addWidget(action_title)
+        action_layout.addWidget(action_hint)
+
+        action_row = QHBoxLayout()
+        self.status_request_button = QPushButton("Get Status")
+        self.status_request_button.setObjectName("SecondaryButton")
+        self.status_request_button.clicked.connect(
+            lambda: self.device_action_requested.emit("get_status")
+        )
+        self.capabilities_request_button = QPushButton("Get Capabilities")
+        self.capabilities_request_button.setObjectName("SecondaryButton")
+        self.capabilities_request_button.clicked.connect(
+            lambda: self.device_action_requested.emit("get_capabilities")
+        )
+        self.ping_request_button = QPushButton("Ping")
+        self.ping_request_button.setObjectName("SecondaryButton")
+        self.ping_request_button.clicked.connect(
+            lambda: self.device_action_requested.emit("ping")
+        )
+        action_row.addWidget(self.status_request_button)
+        action_row.addWidget(self.capabilities_request_button)
+        action_row.addWidget(self.ping_request_button)
+        action_row.addStretch(1)
+        action_layout.addLayout(action_row)
+        layout.addWidget(action_card)
 
         self._refresh_flow_verification_state()
         self._refresh_flow_characterization_state()
