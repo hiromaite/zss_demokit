@@ -40,6 +40,7 @@ Settings are stored with `QSettings` under the `zss-demokit` organization and
 ```bash
 source .venv_gui_prototype/bin/activate
 pip install "pyinstaller>=6,<7"
+python tools/release_readiness_check.py
 pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec
 ```
 

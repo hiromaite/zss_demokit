@@ -1,8 +1,8 @@
-# Release Notes: ZSS Demo Kit `0.1.0-beta.2`
+# Release Notes: ZSS Demo Kit `0.1.0-beta.3`
 
 Status: beta distribution candidate
 
-Package target: `dist/zss_demokit_gui_win64_beta2/`
+Package target: `dist/zss_demokit_gui_win64_beta3/`
 
 Executable: `zss_demokit_gui.exe`
 
@@ -64,10 +64,11 @@ python tools/release_readiness_check.py
 
 ## Distribution Checklist
 
-1. Confirm the checkout is on the intended branch or release tag.
+1. Confirm the checkout is on the intended branch or release tag. See
+   `docs/distribution_plan_v1.md` for the full gate and tag policy.
 2. Run `python tools/release_readiness_check.py`.
 3. Build with `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec`.
-4. Confirm `dist/zss_demokit_gui_win64_beta2/zss_demokit_gui.exe` exists.
+4. Confirm `dist/zss_demokit_gui_win64_beta3/zss_demokit_gui.exe` exists.
 5. Execute `docs/windows_beta_smoke_checklist_v1.md` on Windows 11 Pro.
 6. Record the smoke result in `docs/validation_checklist_v1.md` before tagging
    or sharing a package as the latest beta.

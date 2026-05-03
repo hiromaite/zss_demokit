@@ -8,8 +8,8 @@
 ## Current Packaging Target
 
 - package style: `onedir`
-- package directory name: `zss_demokit_gui_win64_beta2`
-- app version: `0.1.0-beta.2`
+- package directory name: `zss_demokit_gui_win64_beta3`
+- app version: `0.1.0-beta.3`
 - executable name: `zss_demokit_gui.exe`
 
 ## Preconditions
@@ -40,14 +40,14 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 
 Expected result:
 
-- package directory exists at `dist\zss_demokit_gui_win64_beta2\`
-- executable exists at `dist\zss_demokit_gui_win64_beta2\zss_demokit_gui.exe`
+- package directory exists at `dist\zss_demokit_gui_win64_beta3\`
+- executable exists at `dist\zss_demokit_gui_win64_beta3\zss_demokit_gui.exe`
 
 ## Launch Smoke
 
-1. Launch `dist\zss_demokit_gui_win64_beta2\zss_demokit_gui.exe`
+1. Launch `dist\zss_demokit_gui_win64_beta3\zss_demokit_gui.exe`
 2. Confirm that the launcher window appears
-3. Confirm that the app version displayed is `0.1.0-beta.2`
+3. Confirm that the app version displayed is `0.1.0-beta.3`
 4. Confirm that the generated app icon is shown in the window / taskbar if Windows picks it up
 
 ## Wired Smoke
@@ -94,11 +94,12 @@ Expected result:
 - `python tools\release_readiness_check.py` reports `release_readiness_check_ok`
 - no blocking packaging issue is discovered
 
-## Current Result
+## Last Confirmed Result
 
-- Windows 11 Pro 上で user 実施により packaging 成功
-- packaged app の起動成功
-- `Wired` / `BLE` の両モードで blocking issue なし
+- `0.1.0-beta.2` は Windows 11 Pro 上で user 実施により packaging 成功
+- `0.1.0-beta.2` packaged app の起動成功
+- `0.1.0-beta.2` では `Wired` / `BLE` の両モードで blocking issue なし
+- `0.1.0-beta.3` は次の確認対象
 
 ## Follow-up Notes
 

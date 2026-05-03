@@ -24,7 +24,8 @@ As of 2026-05-03:
 - The desktop GUI can run from source, package with PyInstaller, connect over
   BLE or wired serial, record CSV files, show diagnostics, and run flow
   verification / characterization workflows.
-- Windows beta packaging has been smoke-tested through `0.1.0-beta.2`.
+- Windows beta packaging has been smoke-tested through `0.1.0-beta.2`; the
+  next distribution candidate is `0.1.0-beta.3`.
 
 ## Repository Map
 
@@ -76,8 +77,8 @@ pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec
 
 Packaging metadata is centralized in
 `gui_prototype/src/app_metadata.py`. The current beta target is
-`0.1.0-beta.2` with distribution directory
-`dist/zss_demokit_gui_win64_beta2/`.
+`0.1.0-beta.3` with distribution directory
+`dist/zss_demokit_gui_win64_beta3/`.
 
 ## Validation
 
@@ -128,7 +129,8 @@ Start with:
 - `docs/implementation_backlog_v1.md` for active backlog and milestone state.
 - `docs/validation_checklist_v1.md` for tested behavior.
 - `docs/project_organization_review_v1.md` for repository cleanup decisions.
-- `docs/release_notes_beta2.md` for the current beta package notes and known gaps.
+- `docs/distribution_plan_v1.md` for beta distribution policy and task order.
+- `docs/release_notes_beta3.md` for the current beta package notes and known gaps.
 
 Some documents intentionally preserve historical planning context. When a
 document disagrees with current code, prefer the implementation, the active

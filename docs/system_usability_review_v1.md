@@ -262,7 +262,7 @@ protocol fixture、GUI session probe、wired / BLE smoke、flow probe、timing p
 - `P2-LOG-001` は Warning / Event Log に severity filter、text search、visible copy、CSV export、visible / total count summary を追加し、debug / user report の再現性を上げる first slice を完了した
 - `P2-HIST-001` は Flow Verification history に mean / max error comparison と summary CSV export を追加し、Flow Characterization history に polarity / peak / rough gain comparison と summary CSV export を追加する first slice を完了した
 - `P2-MAINT-001` は GUI module split の first slice として、history dialogs、event log panel、generic UI helpers、plot interaction helpers、dialog helpers の分離を完了した
-- `P3-REL-001` は beta2 release notes と `tools/release_readiness_check.py` の first slice を完了した。installer / updater / signing は formal release 前の判断点として残す
+- `P3-REL-001` は beta3 release notes と `tools/release_readiness_check.py` の first slice を完了した。既存 `v0.1.0-beta.2` tag と衝突しないよう、次配布候補は `0.1.0-beta.3` として扱う。installer / updater / signing は formal release 前の判断点として残す
 - 次に進めるなら、release readiness branch の review / merge 後に、formal installer policy を決めるか、hardware completion 待ちだった `P0-HW` flow calibration / selector tuning へ戻るのが自然である
 
 ## 7. 今は深追いしないこと
