@@ -12,6 +12,8 @@ sys.path.insert(0, str(GUI_SRC))
 
 from flow_characterization import (  # noqa: E402
     FlowCharacterizationPersistence,
+    FLOW_ROUGH_SCALE_DEFAULT_TARGET_VOLUME_L,
+    analyze_flow_characterization_session,
     format_flow_characterization_analysis,
 )
 
@@ -21,6 +23,12 @@ def main() -> int:
         description="Summarize a saved flow characterization JSON session.",
     )
     parser.add_argument("session_json", type=Path, help="Path to flow_characterization_*.json")
+    parser.add_argument(
+        "--target-volume-l",
+        type=float,
+        default=FLOW_ROUGH_SCALE_DEFAULT_TARGET_VOLUME_L,
+        help="Assumed lung-capacity volume for rough scale estimation",
+    )
     args = parser.parse_args()
 
     persistence = FlowCharacterizationPersistence(args.session_json.parent.parent)
@@ -28,9 +36,10 @@ def main() -> int:
     if session is None:
         print(f"Could not load session: {args.session_json}", file=sys.stderr)
         return 2
-    if session.analysis is None:
-        print(f"Session has no analysis block: {args.session_json}", file=sys.stderr)
-        return 3
+    session.analysis = analyze_flow_characterization_session(
+        session,
+        rough_scale_target_volume_l=args.target_volume_l,
+    )
 
     print(f"Session: {session.session_id}")
     print(f"Status: {session.status}")

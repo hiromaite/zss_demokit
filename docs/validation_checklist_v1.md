@@ -122,6 +122,7 @@
 | `INT-VAL-020` | Pump noise isolation matrix | pump OFF / ON / separate supply / pneumatic isolation 条件で zirconia noise の相関を比較できる | `TODO` | `USER_TEST_REQUIRED`: pump 操作、電源条件変更、必要なら oscilloscope 観測が必要 |
 | `INT-VAL-021` | Bundle validation integration | A/B/C/D/E branches の user test 結果を統合判断に反映できる | `PASS` | B/C/D/E は user test OK。A は diagnostics OK だが 10 ms cadence failure を検出したため、merge 可能な診断成果と次期 firmware task に分離 |
 | `INT-VAL-022` | BLE raw SDP batch parity | BLE mode でも flow card と CSV raw columns に `SDP811` / `SDP810` が入る | `PASS` | `tools/ble_backend_smoke.py` と fake-live `tools/gui_ble_session_probe.py` で raw SDP が `TelemetryPoint` / CSV raw columns へ入ることを確認。2026-05-03 user実機GUI確認で flow card detail 表示と BLE CSV `10 ms` recording を確認 |
+| `INT-VAL-024` | Rough lung-capacity flow scale estimate | Flow Characterization session から仮定肺活量ベースの rough gain multiplier を算出できる | `TODO` | synthetic characterization smoke と `tools/flow_characterization_analyze.py --target-volume-l 4.5` で `1.000x` estimate を確認。実機の maximum exhale / inhale session で operator review する |
 
 ## 7. 実施ログ
 
