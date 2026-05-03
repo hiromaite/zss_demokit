@@ -328,6 +328,7 @@ class MainWindow(QMainWindow):
         self._viewbox_to_plot_key: dict[object, str] = {}
         self._secondary_y_views: dict[str, pg.ViewBox] = {}
         self._last_plot_data_key: tuple[object, ...] | None = None
+        self._plot_paused = False
         self._active_plot_key = self._plot_key_from_label(self.app_settings.plot.selected_plot)
         self._pending_mode_switch_target: str | None = None
         self._ble_scan_in_progress = False
@@ -606,6 +607,29 @@ class MainWindow(QMainWindow):
         self.reset_view_button = QPushButton("Reset View")
         self.reset_view_button.setObjectName("SecondaryButton")
         self.reset_view_button.clicked.connect(self._reset_plot_view)
+        self.plot_pause_button = QPushButton("Pause Plot")
+        self.plot_pause_button.setObjectName("ToggleButton")
+        self.plot_pause_button.setCheckable(True)
+        self.plot_pause_button.toggled.connect(self._on_plot_pause_toggled)
+
+        self.series_visibility_checks: dict[str, QCheckBox] = {}
+        series_row = QHBoxLayout()
+        series_row.setSpacing(8)
+        series_row.addWidget(QLabel("Series"))
+        for series_key, label in [
+            ("flow", "Flow"),
+            ("o2", "O2"),
+            ("heater", "Heater"),
+            ("zirconia", "Zirconia"),
+        ]:
+            checkbox = QCheckBox(label)
+            checkbox.setChecked(self._series_visible(series_key))
+            checkbox.toggled.connect(
+                lambda checked, key=series_key: self._on_series_visibility_toggled(key, checked)
+            )
+            self.series_visibility_checks[series_key] = checkbox
+            series_row.addWidget(checkbox)
+        series_row.addStretch(1)
 
         grid.addWidget(QLabel("Span"), 0, 0)
         grid.addWidget(self.time_span_combo, 0, 1)
@@ -613,7 +637,9 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.axis_mode_combo, 0, 3)
         grid.addWidget(self.auto_scale_check, 0, 4)
         grid.addWidget(self.reset_view_button, 0, 5)
+        grid.addWidget(self.plot_pause_button, 0, 6)
         toolbar_layout.addLayout(grid)
+        toolbar_layout.addLayout(series_row)
         layout.addWidget(toolbar)
 
         pg.setConfigOptions(antialias=False)
@@ -656,6 +682,7 @@ class MainWindow(QMainWindow):
         self._viewbox_to_plot_key[sensor_view_box] = "sensor"
         sensor_curve = sensor_plot.plot(pen=pg.mkPen(color="#315C8C", width=2.1), name="Flow")
         sensor_curve.setSkipFiniteCheck(True)
+        self.sensor_primary_legend_item = sensor_legend.items[-1]
 
         self.sensor_secondary_view = pg.ViewBox()
         self.sensor_secondary_view.setMouseEnabled(x=False, y=True)
@@ -708,6 +735,7 @@ class MainWindow(QMainWindow):
         self._viewbox_to_plot_key[heater_view_box] = "heater"
         heater_curve = heater_plot.plot(pen=pg.mkPen(color="#5E7D4B", width=2.1), name="Heater")
         heater_curve.setSkipFiniteCheck(True)
+        self.heater_primary_legend_item = heater_legend.items[-1]
 
         self.heater_secondary_view = pg.ViewBox()
         self.heater_secondary_view.setMouseEnabled(x=False, y=True)
@@ -728,6 +756,7 @@ class MainWindow(QMainWindow):
 
         self.plot_widgets["heater"].setXLink(self.plot_widgets["sensor"])
         self._apply_default_plot_ranges()
+        self._apply_series_visibility()
         QTimer.singleShot(0, self._apply_plot_splitter_sizes)
 
         log_frame = CollapsiblePanel(
@@ -797,6 +826,7 @@ class MainWindow(QMainWindow):
         self._active_plot_key = self._plot_key_from_label(self.app_settings.plot.selected_plot)
         self.plot_controller.x_follow_enabled = self.app_settings.plot.x_follow_enabled
         self.plot_controller.manual_y_ranges = dict(self.app_settings.plot.manual_y_ranges)
+        self._sync_series_visibility_checks()
         for plot_key, y_range in self.plot_controller.manual_y_ranges.items():
             if plot_key in self.plot_widgets:
                 plot = self.plot_widgets[plot_key]
@@ -807,7 +837,7 @@ class MainWindow(QMainWindow):
                 view.enableAutoRange(axis="y", enable=False)
                 view.setYRange(y_range[0], y_range[1], padding=0.02)
         self._update_axis_labels()
-        self._update_sensor_secondary_visibility()
+        self._apply_series_visibility()
 
     def _prime_mode_specific_lists(self) -> None:
         if self.mode == BLE_MODE:
@@ -1059,6 +1089,9 @@ class MainWindow(QMainWindow):
         self._sync_heater_toggle()
 
     def _refresh_plots(self) -> None:
+        if self._plot_paused:
+            return
+
         time_span = self.time_span_combo.currentText()
         render_data = self.plot_controller.render_data(time_span)
         x_values = render_data["x_values"]
@@ -1117,6 +1150,21 @@ class MainWindow(QMainWindow):
             self.plot_widgets["heater"].enableAutoRange(axis="y", enable=True)
             self.heater_secondary_view.enableAutoRange(axis="y", enable=True)
             self.plot_controller.manual_y_ranges.clear()
+        self._persist_current_settings()
+
+    def _on_plot_pause_toggled(self, checked: bool) -> None:
+        self._plot_paused = checked
+        self.plot_pause_button.setText("Resume Plot" if checked else "Pause Plot")
+        if checked:
+            self._append_log("info", "Plot view paused. Acquisition and recording continue.")
+            return
+        self._last_plot_data_key = None
+        self._refresh_plots()
+        self._append_log("info", "Plot view resumed.")
+
+    def _on_series_visibility_toggled(self, series_key: str, checked: bool) -> None:
+        self.app_settings.plot.series_visibility[series_key] = checked
+        self._apply_series_visibility()
         self._persist_current_settings()
 
     def _reset_plot_view(self) -> None:
@@ -1884,16 +1932,67 @@ class MainWindow(QMainWindow):
             o2_values.append(float("nan") if o2_percent is None else o2_percent)
         return o2_values
 
-    def _update_sensor_secondary_visibility(self) -> None:
-        visible = self.app_settings.o2.air_calibration_voltage_v is not None
-        plot = self.plot_widgets.get("sensor")
-        if plot is None:
+    def _series_visible(self, series_key: str) -> bool:
+        return bool(self.app_settings.plot.series_visibility.get(series_key, True))
+
+    def _sync_series_visibility_checks(self) -> None:
+        if not hasattr(self, "series_visibility_checks"):
             return
+        for series_key, checkbox in self.series_visibility_checks.items():
+            checkbox.blockSignals(True)
+            checkbox.setChecked(self._series_visible(series_key))
+            checkbox.blockSignals(False)
+
+    def _apply_series_visibility(self) -> None:
+        flow_visible = self._series_visible("flow")
+        heater_visible = self._series_visible("heater")
+        zirconia_visible = self._series_visible("zirconia")
+
+        if "sensor" in self.plot_curves:
+            self.plot_curves["sensor"].setVisible(flow_visible)
+            self._set_legend_entry_visible(
+                getattr(self, "sensor_primary_legend_item", None),
+                flow_visible,
+            )
+
+        if "heater" in self.plot_curves:
+            self.plot_curves["heater"].setVisible(heater_visible)
+            self._set_legend_entry_visible(
+                getattr(self, "heater_primary_legend_item", None),
+                heater_visible,
+            )
+
+        if hasattr(self, "heater_secondary_curve"):
+            self.heater_secondary_curve.setVisible(zirconia_visible)
+        heater_plot = self.plot_widgets.get("heater")
+        if heater_plot is not None:
+            if zirconia_visible:
+                heater_plot.getPlotItem().showAxis("right")
+            else:
+                heater_plot.getPlotItem().hideAxis("right")
+        self._set_legend_entry_visible(
+            getattr(self, "heater_secondary_legend_item", None),
+            zirconia_visible,
+        )
+        self._update_sensor_secondary_visibility()
+
+    def _update_sensor_secondary_visibility(self) -> None:
+        visible = (
+            self.app_settings.o2.air_calibration_voltage_v is not None
+            and self._series_visible("o2")
+        )
+        plot = self.plot_widgets.get("sensor")
+        if plot is None or not hasattr(self, "sensor_secondary_curve"):
+            return
+        self.sensor_secondary_curve.setVisible(visible)
         if visible:
             plot.getPlotItem().showAxis("right")
         else:
             plot.getPlotItem().hideAxis("right")
-        self._set_legend_entry_visible(self.sensor_secondary_legend_item, visible)
+        self._set_legend_entry_visible(
+            getattr(self, "sensor_secondary_legend_item", None),
+            visible,
+        )
 
     @staticmethod
     def _set_legend_entry_visible(entry: object, visible: bool) -> None:

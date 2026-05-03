@@ -27,6 +27,7 @@ class SettingsStore:
             auto_scale=self._to_bool(self._settings.value("plot/auto_scale", settings.plot.auto_scale)),
             selected_plot=selected_plot,
             x_follow_enabled=self._to_bool(self._settings.value("plot/x_follow_enabled", settings.plot.x_follow_enabled)),
+            series_visibility=self._load_series_visibility(settings.plot.series_visibility),
             manual_y_ranges=self._load_manual_ranges(),
         )
 
@@ -75,6 +76,10 @@ class SettingsStore:
         self._settings.setValue("plot/auto_scale", settings.plot.auto_scale)
         self._settings.setValue("plot/selected_plot", settings.plot.selected_plot)
         self._settings.setValue("plot/x_follow_enabled", settings.plot.x_follow_enabled)
+        self._settings.setValue(
+            "plot/series_visibility",
+            json.dumps(self._normalize_series_visibility(settings.plot.series_visibility)),
+        )
         self._settings.setValue("plot/manual_y_ranges", json.dumps(self._normalize_ranges(settings.plot.manual_y_ranges)))
         self._settings.setValue("logging/recording_directory", settings.logging.recording_directory)
         self._settings.setValue(
@@ -142,6 +147,31 @@ class SettingsStore:
                     except (TypeError, ValueError):
                         continue
         return manual_ranges
+
+    def _load_series_visibility(self, defaults: dict[str, bool]) -> dict[str, bool]:
+        visibility = dict(defaults)
+        raw = self._settings.value("plot/series_visibility", "")
+        if not raw:
+            return visibility
+        try:
+            parsed = json.loads(str(raw))
+        except json.JSONDecodeError:
+            return visibility
+        if not isinstance(parsed, dict):
+            return visibility
+        for key in visibility:
+            if key in parsed:
+                visibility[key] = self._to_bool(parsed[key])
+        return visibility
+
+    @staticmethod
+    def _normalize_series_visibility(visibility: dict[str, bool]) -> dict[str, bool]:
+        return {
+            "flow": bool(visibility.get("flow", True)),
+            "o2": bool(visibility.get("o2", True)),
+            "heater": bool(visibility.get("heater", True)),
+            "zirconia": bool(visibility.get("zirconia", True)),
+        }
 
     @staticmethod
     def _normalize_ranges(ranges: dict[str, tuple[float, float]]) -> dict[str, list[float]]:

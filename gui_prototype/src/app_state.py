@@ -13,6 +13,14 @@ class PlotPreferences:
     auto_scale: bool = True
     selected_plot: str = "Flow / O2"
     x_follow_enabled: bool = True
+    series_visibility: dict[str, bool] = field(
+        default_factory=lambda: {
+            "flow": True,
+            "o2": True,
+            "heater": True,
+            "zirconia": True,
+        }
+    )
     manual_y_ranges: dict[str, tuple[float, float]] = field(default_factory=dict)
 
 

@@ -1163,7 +1163,9 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 - firmware の pump / heater safety interlock は実装済みだが、今後の regression protection として明示的に追跡する
 - 2026-05-02 の追加課題群は `active_development_bundles_v1.md` に bundle / branch 単位で整理し、実機確認ができない期間でも進められる作業から分岐開発する
 - 2026-05-03 first slice として、`tools/command_processor_smoke.py` で pump / heater interlock を host-side regression に固定し、
-  Device Status に raw SDP / service voltage / BLE batch availability label を追加した。次は plot pause / series visibility へ進む候補が高い
+  Device Status に raw SDP / service voltage / BLE batch availability label を追加した
+- 2026-05-03 second slice として、Plot Toolbar に `Pause Plot` と series visibility toggle を追加し、
+  acquisition / recording を継続したまま operator が plot 表示だけを freeze / 整理できるようにした。次は Settings の Engineering / Tools 整理か Windows / low-resolution visual validation が候補
 
 直近 bundle:
 
