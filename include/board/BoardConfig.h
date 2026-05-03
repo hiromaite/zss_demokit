@@ -38,6 +38,9 @@ inline constexpr uint8_t kSdp810125PaI2cAddress = 0x25;
 inline constexpr uint8_t kSdp811500PaI2cAddress = 0x26;
 inline constexpr uint32_t kSdp810125PaProductPrefix = 0x03020B00u;
 inline constexpr uint32_t kSdp811500PaProductPrefix = 0x03020D00u;
+inline constexpr float kSdp810125PaPressurePolarity = 1.0f;
+// Current hardware mounts the high-range sensor opposite to the low-range sensor.
+inline constexpr float kSdp811500PaPressurePolarity = -1.0f;
 inline constexpr float kSdpSelectorReturnToLowPa = 100.0f;
 inline constexpr float kSdpSelectorSwitchToHighPa = 110.0f;
 inline constexpr uint8_t kInternalAdcOversamplingCount = 16;

@@ -19,6 +19,8 @@ from protocol_constants import (
 
 
 FLOW_CHARACTERIZATION_CRITERION_VERSION = "flow_characterization_v1_poc"
+FLOW_ROUGH_SCALE_POLICY_ID = "rough_lung_capacity_order_v1"
+FLOW_ROUGH_SCALE_DEFAULT_TARGET_VOLUME_L = 4.5
 SDP810_NOMINAL_RANGE_PA = 125.0
 SDP810_REVIEW_HANDOFF_LOWER_PA = 90.0
 SDP810_REVIEW_HANDOFF_UPPER_PA = 110.0
@@ -220,6 +222,36 @@ class FlowCharacterizationAttemptSummary:
 
 
 @dataclass
+class FlowRoughScaleEstimate:
+    policy_id: str
+    target_volume_l: float
+    max_exhale_measured_volume_l: float | None
+    max_inhale_measured_volume_l: float | None
+    exhale_gain_multiplier: float | None
+    inhale_gain_multiplier: float | None
+    recommended_gain_multiplier: float | None
+    confidence: str
+    source_step_ids: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+
+    @classmethod
+    def from_dict(cls, payload: dict[str, Any]) -> "FlowRoughScaleEstimate":
+        target_volume_l = _optional_float(payload.get("target_volume_l"))
+        return cls(
+            policy_id=str(payload.get("policy_id", FLOW_ROUGH_SCALE_POLICY_ID)),
+            target_volume_l=target_volume_l or FLOW_ROUGH_SCALE_DEFAULT_TARGET_VOLUME_L,
+            max_exhale_measured_volume_l=_optional_float(payload.get("max_exhale_measured_volume_l")),
+            max_inhale_measured_volume_l=_optional_float(payload.get("max_inhale_measured_volume_l")),
+            exhale_gain_multiplier=_optional_float(payload.get("exhale_gain_multiplier")),
+            inhale_gain_multiplier=_optional_float(payload.get("inhale_gain_multiplier")),
+            recommended_gain_multiplier=_optional_float(payload.get("recommended_gain_multiplier")),
+            confidence=str(payload.get("confidence", "unavailable")),
+            source_step_ids=[str(value) for value in payload.get("source_step_ids", [])],
+            notes=[str(value) for value in payload.get("notes", [])],
+        )
+
+
+@dataclass
 class FlowCharacterizationAttempt:
     step_id: str
     step_title: str
@@ -273,6 +305,7 @@ class FlowCharacterizationAnalysis:
     high_range_peak_abs_pa: float | None
     review_handoff_lower_pa: float | None
     review_handoff_upper_pa: float | None
+    rough_scale_estimate: FlowRoughScaleEstimate | None = None
     notes: list[str] = field(default_factory=list)
 
     @classmethod
@@ -287,6 +320,11 @@ class FlowCharacterizationAnalysis:
             high_range_peak_abs_pa=_optional_float(payload.get("high_range_peak_abs_pa")),
             review_handoff_lower_pa=_optional_float(payload.get("review_handoff_lower_pa")),
             review_handoff_upper_pa=_optional_float(payload.get("review_handoff_upper_pa")),
+            rough_scale_estimate=(
+                FlowRoughScaleEstimate.from_dict(payload["rough_scale_estimate"])
+                if isinstance(payload.get("rough_scale_estimate"), dict)
+                else None
+            ),
             notes=[str(value) for value in payload.get("notes", [])],
         )
 
@@ -882,6 +920,8 @@ def summarize_attempt_samples(samples: list[FlowCharacterizationSample]) -> Flow
 
 def analyze_flow_characterization_session(
     session: FlowCharacterizationSession,
+    *,
+    rough_scale_target_volume_l: float = FLOW_ROUGH_SCALE_DEFAULT_TARGET_VOLUME_L,
 ) -> FlowCharacterizationAnalysis:
     latest_attempts: dict[str, FlowCharacterizationAttempt] = {}
     for attempt in session.attempts:
@@ -941,6 +981,18 @@ def analyze_flow_characterization_session(
     if low_high_sign_consistency != "consistent":
         notes.append("Low/high range sign consistency is not fully established from this run.")
 
+    rough_scale_estimate = estimate_rough_flow_scale(
+        latest_attempts,
+        target_volume_l=rough_scale_target_volume_l,
+    )
+    if rough_scale_estimate.recommended_gain_multiplier is None:
+        notes.append("Rough lung-capacity scale estimate is unavailable from this run.")
+    else:
+        notes.append(
+            "Rough lung-capacity scale estimate is for development axis-order alignment only; "
+            "it is not a formal calibration coefficient."
+        )
+
     return FlowCharacterizationAnalysis(
         completed_capture_steps=len(completed_step_ids),
         missing_step_ids=missing_step_ids,
@@ -951,6 +1003,72 @@ def analyze_flow_characterization_session(
         high_range_peak_abs_pa=high_range_peak_abs_pa,
         review_handoff_lower_pa=SDP810_REVIEW_HANDOFF_LOWER_PA,
         review_handoff_upper_pa=SDP810_REVIEW_HANDOFF_UPPER_PA,
+        rough_scale_estimate=rough_scale_estimate,
+        notes=notes,
+    )
+
+
+def estimate_rough_flow_scale(
+    latest_attempts: dict[str, FlowCharacterizationAttempt],
+    *,
+    target_volume_l: float = FLOW_ROUGH_SCALE_DEFAULT_TARGET_VOLUME_L,
+) -> FlowRoughScaleEstimate:
+    notes: list[str] = []
+    source_step_ids: list[str] = []
+    target_volume_l = max(0.1, float(target_volume_l))
+
+    exhale_attempt = latest_attempts.get("max_exhale")
+    inhale_attempt = latest_attempts.get("max_inhale")
+    exhale_volume_l = _integrated_attempt_volume_l(exhale_attempt)
+    inhale_volume_l = _integrated_attempt_volume_l(inhale_attempt)
+
+    exhale_multiplier = _gain_multiplier_for_volume(exhale_volume_l, target_volume_l)
+    inhale_multiplier = _gain_multiplier_for_volume(inhale_volume_l, target_volume_l)
+    multipliers = [
+        value
+        for value in (exhale_multiplier, inhale_multiplier)
+        if value is not None
+    ]
+    if exhale_multiplier is not None:
+        source_step_ids.append("max_exhale")
+    else:
+        notes.append("Maximum exhale did not contain enough finite flow samples for rough scaling.")
+    if inhale_multiplier is not None:
+        source_step_ids.append("max_inhale")
+    else:
+        notes.append("Maximum inhale did not contain enough finite flow samples for rough scaling.")
+
+    recommended = sum(multipliers) / len(multipliers) if multipliers else None
+    confidence = "unavailable"
+    if len(multipliers) == 1:
+        confidence = "single_direction"
+        notes.append("Only one direction contributed; repeat with both maximum exhale and inhale when possible.")
+    elif len(multipliers) >= 2 and recommended is not None:
+        ratio = max(multipliers) / max(min(multipliers), 1e-9)
+        if ratio <= 1.5:
+            confidence = "directionally_consistent"
+        elif ratio <= 2.5:
+            confidence = "review"
+            notes.append("Exhale/inhale rough scale estimates differ; inspect maneuver quality and polarity.")
+        else:
+            confidence = "low"
+            notes.append("Exhale/inhale rough scale estimates diverge strongly; treat the coefficient as unreliable.")
+
+    if recommended is not None:
+        notes.append(
+            "Apply this as a temporary multiplier to the dummy flow gain only after operator review."
+        )
+
+    return FlowRoughScaleEstimate(
+        policy_id=FLOW_ROUGH_SCALE_POLICY_ID,
+        target_volume_l=target_volume_l,
+        max_exhale_measured_volume_l=exhale_volume_l,
+        max_inhale_measured_volume_l=inhale_volume_l,
+        exhale_gain_multiplier=exhale_multiplier,
+        inhale_gain_multiplier=inhale_multiplier,
+        recommended_gain_multiplier=recommended,
+        confidence=confidence,
+        source_step_ids=source_step_ids,
         notes=notes,
     )
 
@@ -975,6 +1093,23 @@ def format_flow_characterization_analysis(analysis: FlowCharacterizationAnalysis
         )
     if analysis.missing_step_ids:
         lines.append(f"Missing steps: {', '.join(analysis.missing_step_ids)}")
+    if analysis.rough_scale_estimate is not None:
+        estimate = analysis.rough_scale_estimate
+        lines.append(
+            "Rough scale target: "
+            f"{estimate.target_volume_l:0.2f} L using {estimate.policy_id}"
+        )
+        lines.append(
+            "Rough measured volume: "
+            f"max exhale={_format_optional_l(estimate.max_exhale_measured_volume_l)}, "
+            f"max inhale={_format_optional_l(estimate.max_inhale_measured_volume_l)}"
+        )
+        lines.append(
+            "Rough gain multiplier: "
+            f"{_format_optional_multiplier(estimate.recommended_gain_multiplier)} "
+            f"({estimate.confidence})"
+        )
+        lines.extend(estimate.notes)
     lines.extend(analysis.notes)
     return lines
 
@@ -1063,6 +1198,40 @@ def _duration_between_iso(start_iso: str, end_iso: str) -> float:
     return max(0.0, (end - start).total_seconds())
 
 
+def _integrated_attempt_volume_l(attempt: FlowCharacterizationAttempt | None) -> float | None:
+    if attempt is None or len(attempt.samples) < 2:
+        return None
+    samples = sorted(attempt.samples, key=lambda sample: sample.elapsed_ms)
+    volume_l = 0.0
+    previous = samples[0]
+    for current in samples[1:]:
+        if not (
+            math.isfinite(previous.derived_flow_lpm)
+            and math.isfinite(current.derived_flow_lpm)
+        ):
+            previous = current
+            continue
+        delta_ms = max(0, current.elapsed_ms - previous.elapsed_ms)
+        if delta_ms == 0:
+            previous = current
+            continue
+        mean_flow_lpm = (previous.derived_flow_lpm + current.derived_flow_lpm) / 2.0
+        volume_l += mean_flow_lpm * (delta_ms / 60000.0)
+        previous = current
+    if abs(volume_l) < 1e-9:
+        return None
+    return volume_l
+
+
+def _gain_multiplier_for_volume(measured_volume_l: float | None, target_volume_l: float) -> float | None:
+    if measured_volume_l is None or not math.isfinite(measured_volume_l):
+        return None
+    measured_abs_volume_l = abs(measured_volume_l)
+    if measured_abs_volume_l < 1e-6:
+        return None
+    return target_volume_l / measured_abs_volume_l
+
+
 def _finite_values(values: Any) -> list[float]:
     finite: list[float] = []
     for value in values:
@@ -1108,3 +1277,15 @@ def _format_optional_pa(value: float | None) -> str:
     if value is None:
         return "--"
     return f"{value:0.3f} Pa"
+
+
+def _format_optional_l(value: float | None) -> str:
+    if value is None:
+        return "--"
+    return f"{value:+0.3f} L"
+
+
+def _format_optional_multiplier(value: float | None) -> str:
+    if value is None:
+        return "--"
+    return f"{value:0.3f}x"
