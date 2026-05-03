@@ -1118,7 +1118,9 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
   センサー極性と `SDP810` abs pressure の handoff review band (`90-110 Pa`) を判断する入力データを作る
 - `Flow Characterization (PoC)` は `Zero Baseline`, `Small Exhale`, `Small Inhale`, `Maximum Exhale`, `Maximum Inhale` を手動 capture し、
   JSON metadata と sample-level CSV を保存する方針にする
-- next step は実機で characterization wizard を wired 優先で走らせ、得られた raw response から bidirectional calibration と selector tuning へ移行することである
+- 2026-05-03 の実機 characterization で current hardware の `SDP811` high-range は `SDP810` low-range と逆極性であることを確認したため、board config に pressure polarity 係数を置き、firmware 側で high-range pressure を canonical telemetry へ格納する時点で反転する
+- 補正後の実機 run では small flow は `SDP810` selected、maximum flow は `SDP810` abs 約 `111 Pa` で `SDP811` へ切替、約 `95-99 Pa` で `SDP810` へ復帰し、`Low/high sign consistency: consistent` を確認した
+- next step は得られた raw response と rough scale estimate をもとに、formal flow calibration と selector threshold tuning の別フェーズへ移行することである
 
 完了条件:
 

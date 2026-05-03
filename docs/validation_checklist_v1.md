@@ -114,7 +114,7 @@
 | `INT-VAL-013` | GUI wired flow integration | GUI が selected differential pressure を含む wired session を継続処理できる | `PASS` | `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem3101 --duration-s 8 --toggle-interval-s 2.5` で `967` telemetry, warning/error `0`, CSV `799` rows, `gui_wired_session_probe_ok` を確認 |
 | `INT-VAL-014` | Wired flow probe baseline | wired transport 上で selected differential pressure と derived flow rate を集計できる | `PASS` | `tools/wired_flow_probe.py --port /dev/cu.usbmodem4101 --duration-s 4` で `telemetry_field_bits=63`, advertised differential pressure, finite `selected / SDP810 / SDP811` no-flow baseline を確認 |
 | `INT-VAL-015` | BLE batch GUI decode smoke | BLE batch payload を GUI が通常 telemetry stream へ展開できる | `PASS` | fake-live `tools/gui_ble_session_probe.py --use-fake-live --duration-s 6 --recording-duration-s 2 --reconnect-at-s 3 --min-observed-duration-s 3` で `Telemetry samples observed=524`, sequence gap `0`, CSV non-unit gap `0`, `gui_ble_session_probe_ok` を確認。2026-05-03 user実機確認で BLE mode でも plot / CSV が `10 ms` sample列として復元されることを確認 |
-| `INT-VAL-023` | Wired flow operator sweep | low / medium / high flow で transport-level flow probe が handoff を観測できる | `TODO` | `tools/wired_flow_probe.py` を用いた user-operated flow sweep を次回実施 |
+| `INT-VAL-023` | Wired flow operator sweep | low / medium / high flow で transport-level flow probe が handoff を観測できる | `PASS` | 2026-05-03 Flow Characterization 実機 run で small flow は `SDP810` selected、maximum flow は `SDP810` abs 約 `111 Pa` で `SDP811` へ切替、約 `95-99 Pa` で `SDP810` へ復帰することを確認 |
 | `INT-VAL-016` | Service visibility wired integration | wired 実機で service visibility wiring 後も command / recording / GUI session が退行しない | `PASS` | `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` と `tools/gui_wired_session_probe.py --port /dev/cu.usbmodem4101 --duration-s 6 --toggle-interval-s 2.5` を実施し、`wired_serial_smoke_ok` と `gui_wired_session_probe_ok` を確認 |
 | `INT-VAL-017` | Flow card raw SDP visibility | wired differential pressure raw values が flow metric card に表示される | `PASS` | offscreen live connection で `flow_detail=SDP811: -0.05 Pa / SDP810: -0.05 Pa`, `detail_visible=True` を確認 |
 | `INT-VAL-018` | Flow characterization PoC smoke | raw SDP810 / SDP811 capture wizard が設定画面から生成でき、JSON/CSV保存と解析summaryが動く | `PASS` | `flow_characterization_dialog_smoke_ok`、controller fake telemetry capture、`tools/flow_characterization_analyze.py` smoke を確認 |
@@ -122,7 +122,7 @@
 | `INT-VAL-020` | Pump noise isolation matrix | pump OFF / ON / separate supply / pneumatic isolation 条件で zirconia noise の相関を比較できる | `TODO` | `USER_TEST_REQUIRED`: pump 操作、電源条件変更、必要なら oscilloscope 観測が必要 |
 | `INT-VAL-021` | Bundle validation integration | A/B/C/D/E branches の user test 結果を統合判断に反映できる | `PASS` | B/C/D/E は user test OK。A は diagnostics OK だが 10 ms cadence failure を検出したため、merge 可能な診断成果と次期 firmware task に分離 |
 | `INT-VAL-022` | BLE raw SDP batch parity | BLE mode でも flow card と CSV raw columns に `SDP811` / `SDP810` が入る | `PASS` | `tools/ble_backend_smoke.py` と fake-live `tools/gui_ble_session_probe.py` で raw SDP が `TelemetryPoint` / CSV raw columns へ入ることを確認。2026-05-03 user実機GUI確認で flow card detail 表示と BLE CSV `10 ms` recording を確認 |
-| `INT-VAL-024` | Rough lung-capacity flow scale estimate | Flow Characterization session から仮定肺活量ベースの rough gain multiplier を算出できる | `TODO` | synthetic characterization smoke と `tools/flow_characterization_analyze.py --target-volume-l 4.5` で `1.000x` estimate を確認。実機の maximum exhale / inhale session で operator review する |
+| `INT-VAL-024` | Rough lung-capacity flow scale estimate | Flow Characterization session から仮定肺活量ベースの rough gain multiplier を算出できる | `PASS` | synthetic characterization smoke で `1.000x`、2026-05-03 実機 session `flow_characterization_20260503_132640` で `max exhale=+0.156 L`, `max inhale=-0.158 L`, `Rough gain multiplier: 28.651x (directionally_consistent)` を確認 |
 
 ## 7. 実施ログ
 
@@ -318,6 +318,10 @@
 - final timing probe は sequence gap `0`, device interval `mean=10.000 ms`, `min=9.995 ms`, `p95=10.001 ms`, `max=10.004 ms`, jitter `max_abs=5 us`, scheduler lateness `max=0.006 ms` を確認した
 - 同 final probe で full ADS + dual SDP acquisition は `mean=5.464 ms`, ADC total `mean=5.052 ms`, differential pressure total `mean=0.392 ms`, slow acquisition `0` だった
 - `tools/wired_serial_smoke.py --port /dev/cu.usbmodem4101 --baudrate 115200` と `tools/wired_flow_probe.py --port /dev/cu.usbmodem4101 --duration-s 4` が通過した
+- Flow Characterization 実機 session `flow_characterization_20260503_130827` で `SDP810` と `SDP811` の極性が逆であることを確認した。`Maximum Exhale` では `SDP810` positive / `SDP811` negative、`Maximum Inhale` では `SDP810` negative / `SDP811` positive となり、`Low/high sign consistency: mixed:0/2` だった
+- current hardware の配管制約に合わせ、firmware の board config に SDP pressure polarity 係数を追加し、`SDP811` high-range pressure を canonical telemetry へ格納する時点で反転するよう補正した
+- 補正後 firmware を `/dev/cu.usbmodem4101` へ upload し、`tools/wired_flow_probe.py --port /dev/cu.usbmodem4101 --duration-s 4` で capabilities `telemetry_field_bits=123`, sequence gap `0`, finite `selected / SDP810 / SDP811` no-flow baseline を確認した
+- 補正後の Flow Characterization 実機 session `flow_characterization_20260503_132640` で `Polarity hint: exhalation_positive_inhalation_negative`, `Low/high sign consistency: consistent`, `SDP810` handoff 到達、rough measured volume `max exhale=+0.156 L`, `max inhale=-0.158 L`, `Rough gain multiplier: 28.651x (directionally_consistent)` を確認した
 
 ## 8. 更新ルール
 

@@ -87,13 +87,15 @@ DifferentialPressureMeasurements DifferentialPressureFrontend::readMeasurements(
 
     if (measurements.low_range_valid) {
         measurements.low_range_differential_pressure_pa =
-            low_range_reading.differential_pressure_pa;
+            low_range_reading.differential_pressure_pa *
+            zss::board::kSdp810125PaPressurePolarity;
         measurements.low_range_temperature_c = low_range_reading.temperature_c;
     }
 
     if (measurements.high_range_valid) {
         measurements.high_range_differential_pressure_pa =
-            high_range_reading.differential_pressure_pa;
+            high_range_reading.differential_pressure_pa *
+            zss::board::kSdp811500PaPressurePolarity;
         measurements.high_range_temperature_c = high_range_reading.temperature_c;
     }
 
@@ -146,7 +148,8 @@ DifferentialPressureMeasurements DifferentialPressureFrontend::readScheduledMeas
         latest_measurements_.low_range_valid = low_ok && low_range_reading.valid;
         if (latest_measurements_.low_range_valid) {
             latest_measurements_.low_range_differential_pressure_pa =
-                low_range_reading.differential_pressure_pa;
+                low_range_reading.differential_pressure_pa *
+                zss::board::kSdp810125PaPressurePolarity;
             latest_measurements_.low_range_temperature_c = low_range_reading.temperature_c;
             updateSelectionPreference(low_range_reading);
         } else {
@@ -168,7 +171,8 @@ DifferentialPressureMeasurements DifferentialPressureFrontend::readScheduledMeas
         latest_measurements_.high_range_valid = high_ok && high_range_reading.valid;
         if (latest_measurements_.high_range_valid) {
             latest_measurements_.high_range_differential_pressure_pa =
-                high_range_reading.differential_pressure_pa;
+                high_range_reading.differential_pressure_pa *
+                zss::board::kSdp811500PaPressurePolarity;
             latest_measurements_.high_range_temperature_c = high_range_reading.temperature_c;
         } else {
             high_range_available_ = false;

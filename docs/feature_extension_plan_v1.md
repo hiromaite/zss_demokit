@@ -539,6 +539,8 @@ else:
 - 保存時には極性 hint、low/high sign consistency、`SDP810` の review handoff band (`90-110 Pa`) に対する到達状況を summary 化し、
   センサー極性確認と high-range 切替閾値検討の入力データにする
 - offscreen smoke により controller-only capture path、settings entry、dialog skeleton、latest details dialog の起動を確認した
+- 2026-05-03 の実機 characterization で current hardware は `SDP811` high-range が `SDP810` low-range と逆極性であることを確認したため、firmware 側で high-range pressure を反転して canonical telemetry の符号系を揃える方針にした
+- 補正後の実機 run では small flow は `SDP810` selected、maximum flow は `SDP810` abs 約 `111 Pa` で `SDP811` へ切替、約 `95-99 Pa` で `SDP810` へ復帰し、low/high sign consistency が成立した
 
 ## 9. まとめて実装すべき単位
 
