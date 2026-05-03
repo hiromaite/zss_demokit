@@ -1170,6 +1170,8 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
   `Device` は connection summary / O2 calibration に寄せ、Flow Verification / Characterization / on-demand diagnostics は tools page から起動する
 - 2026-05-03 fourth slice として、`tools/gui_layout_smoke.py` を追加し、tall desktop / default / Windows common / compact HD / narrow lab sizes で
   horizontal scroll、metric cards row、metric / toolbar compact height、plot splitter minimum height / tall-window growth / resize response を offscreen regression として固定した
+- 2026-05-03 fifth slice として、Recording panel に latest CSV summary、`Open Folder`、`Copy CSV Path` を追加した。
+  recording stop 後に rows / duration / sequence range / gap / size をすぐ確認でき、CSV の保存先へ短い導線で移動できる
 
 直近 bundle:
 

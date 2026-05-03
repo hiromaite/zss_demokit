@@ -182,6 +182,8 @@
 - current file path
 - session id
 - recording elapsed time
+- latest finalized CSV summary with rows, duration, sequence range, gap count, and file size
+- post-run actions: open recording folder and copy latest CSV path
 - partial recovery notification at startup
 
 実装方針:
@@ -190,6 +192,7 @@
 - partial file は session 開始時に作成し、正常終了時に rename する
 - recording directory は settings で変更可能とし、次回起動時に restore する
 - partial recovery detection は recording directory を見て startup 時に実施する
+- recording stop 後は operator がファイル探索に迷わないよう、Recording panel 上で latest summary と保存先導線を表示する
 - `derived_metric_policy` を metadata に残す
 - 長い file path は panel 幅を変えずに省略表示できるようにする
 

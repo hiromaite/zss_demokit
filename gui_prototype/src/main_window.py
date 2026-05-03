@@ -6,9 +6,10 @@ from pathlib import Path
 from typing import Callable
 
 import pyqtgraph as pg
-from PySide6.QtCore import QTimer, Qt
-from PySide6.QtGui import QColor
+from PySide6.QtCore import QTimer, Qt, QUrl
+from PySide6.QtGui import QColor, QDesktopServices
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QDialog,
@@ -65,6 +66,7 @@ from protocol_constants import (
     infer_differential_pressure_selected_source,
     transport_type_for_mode,
 )
+from recording_io import RecordingCsvSummary, summarize_recording_csv
 from settings_store import SettingsStore
 from theme import COLORS
 
@@ -354,6 +356,7 @@ class MainWindow(QMainWindow):
         self._latest_feature_bits = 0
         self._ble_batch_supported = False
         self._ble_legacy_cadence_warning_emitted = False
+        self._latest_recording_summary: RecordingCsvSummary | None = None
 
         self._build_ui()
         self._bind_controllers()
@@ -578,6 +581,26 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.recording_file_value)
         layout.addWidget(QLabel("Elapsed"))
         layout.addWidget(self.elapsed_value)
+
+        self.latest_recording_summary_value = QLabel("No completed session yet.")
+        self.latest_recording_summary_value.setObjectName("SectionHint")
+        self.latest_recording_summary_value.setWordWrap(True)
+        layout.addWidget(QLabel("Latest Summary"))
+        layout.addWidget(self.latest_recording_summary_value)
+
+        review_row = QHBoxLayout()
+        review_row.setSpacing(8)
+        self.open_recording_folder_button = QPushButton("Open Folder")
+        self.open_recording_folder_button.setObjectName("SecondaryButton")
+        self.open_recording_folder_button.clicked.connect(self._open_latest_recording_folder)
+        self.copy_recording_path_button = QPushButton("Copy CSV Path")
+        self.copy_recording_path_button.setObjectName("SecondaryButton")
+        self.copy_recording_path_button.clicked.connect(self._copy_latest_recording_path)
+        review_row.addWidget(self.open_recording_folder_button)
+        review_row.addWidget(self.copy_recording_path_button)
+        review_row.addStretch(1)
+        layout.addLayout(review_row)
+        self._sync_latest_recording_actions()
         return frame
 
     def _build_right_column(self) -> QWidget:
@@ -1254,6 +1277,7 @@ class MainWindow(QMainWindow):
         self.record_toggle_button.setText("Stop Recording" if checked else "Start Recording")
         self.record_toggle_button.blockSignals(False)
         self._sync_recording_emphasis(checked)
+        self._sync_latest_recording_actions()
 
     def _sync_recording_emphasis(self, active: bool) -> None:
         self.recording_panel_frame.setProperty("recordingActive", active)
@@ -1262,13 +1286,28 @@ class MainWindow(QMainWindow):
         self.recording_state_detail.setText(
             "Session is being written to a partial CSV file."
             if active
-            else "No active session."
+            else (
+                "Last session finalized. CSV is ready for review."
+                if self._latest_recording_summary is not None
+                else "No active session."
+            )
         )
         for widget in (self.recording_panel_frame, self.recording_state_badge):
             style = widget.style()
             style.unpolish(widget)
             style.polish(widget)
             widget.update()
+
+    def _sync_latest_recording_actions(self) -> None:
+        if not hasattr(self, "open_recording_folder_button"):
+            return
+        has_completed_recording = (
+            self._latest_recording_summary is not None
+            and self._latest_recording_summary.path.exists()
+            and not self.recording_controller.is_recording
+        )
+        self.open_recording_folder_button.setEnabled(has_completed_recording)
+        self.copy_recording_path_button.setEnabled(has_completed_recording)
 
     def _recording_source_endpoint(self) -> str:
         if self.mode == BLE_MODE:
@@ -1323,6 +1362,8 @@ class MainWindow(QMainWindow):
         self.session_id_value.setText(self.recording_controller.session_id)
         self.recording_file_value.setText(str(self.recording_controller.partial_path))
         self.elapsed_value.setText("00:00")
+        self.latest_recording_summary_value.setText("Recording in progress. Summary will appear after stop.")
+        self._latest_recording_summary = None
         self._sync_recording_controls()
         self._append_log("info", f"Recording started: {self.recording_controller.session_id}")
 
@@ -1343,7 +1384,47 @@ class MainWindow(QMainWindow):
         self._sync_recording_controls()
         if final_path is not None:
             self.recording_file_value.setText(str(final_path))
+            self._update_latest_recording_summary(final_path)
+        else:
+            self.latest_recording_summary_value.setText("No completed session is available from the last run.")
+            self._latest_recording_summary = None
+            self._sync_latest_recording_actions()
         self._append_log("info", "Recording stopped.")
+
+    def _update_latest_recording_summary(self, final_path: Path) -> None:
+        try:
+            summary = summarize_recording_csv(final_path)
+        except Exception as exc:
+            self._latest_recording_summary = None
+            self.latest_recording_summary_value.setText("Latest session finalized, but summary could not be read.")
+            self._sync_latest_recording_actions()
+            self._append_log("warn", f"Recording summary could not be read: {exc}")
+            return
+
+        self._latest_recording_summary = summary
+        self.latest_recording_summary_value.setText(summary.short_text())
+        self.recording_state_detail.setText("Last session finalized. CSV is ready for review.")
+        self._sync_latest_recording_actions()
+        self._append_log("info", f"Recording summary: {summary.short_text()}")
+
+    def _open_latest_recording_folder(self) -> None:
+        if self._latest_recording_summary is None:
+            self._append_log("warn", "No completed recording is available to open.")
+            return
+        folder = self._latest_recording_summary.path.parent
+        if not folder.exists():
+            self._append_log("warn", f"Recording folder does not exist: {folder}")
+            self._sync_latest_recording_actions()
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder))):
+            self._append_log("warn", f"Recording folder could not be opened: {folder}")
+
+    def _copy_latest_recording_path(self) -> None:
+        if self._latest_recording_summary is None:
+            self._append_log("warn", "No completed recording path is available to copy.")
+            return
+        QApplication.clipboard().setText(str(self._latest_recording_summary.path))
+        self._append_log("info", "Latest recording CSV path copied to clipboard.")
 
     def _toggle_pump_from_button(self, checked: bool) -> None:
         if not self._has_expected_connected_device():

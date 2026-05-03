@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -39,6 +40,36 @@ CSV_COLUMNS = [
 class RecordingPaths:
     recording_path: Path
     partial_path: Path
+
+
+@dataclass(frozen=True)
+class RecordingCsvSummary:
+    path: Path
+    row_count: int
+    sequence_first: int | None
+    sequence_last: int | None
+    sequence_gap_total: int
+    device_duration_s: float | None
+    host_duration_s: float | None
+    size_bytes: int
+
+    @property
+    def duration_s(self) -> float | None:
+        return self.device_duration_s if self.device_duration_s is not None else self.host_duration_s
+
+    def short_text(self) -> str:
+        duration = "--" if self.duration_s is None else f"{self.duration_s:0.2f} s"
+        size_kib = self.size_bytes / 1024.0
+        sequence_range = (
+            "--"
+            if self.sequence_first is None or self.sequence_last is None
+            else f"{self.sequence_first}->{self.sequence_last}"
+        )
+        return (
+            f"Rows: {self.row_count} | Duration: {duration} | "
+            f"Seq: {sequence_range} | Gaps: {self.sequence_gap_total} | "
+            f"Size: {size_kib:0.1f} KiB"
+        )
 
 
 def recording_directory() -> Path:
@@ -112,3 +143,78 @@ def summarize_partial_recordings(partials: Sequence[Path], limit: int = 5) -> st
     if len(partials) > limit:
         preview += f"\n- ... and {len(partials) - limit} more"
     return preview
+
+
+def summarize_recording_csv(path: Path) -> RecordingCsvSummary:
+    row_count = 0
+    sequence_first: int | None = None
+    sequence_last: int | None = None
+    sequence_gap_total = 0
+    first_host_received_at: datetime | None = None
+    last_host_received_at: datetime | None = None
+    latest_device_elapsed_s: float | None = None
+
+    with path.open("r", newline="", encoding="utf-8") as file_obj:
+        data_lines = (line for line in file_obj if line.strip() and not line.startswith("#"))
+        reader = csv.DictReader(data_lines)
+        for row in reader:
+            row_count += 1
+            sequence = _to_optional_int(row.get("sequence", ""))
+            if sequence is not None:
+                if sequence_first is None:
+                    sequence_first = sequence
+                sequence_last = sequence
+
+            sequence_gap_total += max(0, _to_optional_int(row.get("sequence_gap", "")) or 0)
+
+            device_elapsed_s = _to_optional_float(row.get("device_elapsed_s", ""))
+            if device_elapsed_s is not None:
+                latest_device_elapsed_s = device_elapsed_s
+
+            host_received_at = _to_optional_datetime(row.get("host_received_at_iso", ""))
+            if host_received_at is not None:
+                if first_host_received_at is None:
+                    first_host_received_at = host_received_at
+                last_host_received_at = host_received_at
+
+    host_duration_s = None
+    if first_host_received_at is not None and last_host_received_at is not None:
+        host_duration_s = max(0.0, (last_host_received_at - first_host_received_at).total_seconds())
+
+    return RecordingCsvSummary(
+        path=path,
+        row_count=row_count,
+        sequence_first=sequence_first,
+        sequence_last=sequence_last,
+        sequence_gap_total=sequence_gap_total,
+        device_duration_s=latest_device_elapsed_s,
+        host_duration_s=host_duration_s,
+        size_bytes=path.stat().st_size if path.exists() else 0,
+    )
+
+
+def _to_optional_int(value: object) -> int | None:
+    if value in {"", None}:
+        return None
+    try:
+        return int(str(value))
+    except ValueError:
+        return None
+
+
+def _to_optional_float(value: object) -> float | None:
+    if value in {"", None}:
+        return None
+    try:
+        return float(str(value))
+    except ValueError:
+        return None
+
+
+def _to_optional_datetime(value: object) -> datetime | None:
+    if value in {"", None}:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
