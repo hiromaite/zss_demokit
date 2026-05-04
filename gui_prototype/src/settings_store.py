@@ -1,18 +1,31 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from PySide6.QtCore import QSettings
 
-from app_state import AppSettings, LoggingPreferences, O2CalibrationPreferences, PlotPreferences, WindowPreferences
+from app_state import (
+    AppSettings,
+    LoggingPreferences,
+    O2CalibrationPreferences,
+    O2OutputFilterPreferences,
+    PlotPreferences,
+    WindowPreferences,
+)
+from o2_filter import normalize_o2_filter_preferences
 from protocol_constants import BLE_MODE
 from recording_io import recording_directory
 
 
 class SettingsStore:
     def __init__(self) -> None:
-        self._settings = QSettings("zss-demokit", "gui-prototype")
+        settings_file = os.environ.get("ZSS_DEMOKIT_SETTINGS_FILE", "").strip()
+        if settings_file:
+            self._settings = QSettings(settings_file, QSettings.IniFormat)
+        else:
+            self._settings = QSettings("zss-demokit", "gui-prototype")
 
     def load(self) -> AppSettings:
         settings = AppSettings()
@@ -41,20 +54,73 @@ class SettingsStore:
             ),
         )
 
+        zero_reference_voltage_v = self._to_float(
+            self._settings.value("o2/zero_reference_voltage_v", 0.0),
+            0.0,
+        )
+        air_calibration_voltage_v = self._to_optional_float(
+            self._settings.value("o2/air_calibration_voltage_v", "")
+        )
+        calibrated_at_iso = str(self._settings.value("o2/calibrated_at_iso", "")).strip()
+        if air_calibration_voltage_v is not None and not calibrated_at_iso:
+            air_calibration_voltage_v = None
+            if abs(zero_reference_voltage_v - 2.5) < 1e-9:
+                zero_reference_voltage_v = 0.0
+
         settings.o2 = O2CalibrationPreferences(
-            zero_reference_voltage_v=self._to_float(
-                self._settings.value("o2/zero_reference_voltage_v", 2.5),
-                2.5,
-            ),
+            zero_reference_voltage_v=zero_reference_voltage_v,
             ambient_reference_percent=self._to_float(
                 self._settings.value("o2/ambient_reference_percent", 21.0),
                 21.0,
             ),
-            air_calibration_voltage_v=self._to_optional_float(
-                self._settings.value("o2/air_calibration_voltage_v", "")
-            ),
-            calibrated_at_iso=str(self._settings.value("o2/calibrated_at_iso", "")),
+            air_calibration_voltage_v=air_calibration_voltage_v,
+            calibrated_at_iso=calibrated_at_iso,
             invert_polarity=self._to_bool(self._settings.value("o2/invert_polarity", False)),
+        )
+        settings.o2_filter = normalize_o2_filter_preferences(
+            O2OutputFilterPreferences(
+                enabled=self._to_bool(self._settings.value("o2_filter/enabled", True)),
+                filter_type=str(
+                    self._settings.value(
+                        "o2_filter/filter_type",
+                        settings.o2_filter.filter_type,
+                    )
+                ),
+                preset=str(
+                    self._settings.value(
+                        "o2_filter/preset",
+                        settings.o2_filter.preset,
+                    )
+                ),
+                savgol_window_points=self._to_int(
+                    self._settings.value(
+                        "o2_filter/savgol_window_points",
+                        settings.o2_filter.savgol_window_points,
+                    ),
+                    settings.o2_filter.savgol_window_points,
+                ),
+                savgol_polynomial_order=self._to_int(
+                    self._settings.value(
+                        "o2_filter/savgol_polynomial_order",
+                        settings.o2_filter.savgol_polynomial_order,
+                    ),
+                    settings.o2_filter.savgol_polynomial_order,
+                ),
+                centered_gaussian_window_points=self._to_int(
+                    self._settings.value(
+                        "o2_filter/centered_gaussian_window_points",
+                        settings.o2_filter.centered_gaussian_window_points,
+                    ),
+                    settings.o2_filter.centered_gaussian_window_points,
+                ),
+                centered_gaussian_sigma_samples=self._to_float(
+                    self._settings.value(
+                        "o2_filter/centered_gaussian_sigma_samples",
+                        settings.o2_filter.centered_gaussian_sigma_samples,
+                    ),
+                    settings.o2_filter.centered_gaussian_sigma_samples,
+                ),
+            )
         )
 
         settings.windows = WindowPreferences(
@@ -94,6 +160,26 @@ class SettingsStore:
         )
         self._settings.setValue("o2/calibrated_at_iso", settings.o2.calibrated_at_iso)
         self._settings.setValue("o2/invert_polarity", settings.o2.invert_polarity)
+        o2_filter = normalize_o2_filter_preferences(settings.o2_filter)
+        self._settings.setValue("o2_filter/enabled", o2_filter.enabled)
+        self._settings.setValue("o2_filter/filter_type", o2_filter.filter_type)
+        self._settings.setValue("o2_filter/preset", o2_filter.preset)
+        self._settings.setValue("o2_filter/savgol_window_points", o2_filter.savgol_window_points)
+        self._settings.setValue("o2_filter/savgol_polynomial_order", o2_filter.savgol_polynomial_order)
+        self._settings.setValue(
+            "o2_filter/centered_gaussian_window_points",
+            o2_filter.centered_gaussian_window_points,
+        )
+        self._settings.setValue(
+            "o2_filter/centered_gaussian_sigma_samples",
+            o2_filter.centered_gaussian_sigma_samples,
+        )
+        for legacy_key in (
+            "o2_filter/ema_cutoff_hz",
+            "o2_filter/gaussian_sigma_ms",
+            "o2_filter/gaussian_tail_sigma",
+        ):
+            self._settings.remove(legacy_key)
         self._settings.setValue("windows/main_window_width", settings.windows.main_window_width)
         self._settings.setValue("windows/main_window_height", settings.windows.main_window_height)
         self._settings.setValue("windows/launcher_window_width", settings.windows.launcher_window_width)
@@ -116,6 +202,13 @@ class SettingsStore:
     def _to_float(value: object, default: float) -> float:
         try:
             return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _to_int(value: object, default: int) -> int:
+        try:
+            return int(round(float(value)))
         except (TypeError, ValueError):
             return default
 

@@ -234,12 +234,15 @@ device 側の canonical measurement は引き続き `zirconia_output_voltage_v` 
 
 ### 推奨モデル
 
-ユーザー要求を初期方針として、`0 % O2` の固定基準を `2.5 V` とし、
-`21 % O2` の基準を ambient-air calibration で取得する。
+ユーザー要求を初期方針として、`0 % O2` の基準電圧と
+`21 % O2` の ambient-air calibration anchor から一次換算する。
+当初は `0 % O2 = 2.5 V` 固定案だったが、prototype wiring / analog
+frontend の個体差を吸収するため、現在のGUIでは 0% 基準を Device
+settings から調整可能にし、default は `0.0 V` とする。
 
 定義:
 
-- `v_zero_ref = 2.5`
+- `v_zero_ref = GUI-configured 0% reference voltage`
 - `v_air_cal = calibrated zirconia_output_voltage_v in ambient air`
 - `o2_air_ref = 21.0`
 

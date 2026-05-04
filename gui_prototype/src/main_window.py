@@ -47,10 +47,12 @@ from flow_history_dialogs import FlowCharacterizationHistoryDialog, FlowVerifica
 from flow_verification import FlowVerificationController, FlowVerificationPersistence
 from mock_backend import MockBackend, TelemetryPoint
 from mock_backend import PREFERRED_BLE_NAME_PREFIXES, PREFERRED_WIRED_PORT_TOKENS
+from o2_filter import O2OutputFilter, describe_o2_filter
 from plot_interactions import PlotInteractionAxisItem, PlotInteractionViewBox, TimeAxisItem
 from protocol_constants import (
     BLE_FEATURE_TELEMETRY_BATCH,
     BLE_MODE,
+    O2_MIN_CALIBRATION_SPAN_V,
     STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_PUMP_ON,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE,
@@ -79,6 +81,7 @@ from ui_helpers import (
 FLOW_DEFAULT_Y_RANGE_LPM = (-5.0, 5.0)
 O2_DEFAULT_Y_RANGE_PERCENT = (0.0, 25.0)
 PLOT_SPLITTER_MIN_HEIGHT = 600
+O2_FILTER_RESET_GAP_MS = 100
 
 
 class MainWindow(QMainWindow):
@@ -100,6 +103,7 @@ class MainWindow(QMainWindow):
         self.connection_controller = ConnectionController(self.backend, self)
         self.warning_controller = WarningController()
         self.plot_controller = PlotController()
+        self.o2_output_filter = O2OutputFilter(self.app_settings.o2_filter)
         self.recording_controller = RecordingController()
         self.telemetry_health_monitor = TelemetryHealthMonitor(mode)
         self.telemetry_session_stats = TelemetrySessionStats(mode)
@@ -635,14 +639,22 @@ class MainWindow(QMainWindow):
         self.settings_store.save(self.app_settings)
 
     def _apply_dialog_settings(self, dialog: SettingsDialog) -> None:
+        previous_filter_description = describe_o2_filter(self.app_settings.o2_filter)
         self.app_settings.plot.time_span = dialog.selected_time_span
         self.app_settings.plot.axis_mode = dialog.selected_axis_mode
         self.app_settings.plot.auto_scale = dialog.selected_auto_scale
         self.app_settings.plot.selected_plot = dialog.selected_plot
         self.app_settings.logging.recording_directory = dialog.recording_directory
         self.app_settings.logging.partial_recovery_notice_enabled = dialog.partial_recovery_notice_enabled
+        self.app_settings.o2.zero_reference_voltage_v = dialog.selected_o2_zero_reference_voltage_v
         self.app_settings.o2.air_calibration_voltage_v = dialog.selected_o2_air_calibration_voltage_v
         self.app_settings.o2.calibrated_at_iso = dialog.selected_o2_calibrated_at_iso
+        self.app_settings.o2_filter = dialog.selected_o2_filter_preferences
+        self.o2_output_filter.set_preferences(self.app_settings.o2_filter)
+        self._rebuild_o2_filtered_history()
+        current_filter_description = describe_o2_filter(self.app_settings.o2_filter)
+        if current_filter_description != previous_filter_description:
+            self._append_log("info", f"O2 output filter: {current_filter_description}")
 
     def _apply_settings_to_widgets(self) -> None:
         self.time_span_combo.setCurrentText(self.app_settings.plot.time_span)
@@ -733,6 +745,7 @@ class MainWindow(QMainWindow):
     def _on_connection_changed(self, connected: bool, identifier: str) -> None:
         had_plot_samples = bool(self.plot_controller.time_values)
         if connected:
+            self.o2_output_filter.reset()
             self._ble_legacy_cadence_warning_emitted = False
             if self.mode != WIRED_MODE or self.ui_state.connection.phase not in {"connecting", "handshaking"}:
                 self.ui_state.connection.phase = "connected"
@@ -867,7 +880,19 @@ class MainWindow(QMainWindow):
         self._sync_connection_controls()
 
     def _on_telemetry(self, point: TelemetryPoint) -> None:
-        plot_update = self.plot_controller.append_sample(point)
+        sequence_gap_for_filter = 0
+        if self.plot_controller.last_sequence is not None:
+            sequence_gap_for_filter = max(0, point.sequence - self.plot_controller.last_sequence - 1)
+        if sequence_gap_for_filter * point.nominal_sample_period_ms >= O2_FILTER_RESET_GAP_MS:
+            self.o2_output_filter.reset()
+        o2_zirconia_value = self.o2_output_filter.apply(
+            point.zirconia_output_voltage_v,
+            point.nominal_sample_period_ms,
+        )
+        plot_update = self.plot_controller.append_sample(
+            point,
+            o2_zirconia_output_voltage_v=o2_zirconia_value,
+        )
         if float(plot_update["elapsed_seconds"]) == 0.0:
             self._session_started = point.host_received_at
         self.telemetry_session_stats.on_telemetry(point)
@@ -925,6 +950,7 @@ class MainWindow(QMainWindow):
 
         flow_values = render_data["series"]["flow"]
         zirconia_values = render_data["series"]["zirconia"]
+        o2_zirconia_values = render_data["series"]["o2_zirconia"]
         heater_values = render_data["series"]["heater"]
         data_key = (
             render_data["revision"],
@@ -933,9 +959,16 @@ class MainWindow(QMainWindow):
             self.app_settings.o2.zero_reference_voltage_v,
             self.app_settings.o2.ambient_reference_percent,
             self.app_settings.o2.invert_polarity,
+            self.app_settings.o2_filter.enabled,
+            self.app_settings.o2_filter.filter_type,
+            self.app_settings.o2_filter.preset,
+            self.app_settings.o2_filter.savgol_window_points,
+            self.app_settings.o2_filter.savgol_polynomial_order,
+            self.app_settings.o2_filter.centered_gaussian_window_points,
+            self.app_settings.o2_filter.centered_gaussian_sigma_samples,
         )
         if data_key != self._last_plot_data_key:
-            o2_values = self._build_o2_series(zirconia_values)
+            o2_values = self._build_o2_series(o2_zirconia_values)
 
             self.plot_curves["sensor"].setData(x_values, flow_values)
             if o2_values is None:
@@ -1331,6 +1364,7 @@ class MainWindow(QMainWindow):
         if requested_mode == previous_mode:
             self.app_settings.last_mode = previous_mode
             self._apply_settings_to_widgets()
+            self._refresh_plots()
             self._refresh_metric_cards()
             self._persist_current_settings()
             self._log_o2_calibration_changes(
@@ -1344,6 +1378,7 @@ class MainWindow(QMainWindow):
         if confirm.exec() != QDialog.DialogCode.Accepted:
             self.app_settings.last_mode = previous_mode
             self._apply_settings_to_widgets()
+            self._refresh_plots()
             self._persist_current_settings()
             return
         self._log_o2_calibration_changes(
@@ -1537,6 +1572,7 @@ class MainWindow(QMainWindow):
 
     def _clear_plot_buffers(self) -> None:
         self.plot_controller.clear()
+        self.o2_output_filter.reset()
         self.gap_value.setText("0")
         self._session_started = datetime.now()
         self._latest_low_range_differential_pressure_pa = None
@@ -1550,9 +1586,33 @@ class MainWindow(QMainWindow):
         self.heater_secondary_curve.setData([], [])
         self._last_plot_data_key = None
 
+    def _rebuild_o2_filtered_history(self) -> None:
+        zirconia_values = list(self.plot_controller.zirconia_values)
+        if not zirconia_values:
+            self.o2_output_filter.reset()
+            self._last_plot_data_key = None
+            return
+        filtered_values = self.o2_output_filter.apply_series(
+            zirconia_values,
+            self._current_nominal_sample_period_ms(),
+        )
+        self.plot_controller.replace_o2_zirconia_values(filtered_values)
+        self._last_plot_data_key = None
+
+    def _current_nominal_sample_period_ms(self) -> int:
+        raw_value = self.sample_period_value.text().replace(" ms", "").strip()
+        if raw_value == "--":
+            raw_value = self.ui_state.session_metadata.nominal_sample_period_ms
+        try:
+            parsed = int(float(raw_value))
+        except (TypeError, ValueError):
+            return 10
+        return parsed if parsed > 0 else 10
+
     def _refresh_metric_cards(self, metrics: dict[str, float] | None = None, point: TelemetryPoint | None = None) -> None:
         metrics = metrics or self.plot_controller.metric_snapshot()
         zirconia_value = metrics.get("zirconia_output_voltage_v")
+        o2_zirconia_value = metrics.get("o2_zirconia_output_voltage_v", zirconia_value)
         heater_value = metrics.get("heater_rtd_resistance_ohm")
         flow_value = metrics.get("flow_rate_lpm")
         low_range_differential_pressure_pa = self._latest_low_range_differential_pressure_pa
@@ -1561,6 +1621,11 @@ class MainWindow(QMainWindow):
 
         if point is not None:
             zirconia_value = zirconia_value if zirconia_value is not None else point.zirconia_output_voltage_v
+            o2_zirconia_value = (
+                o2_zirconia_value
+                if o2_zirconia_value is not None
+                else point.zirconia_output_voltage_v
+            )
             heater_value = heater_value if heater_value is not None else point.heater_rtd_resistance_ohm
             flow_value = flow_value if flow_value is not None else 0.0
             selected_differential_pressure_pa = point.differential_pressure_selected_pa
@@ -1595,7 +1660,8 @@ class MainWindow(QMainWindow):
             self.metric_flow.set_detail(self._format_flow_raw_unavailable_detail())
         else:
             self.metric_flow.set_detail("")
-        self.metric_o2.set_value(self._format_o2_metric_value(zirconia_value))
+        self.metric_o2.set_value(self._format_o2_metric_value(o2_zirconia_value))
+        self.metric_o2.set_detail(self._format_o2_metric_detail(o2_zirconia_value))
 
     def _format_o2_metric_value(self, zirconia_value: float | None) -> str:
         if zirconia_value is None or not math.isfinite(zirconia_value):
@@ -1611,6 +1677,39 @@ class MainWindow(QMainWindow):
         if o2_percent is None:
             return "Calibrate"
         return f"{o2_percent:0.1f} %"
+
+    def _format_o2_metric_detail(self, zirconia_value: float | None) -> str:
+        if zirconia_value is None or not math.isfinite(zirconia_value):
+            return ""
+
+        air_voltage = self.app_settings.o2.air_calibration_voltage_v
+        zero_voltage = self.app_settings.o2.zero_reference_voltage_v
+        if air_voltage is None or not math.isfinite(air_voltage):
+            return "Set ambient calibration in Settings > Device."
+        if not math.isfinite(zero_voltage):
+            return "Set a valid 0% reference voltage in Settings > Device."
+
+        filter_text = describe_o2_filter(self.app_settings.o2_filter)
+        base = (
+            f"Input {zirconia_value:0.3f} V ({filter_text}); "
+            f"air {air_voltage:0.3f} V, 0% {zero_voltage:0.3f} V"
+        )
+        span = zero_voltage - air_voltage
+        if abs(span) < O2_MIN_CALIBRATION_SPAN_V:
+            return (
+                f"{base}. Calibration span is only {abs(span) * 1000.0:0.1f} mV; "
+                "set the 0% reference farther from ambient."
+            )
+
+        normalized = (zero_voltage - zirconia_value) / span
+        if self.app_settings.o2.invert_polarity:
+            normalized *= -1.0
+        unclamped_percent = normalized * self.app_settings.o2.ambient_reference_percent
+        if unclamped_percent <= 0.0:
+            return f"{base}. O2 is clamped to 0%; voltage is outside the calibrated span."
+        if unclamped_percent >= 100.0:
+            return f"{base}. O2 is clamped to 100%; voltage is outside the calibrated span."
+        return base
 
     def _log_o2_calibration_changes(
         self,

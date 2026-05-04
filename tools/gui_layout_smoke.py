@@ -152,11 +152,13 @@ def _run_case(raw_case: str) -> int:
     from PySide6.QtWidgets import QApplication
 
     from app_metadata import APP_ID, APP_NAME, APP_ORGANIZATION, APP_VERSION
+    from gui_smoke_support import isolate_gui_settings
     from main_window import MainWindow
     from protocol_constants import BLE_MODE
     from qt_runtime import configure_qt_runtime
 
     width, height, label = _parse_case(raw_case)
+    settings_dir = isolate_gui_settings(f"zss_layout_{label}_")
     configure_qt_runtime()
     app = QApplication.instance() or QApplication(sys.argv)
     app.setOrganizationName(APP_ORGANIZATION)
@@ -191,10 +193,12 @@ def _run_case(raw_case: str) -> int:
         sys.stdout.flush()
         window.hide()
         app.processEvents()
+        settings_dir.cleanup()
         os._exit(0)
     except Exception as exc:
         print(f"FAIL {label} {width}x{height}: {exc}", file=sys.stderr)
         sys.stderr.flush()
+        settings_dir.cleanup()
         os._exit(1)
 
 

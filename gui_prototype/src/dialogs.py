@@ -3,13 +3,14 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFileDialog
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -21,13 +22,22 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QRadioButton,
+    QSpinBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
 
 from app_metadata import APP_NAME
-from app_state import AppSettings
+from app_state import (
+    AppSettings,
+    O2_FILTER_PRESET_CUSTOM,
+    O2_FILTER_PRESETS,
+    O2_FILTER_TYPES,
+    O2_FILTER_TYPE_CENTERED_GAUSSIAN,
+    O2_FILTER_TYPE_SAVGOL,
+    O2OutputFilterPreferences,
+)
 from dialog_helpers import dialog_header, format_optional, style_dialog_buttons
 from flow_characterization import (
     FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS,
@@ -48,15 +58,18 @@ from flow_verification import (
     VerificationStrokeResult,
     ZeroCheckResult,
 )
+from o2_filter import effective_o2_filter_preferences
 from protocol_constants import (
     BLE_MODE,
     DERIVED_METRIC_POLICY_ID,
+    O2_MIN_CALIBRATION_SPAN_V,
     PROTOCOL_VERSION_TEXT,
     WIRED_DEFAULT_BAUDRATE,
     WIRED_DEFAULT_LINE_SETTINGS,
     WIRED_MODE,
 )
 from recording_io import find_partial_recordings, summarize_partial_recordings
+from ui_helpers import VerticalOnlyScrollArea
 
 
 class PartialRecoveryDialog(QDialog):
@@ -168,6 +181,8 @@ class SettingsDialog(QDialog):
         self._show_flow_characterization_history_requested = False
         self._pending_o2_air_calibration_voltage_v = settings.o2.air_calibration_voltage_v
         self._pending_o2_calibrated_at_iso = settings.o2.calibrated_at_iso
+        self._pending_o2_zero_reference_voltage_v = settings.o2.zero_reference_voltage_v
+        self._syncing_o2_filter_controls = False
         self.setWindowTitle("Settings")
         self.resize(880, 580)
 
@@ -253,8 +268,26 @@ class SettingsDialog(QDialog):
         return self._pending_o2_air_calibration_voltage_v
 
     @property
+    def selected_o2_zero_reference_voltage_v(self) -> float:
+        if hasattr(self, "o2_zero_reference_spin"):
+            return self.o2_zero_reference_spin.value()
+        return self._pending_o2_zero_reference_voltage_v
+
+    @property
     def selected_o2_calibrated_at_iso(self) -> str:
         return self._pending_o2_calibrated_at_iso
+
+    @property
+    def selected_o2_filter_preferences(self) -> O2OutputFilterPreferences:
+        return O2OutputFilterPreferences(
+            enabled=self.o2_filter_enabled_check.isChecked(),
+            filter_type=self.o2_filter_type_combo.currentText(),
+            preset=self.o2_filter_preset_combo.currentText(),
+            savgol_window_points=self.o2_filter_savgol_window_spin.value(),
+            savgol_polynomial_order=self.o2_filter_savgol_order_spin.value(),
+            centered_gaussian_window_points=self.o2_filter_centered_gaussian_window_spin.value(),
+            centered_gaussian_sigma_samples=self.o2_filter_centered_gaussian_sigma_spin.value(),
+        )
 
     @property
     def flow_verification_requested(self) -> bool:
@@ -276,11 +309,19 @@ class SettingsDialog(QDialog):
     def flow_characterization_history_requested(self) -> bool:
         return self._show_flow_characterization_history_requested
 
-    def _page_wrapper(self) -> tuple[QWidget, QVBoxLayout]:
-        page = QWidget()
-        layout = QVBoxLayout(page)
+    def _page_wrapper(self, *, scrollable: bool = False) -> tuple[QWidget, QVBoxLayout]:
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
+        if not scrollable:
+            return content, layout
+
+        page = VerticalOnlyScrollArea()
+        page.setWidgetResizable(True)
+        page.setFrameShape(QFrame.NoFrame)
+        page.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        page.setWidget(content)
         return page, layout
 
     def _create_general_page(self) -> QWidget:
@@ -371,7 +412,7 @@ class SettingsDialog(QDialog):
         return page
 
     def _create_device_page(self) -> QWidget:
-        page, layout = self._page_wrapper()
+        page, layout = self._page_wrapper(scrollable=True)
         summary_card = QFrame()
         summary_card.setObjectName("SurfaceCard")
         summary_form = QFormLayout(summary_card)
@@ -389,7 +430,7 @@ class SettingsDialog(QDialog):
         calibration_title.setObjectName("SectionTitle")
         calibration_hint = QLabel(
             "Use the current zirconia output voltage while the sensor is resting in ambient air. "
-            "The GUI will keep 2.5 V as the 0 % anchor and store the ambient point as the 21 % anchor."
+            "Set the 0 % anchor voltage for this prototype and store the ambient point as the 21 % anchor."
         )
         calibration_hint.setObjectName("SectionHint")
         calibration_hint.setWordWrap(True)
@@ -406,6 +447,17 @@ class SettingsDialog(QDialog):
         self.o2_calibration_live_label.setWordWrap(True)
         calibration_layout.addWidget(self.o2_calibration_live_label)
 
+        calibration_form = QFormLayout()
+        self.o2_zero_reference_spin = QDoubleSpinBox()
+        self.o2_zero_reference_spin.setRange(0.0, 5.0)
+        self.o2_zero_reference_spin.setDecimals(3)
+        self.o2_zero_reference_spin.setSingleStep(0.05)
+        self.o2_zero_reference_spin.setSuffix(" V")
+        self.o2_zero_reference_spin.setValue(self._pending_o2_zero_reference_voltage_v)
+        self.o2_zero_reference_spin.valueChanged.connect(self._update_o2_zero_reference_voltage)
+        calibration_form.addRow("0% reference voltage", self.o2_zero_reference_spin)
+        calibration_layout.addLayout(calibration_form)
+
         calibration_row = QHBoxLayout()
         self.o2_calibrate_button = QPushButton("Calibrate to Ambient Air (21%)")
         self.o2_calibrate_button.setObjectName("PrimaryButton")
@@ -419,9 +471,150 @@ class SettingsDialog(QDialog):
         calibration_layout.addLayout(calibration_row)
         layout.addWidget(calibration_card)
 
+        filter_card = QFrame()
+        filter_card.setObjectName("SurfaceCard")
+        filter_layout = QVBoxLayout(filter_card)
+        filter_title = QLabel("O2 Output Filter")
+        filter_title.setObjectName("SectionTitle")
+        filter_layout.addWidget(filter_title)
+
+        filter_form = QFormLayout()
+        self.o2_filter_enabled_check = QCheckBox("Enable O2 output smoothing")
+        self.o2_filter_enabled_check.setChecked(self._settings.o2_filter.enabled)
+        self.o2_filter_type_combo = QComboBox()
+        self.o2_filter_type_combo.addItems(list(O2_FILTER_TYPES))
+        self.o2_filter_type_combo.setCurrentText(self._settings.o2_filter.filter_type)
+        self.o2_filter_preset_combo = QComboBox()
+        self.o2_filter_preset_combo.addItems(list(O2_FILTER_PRESETS))
+        self.o2_filter_preset_combo.setCurrentText(self._settings.o2_filter.preset)
+
+        self.o2_filter_savgol_window_spin = QSpinBox()
+        self.o2_filter_savgol_window_spin.setRange(3, 51)
+        self.o2_filter_savgol_window_spin.setSingleStep(2)
+        self.o2_filter_savgol_window_spin.setSuffix(" points")
+        self.o2_filter_savgol_window_spin.setValue(self._settings.o2_filter.savgol_window_points)
+
+        self.o2_filter_savgol_order_spin = QSpinBox()
+        self.o2_filter_savgol_order_spin.setRange(0, 5)
+        self.o2_filter_savgol_order_spin.setSingleStep(1)
+        self.o2_filter_savgol_order_spin.setValue(self._settings.o2_filter.savgol_polynomial_order)
+
+        self.o2_filter_centered_gaussian_window_spin = QSpinBox()
+        self.o2_filter_centered_gaussian_window_spin.setRange(3, 51)
+        self.o2_filter_centered_gaussian_window_spin.setSingleStep(2)
+        self.o2_filter_centered_gaussian_window_spin.setSuffix(" points")
+        self.o2_filter_centered_gaussian_window_spin.setValue(
+            self._settings.o2_filter.centered_gaussian_window_points
+        )
+
+        self.o2_filter_centered_gaussian_sigma_spin = QDoubleSpinBox()
+        self.o2_filter_centered_gaussian_sigma_spin.setRange(0.5, 12.0)
+        self.o2_filter_centered_gaussian_sigma_spin.setDecimals(2)
+        self.o2_filter_centered_gaussian_sigma_spin.setSingleStep(0.25)
+        self.o2_filter_centered_gaussian_sigma_spin.setSuffix(" samples")
+        self.o2_filter_centered_gaussian_sigma_spin.setValue(
+            self._settings.o2_filter.centered_gaussian_sigma_samples
+        )
+
+        filter_form.addRow("Enabled", self.o2_filter_enabled_check)
+        filter_form.addRow("Type", self.o2_filter_type_combo)
+        filter_form.addRow("Preset", self.o2_filter_preset_combo)
+        filter_form.addRow("SG window", self.o2_filter_savgol_window_spin)
+        filter_form.addRow("SG polynomial order", self.o2_filter_savgol_order_spin)
+        filter_form.addRow("Gaussian window", self.o2_filter_centered_gaussian_window_spin)
+        filter_form.addRow("Gaussian sigma", self.o2_filter_centered_gaussian_sigma_spin)
+        self._o2_filter_form = filter_form
+        filter_layout.addLayout(filter_form)
+        layout.addWidget(filter_card)
+
+        self.o2_filter_enabled_check.toggled.connect(self._update_o2_filter_control_state)
+        self.o2_filter_type_combo.currentTextChanged.connect(self._handle_o2_filter_type_changed)
+        self.o2_filter_preset_combo.currentTextChanged.connect(self._handle_o2_filter_preset_changed)
+        for spin_box in (
+            self.o2_filter_savgol_window_spin,
+            self.o2_filter_savgol_order_spin,
+            self.o2_filter_centered_gaussian_window_spin,
+            self.o2_filter_centered_gaussian_sigma_spin,
+        ):
+            spin_box.valueChanged.connect(self._mark_o2_filter_custom)
+            spin_box.valueChanged.connect(self._update_o2_filter_control_state)
+        self._apply_o2_filter_preset_values()
+        self._update_o2_filter_control_state()
+
         self._refresh_o2_calibration_state()
         layout.addStretch(1)
         return page
+
+    def _update_o2_filter_control_state(self, *_args: object) -> None:
+        if not hasattr(self, "o2_filter_enabled_check"):
+            return
+        filter_type = self.o2_filter_type_combo.currentText()
+        is_centered_gaussian = filter_type == O2_FILTER_TYPE_CENTERED_GAUSSIAN
+        is_savgol = filter_type == O2_FILTER_TYPE_SAVGOL
+        is_custom = self.o2_filter_preset_combo.currentText() == O2_FILTER_PRESET_CUSTOM
+
+        max_savgol_order = min(5, max(0, self.o2_filter_savgol_window_spin.value() - 1))
+        self.o2_filter_savgol_order_spin.setMaximum(max_savgol_order)
+        if self.o2_filter_savgol_order_spin.value() > max_savgol_order:
+            self.o2_filter_savgol_order_spin.setValue(max_savgol_order)
+
+        self.o2_filter_type_combo.setEnabled(True)
+        self.o2_filter_preset_combo.setEnabled(True)
+        self._set_o2_filter_parameter_visible(self.o2_filter_savgol_window_spin, is_savgol)
+        self._set_o2_filter_parameter_visible(self.o2_filter_savgol_order_spin, is_savgol)
+        self._set_o2_filter_parameter_visible(
+            self.o2_filter_centered_gaussian_window_spin,
+            is_centered_gaussian,
+        )
+        self._set_o2_filter_parameter_visible(
+            self.o2_filter_centered_gaussian_sigma_spin,
+            is_centered_gaussian,
+        )
+        self.o2_filter_savgol_window_spin.setEnabled(is_savgol and is_custom)
+        self.o2_filter_savgol_order_spin.setEnabled(is_savgol and is_custom)
+        self.o2_filter_centered_gaussian_window_spin.setEnabled(is_centered_gaussian and is_custom)
+        self.o2_filter_centered_gaussian_sigma_spin.setEnabled(is_centered_gaussian and is_custom)
+
+    def _set_o2_filter_parameter_visible(self, widget: QWidget, visible: bool) -> None:
+        widget.setVisible(visible)
+        label = self._o2_filter_form.labelForField(widget)
+        if label is not None:
+            label.setVisible(visible)
+
+    def _handle_o2_filter_type_changed(self, *_args: object) -> None:
+        self._apply_o2_filter_preset_values()
+        self._update_o2_filter_control_state()
+
+    def _handle_o2_filter_preset_changed(self, *_args: object) -> None:
+        self._apply_o2_filter_preset_values()
+        self._update_o2_filter_control_state()
+
+    def _apply_o2_filter_preset_values(self) -> None:
+        if self._syncing_o2_filter_controls:
+            return
+        if self.o2_filter_preset_combo.currentText() == O2_FILTER_PRESET_CUSTOM:
+            return
+
+        effective = effective_o2_filter_preferences(self.selected_o2_filter_preferences)
+        self._syncing_o2_filter_controls = True
+        try:
+            self.o2_filter_savgol_window_spin.setValue(effective.savgol_window_points)
+            self.o2_filter_savgol_order_spin.setValue(effective.savgol_polynomial_order)
+            self.o2_filter_centered_gaussian_window_spin.setValue(
+                effective.centered_gaussian_window_points
+            )
+            self.o2_filter_centered_gaussian_sigma_spin.setValue(
+                effective.centered_gaussian_sigma_samples
+            )
+        finally:
+            self._syncing_o2_filter_controls = False
+
+    def _mark_o2_filter_custom(self, *_args: object) -> None:
+        if self._syncing_o2_filter_controls:
+            return
+        if self.o2_filter_preset_combo.currentText() == O2_FILTER_PRESET_CUSTOM:
+            return
+        self.o2_filter_preset_combo.setCurrentText(O2_FILTER_PRESET_CUSTOM)
 
     def _create_engineering_tools_page(self) -> QWidget:
         page, layout = self._page_wrapper()
@@ -629,6 +822,10 @@ class SettingsDialog(QDialog):
         self._pending_o2_calibrated_at_iso = ""
         self._refresh_o2_calibration_state(message="O2 calibration reset is staged. Save settings to apply it.")
 
+    def _update_o2_zero_reference_voltage(self, value: float) -> None:
+        self._pending_o2_zero_reference_voltage_v = float(value)
+        self._refresh_o2_calibration_state()
+
     def _refresh_o2_calibration_state(self, message: str | None = None) -> None:
         live_voltage = self._current_zirconia_voltage_v
         if live_voltage is None:
@@ -639,7 +836,10 @@ class SettingsDialog(QDialog):
             self.o2_calibrate_button.setEnabled(True)
 
         if self._pending_o2_air_calibration_voltage_v is None:
-            status_text = "Current calibration state: not calibrated"
+            status_text = (
+                "Current calibration state: not calibrated; "
+                f"0% anchor {self._pending_o2_zero_reference_voltage_v:0.3f} V"
+            )
             if message:
                 status_text = f"{status_text}. {message}"
             self.o2_calibration_status_label.setText(status_text)
@@ -649,6 +849,7 @@ class SettingsDialog(QDialog):
         timestamp_text = self._pending_o2_calibrated_at_iso or "timestamp unavailable"
         status_text = (
             "Current calibration state: "
+            f"0% anchor {self._pending_o2_zero_reference_voltage_v:0.3f} V, "
             f"ambient anchor {self._pending_o2_air_calibration_voltage_v:0.3f} V "
             f"({timestamp_text})"
         )
@@ -656,6 +857,22 @@ class SettingsDialog(QDialog):
             status_text = f"{status_text}. {message}"
         self.o2_calibration_status_label.setText(status_text)
         self.o2_reset_button.setEnabled(True)
+        self._append_o2_calibration_span_warning()
+
+    def _append_o2_calibration_span_warning(self) -> None:
+        if self._pending_o2_air_calibration_voltage_v is None:
+            return
+        span_v = abs(
+            self._pending_o2_zero_reference_voltage_v
+            - self._pending_o2_air_calibration_voltage_v
+        )
+        if span_v >= O2_MIN_CALIBRATION_SPAN_V:
+            return
+        self.o2_calibration_status_label.setText(
+            f"{self.o2_calibration_status_label.text()}. "
+            f"Warning: calibration span is only {span_v * 1000.0:0.1f} mV; "
+            "set the 0% reference farther from ambient."
+        )
 
     def _refresh_flow_verification_state(self) -> None:
         self.flow_verification_button.setEnabled(self._flow_verification_available)

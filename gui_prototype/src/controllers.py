@@ -184,6 +184,7 @@ class PlotController:
         self.history_window_s = history_window_s
         self.time_values: deque[float] = deque()
         self.zirconia_values: deque[float] = deque()
+        self.o2_zirconia_values: deque[float] = deque()
         self.heater_values: deque[float] = deque()
         self.differential_pressure_selected_values: deque[float] = deque()
         self.flow_rate_values: deque[float] = deque()
@@ -196,7 +197,12 @@ class PlotController:
         self.manual_y_ranges: dict[str, tuple[float, float]] = {}
         self.render_revision = 0
 
-    def append_sample(self, point: TelemetryPoint) -> dict[str, object]:
+    def append_sample(
+        self,
+        point: TelemetryPoint,
+        *,
+        o2_zirconia_output_voltage_v: float | None = None,
+    ) -> dict[str, object]:
         if self.plot_sequence_origin is None:
             self.plot_sequence_origin = point.sequence
 
@@ -210,6 +216,11 @@ class PlotController:
 
         self.time_values.append(elapsed)
         self.zirconia_values.append(point.zirconia_output_voltage_v)
+        self.o2_zirconia_values.append(
+            point.zirconia_output_voltage_v
+            if o2_zirconia_output_voltage_v is None
+            else o2_zirconia_output_voltage_v
+        )
         self.heater_values.append(point.heater_rtd_resistance_ohm)
         self.differential_pressure_selected_values.append(
             differential_pressure_selected_pa if differential_pressure_selected_pa is not None else math.nan
@@ -234,6 +245,7 @@ class PlotController:
     def clear(self) -> None:
         self.time_values.clear()
         self.zirconia_values.clear()
+        self.o2_zirconia_values.clear()
         self.heater_values.clear()
         self.differential_pressure_selected_values.clear()
         self.flow_rate_values.clear()
@@ -243,6 +255,12 @@ class PlotController:
         self.latest_host_received_at = None
         self.sequence_gap_total = 0
         self.x_follow_enabled = True
+        self.render_revision += 1
+
+    def replace_o2_zirconia_values(self, values: list[float]) -> None:
+        self.o2_zirconia_values = deque(values[-len(self.zirconia_values):])
+        while len(self.o2_zirconia_values) < len(self.zirconia_values):
+            self.o2_zirconia_values.appendleft(math.nan)
         self.render_revision += 1
 
     def history_duration_s(self) -> float:
@@ -255,6 +273,7 @@ class PlotController:
             return {}
         return {
             "zirconia_output_voltage_v": self.zirconia_values[-1],
+            "o2_zirconia_output_voltage_v": self.o2_zirconia_values[-1],
             "heater_rtd_resistance_ohm": self.heater_values[-1],
             "flow_rate_lpm": self.flow_rate_values[-1],
         }
@@ -263,7 +282,7 @@ class PlotController:
         if not self.time_values:
             return {
                 "x_values": [],
-                "series": {"zirconia": [], "heater": [], "flow": []},
+                "series": {"zirconia": [], "o2_zirconia": [], "heater": [], "flow": []},
                 "xmin": 0.0,
                 "xmax": 0.0,
                 "revision": self.render_revision,
@@ -276,16 +295,17 @@ class PlotController:
         if span is None:
             xmin = self.time_values[0]
             xmax = x_latest
-            x_values, zirconia_values, heater_values, flow_values = self._extract_visible_series()
+            x_values, zirconia_values, o2_zirconia_values, heater_values, flow_values = self._extract_visible_series()
         else:
             follow_elapsed = max(x_latest, self._current_follow_elapsed())
             xmax = max(span, follow_elapsed)
             xmin = xmax - span
-            x_values, zirconia_values, heater_values, flow_values = self._extract_visible_series(cutoff=xmin)
+            x_values, zirconia_values, o2_zirconia_values, heater_values, flow_values = self._extract_visible_series(cutoff=xmin)
 
-        x_values, zirconia_values, heater_values, flow_values = self._downsample_series(
+        x_values, zirconia_values, o2_zirconia_values, heater_values, flow_values = self._downsample_series(
             x_values,
             zirconia_values,
+            o2_zirconia_values,
             heater_values,
             flow_values,
             max_points=max_render_points.get(time_span, 8000),
@@ -295,6 +315,7 @@ class PlotController:
             "x_values": x_values,
             "series": {
                 "zirconia": zirconia_values,
+                "o2_zirconia": o2_zirconia_values,
                 "heater": heater_values,
                 "flow": flow_values,
             },
@@ -322,6 +343,7 @@ class PlotController:
         while self.time_values and self.time_values[0] < cutoff:
             self.time_values.popleft()
             self.zirconia_values.popleft()
+            self.o2_zirconia_values.popleft()
             self.heater_values.popleft()
             self.differential_pressure_selected_values.popleft()
             self.flow_rate_values.popleft()
@@ -330,22 +352,25 @@ class PlotController:
         self,
         *,
         cutoff: float | None = None,
-    ) -> tuple[list[float], list[float], list[float], list[float]]:
+    ) -> tuple[list[float], list[float], list[float], list[float], list[float]]:
         if cutoff is None:
             return (
                 list(self.time_values),
                 list(self.zirconia_values),
+                list(self.o2_zirconia_values),
                 list(self.heater_values),
                 list(self.flow_rate_values),
             )
 
         x_values_reversed: list[float] = []
         zirconia_reversed: list[float] = []
+        o2_zirconia_reversed: list[float] = []
         heater_reversed: list[float] = []
         flow_reversed: list[float] = []
-        for elapsed, zirconia, heater, flow in zip(
+        for elapsed, zirconia, o2_zirconia, heater, flow in zip(
             reversed(self.time_values),
             reversed(self.zirconia_values),
+            reversed(self.o2_zirconia_values),
             reversed(self.heater_values),
             reversed(self.flow_rate_values),
         ):
@@ -353,33 +378,37 @@ class PlotController:
                 break
             x_values_reversed.append(elapsed)
             zirconia_reversed.append(zirconia)
+            o2_zirconia_reversed.append(o2_zirconia)
             heater_reversed.append(heater)
             flow_reversed.append(flow)
 
         x_values_reversed.reverse()
         zirconia_reversed.reverse()
+        o2_zirconia_reversed.reverse()
         heater_reversed.reverse()
         flow_reversed.reverse()
-        return x_values_reversed, zirconia_reversed, heater_reversed, flow_reversed
+        return x_values_reversed, zirconia_reversed, o2_zirconia_reversed, heater_reversed, flow_reversed
 
     @staticmethod
     def _downsample_series(
         x_values: list[float],
         zirconia_values: list[float],
+        o2_zirconia_values: list[float],
         heater_values: list[float],
         flow_values: list[float],
         *,
         max_points: int,
-    ) -> tuple[list[float], list[float], list[float], list[float]]:
+    ) -> tuple[list[float], list[float], list[float], list[float], list[float]]:
         if len(x_values) <= max_points:
-            return x_values, zirconia_values, heater_values, flow_values
+            return x_values, zirconia_values, o2_zirconia_values, heater_values, flow_values
 
         step = max(1, math.ceil(len(x_values) / max_points))
         x_values = x_values[::step]
         zirconia_values = zirconia_values[::step]
+        o2_zirconia_values = o2_zirconia_values[::step]
         heater_values = heater_values[::step]
         flow_values = flow_values[::step]
-        return x_values, zirconia_values, heater_values, flow_values
+        return x_values, zirconia_values, o2_zirconia_values, heater_values, flow_values
 
 
 class TelemetryHealthMonitor:

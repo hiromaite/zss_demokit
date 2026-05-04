@@ -20,6 +20,7 @@ for candidate in [str(GUI_ROOT), str(GUI_SRC)]:
         sys.path.insert(0, candidate)
 
 from app_metadata import APP_ID, APP_NAME, APP_ORGANIZATION, APP_VERSION
+from gui_smoke_support import isolate_gui_settings
 from main_window import MainWindow
 from mock_backend import TelemetryPoint
 from protocol_constants import BLE_MODE, TELEMETRY_FIELD_BITS, transport_type_for_mode
@@ -67,6 +68,7 @@ def _exercise_plot_pause_and_visibility() -> None:
     try:
         window._plot_refresh_timer.stop()  # noqa: SLF001 - deterministic offscreen smoke
         window.app_settings.o2.air_calibration_voltage_v = 0.72
+        window.plot_controller.x_follow_enabled = False
         window.app_settings.plot.series_visibility = {
             "flow": True,
             "o2": True,
@@ -128,7 +130,11 @@ def main() -> int:
     app.setApplicationName(APP_ID)
     app.setApplicationDisplayName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
-    _exercise_plot_pause_and_visibility()
+    settings_dir = isolate_gui_settings("zss_plot_controls_smoke_")
+    try:
+        _exercise_plot_pause_and_visibility()
+    finally:
+        settings_dir.cleanup()
     print("gui_plot_controls_smoke_ok")
     return 0
 

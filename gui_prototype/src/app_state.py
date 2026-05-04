@@ -5,6 +5,32 @@ from datetime import datetime
 
 from protocol_constants import BLE_MODE
 
+O2_FILTER_TYPE_SAVGOL = "Savitzky-Golay"
+O2_FILTER_TYPE_CENTERED_GAUSSIAN = "Centered Gaussian"
+O2_FILTER_TYPES = (
+    O2_FILTER_TYPE_SAVGOL,
+    O2_FILTER_TYPE_CENTERED_GAUSSIAN,
+)
+# Legacy labels are kept only so existing QSettings values can migrate cleanly.
+O2_FILTER_TYPE_EMA_1 = "EMA 1-pole"
+O2_FILTER_TYPE_EMA_2 = "EMA 2-pole"
+O2_FILTER_TYPE_GAUSSIAN = "One-sided Gaussian"
+O2_FILTER_TYPE_SAVGOL_7 = "Savitzky-Golay 7-point"
+O2_FILTER_TYPE_SAVGOL_9 = "Savitzky-Golay 9-point"
+O2_FILTER_TYPE_CENTERED_GAUSSIAN_7 = "Centered Gaussian 7-point"
+
+O2_FILTER_PRESET_FAST = "Fast"
+O2_FILTER_PRESET_DEFAULT = "Default"
+O2_FILTER_PRESET_QUIET = "Quiet"
+O2_FILTER_PRESET_CUSTOM = "Custom"
+O2_FILTER_PRESETS = (
+    O2_FILTER_PRESET_FAST,
+    O2_FILTER_PRESET_DEFAULT,
+    O2_FILTER_PRESET_QUIET,
+    O2_FILTER_PRESET_CUSTOM,
+)
+O2_FILTER_PRESET_BALANCED = O2_FILTER_PRESET_DEFAULT
+
 
 @dataclass
 class PlotPreferences:
@@ -32,11 +58,22 @@ class LoggingPreferences:
 
 @dataclass
 class O2CalibrationPreferences:
-    zero_reference_voltage_v: float = 2.5
+    zero_reference_voltage_v: float = 0.0
     ambient_reference_percent: float = 21.0
     air_calibration_voltage_v: float | None = None
     calibrated_at_iso: str = ""
     invert_polarity: bool = False
+
+
+@dataclass
+class O2OutputFilterPreferences:
+    enabled: bool = True
+    filter_type: str = O2_FILTER_TYPE_SAVGOL
+    preset: str = O2_FILTER_PRESET_DEFAULT
+    savgol_window_points: int = 9
+    savgol_polynomial_order: int = 2
+    centered_gaussian_window_points: int = 9
+    centered_gaussian_sigma_samples: float = 1.75
 
 
 @dataclass
@@ -53,6 +90,7 @@ class AppSettings:
     plot: PlotPreferences = field(default_factory=PlotPreferences)
     logging: LoggingPreferences = field(default_factory=LoggingPreferences)
     o2: O2CalibrationPreferences = field(default_factory=O2CalibrationPreferences)
+    o2_filter: O2OutputFilterPreferences = field(default_factory=O2OutputFilterPreferences)
     windows: WindowPreferences = field(default_factory=WindowPreferences)
 
 

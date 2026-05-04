@@ -203,18 +203,28 @@ flow_rate_lpm = sign(selected_differential_pressure_pa) * (1.0 * sqrt(abs(select
 - raw / canonical measurement は引き続き `zirconia_output_voltage_v` とする
 - calibration は GUI ローカルに保存し、device 側 persistent state にはしない
 
-初期 calibration model:
+Calibration model:
 
 ```text
-v_zero_ref = 2.5 V
+v_zero_ref = GUI-configured 0% reference voltage
 v_air_cal = zirconia_output_voltage_v captured in ambient air
 o2_percent = clamp(((v_zero_ref - v_measured) / (v_zero_ref - v_air_cal)) * 21.0, 0.0, 100.0)
 ```
 
 補足:
 
-- この式は `v_measured` が低いほど O2% が高い前提である
-- 実機極性が逆なら GUI config で反転可能にする
+- `v_zero_ref` と `v_air_cal` の相対関係で slope が決まるため、prototype wiring / analog frontend に合わせて `v_zero_ref` を GUI から調整できるようにする
+- GUI default の `v_zero_ref` は legacy-compatible な `0.0 V` とし、実機ごとの 0% reference は Device settings で明示的に合わせる
+- 由来が追跡できない古い ambient anchor は読み込み時に未校正扱いへ戻し、O2 plot が stale calibration 由来の `0%` clamp を表示し続けないようにする
+
+## 20.1. O2 Output Filter Direction
+
+- O2 output filter は GUI / analysis 側の smoothing layer とし、firmware telemetry と通常CSVの raw `zirconia_output_voltage_v` は変更しない
+- GUI で選べる filter type は `Savitzky-Golay` と `Centered Gaussian` の2系統に絞る
+- Preset は両filterで `Fast` / `Default` / `Quiet` / `Custom` とする
+- `Savitzky-Golay` preset は `7` / `9` / `13` point、polynomial order `2` とし、Custom では odd window points と polynomial order を編集可能にする
+- `Centered Gaussian` preset は `7` point sigma `1.25 samples`、`9` point sigma `1.75 samples`、`13` point sigma `2.75 samples` とし、Custom では odd window points と sigma samples を編集可能にする
+- いずれも live plot では未来sampleを使わず、centered FIR相当の係数を現在値と過去値に適用するため、window半幅ぶんの表示遅れを許容して静粛性を上げる
 
 ## 21. Dual-SDP Flow Measurement Direction
 
