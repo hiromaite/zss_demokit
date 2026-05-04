@@ -451,6 +451,9 @@
 - 2026-05-04 beta4 release-prep slice として、Windows validated `v0.1.0-beta.3` を維持し、
   O2 filter / zero-reference / data-flow documentation を含む next distribution candidate を
   `0.1.0-beta.4` / `zss_demokit_gui_win64_beta4` として整理した
+- 2026-05-04 release-finalization slice として、Windows validated `v0.1.0-beta.4` と
+  release-candidate smoke OK を受け、first stable release を `1.0.0` /
+  `zss_demokit_gui_win64_1_0_0` として整理した
 - 残タスクは final art direction の要否判断、installer / signing / updater policy の最終化
 
 ### GUI-010. User Feedback Integration and UX Parity
@@ -1197,6 +1200,9 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
   startup behavior setting、stale calibration migration、clamp diagnostics、
   GUI telemetry data-flow documentation を final beta candidate に含める。beta4 が
   Windows packaged smoke を通過すれば、次は `1.0.0-rc.1` または `1.0.0` の判断へ進む
+- 2026-05-04 release-finalization slice として、beta4 後の startup / O2 polish を含む
+  latest main が Windows packaged smoke OK となったため、`1.0.0` release metadata、
+  release notes、distribution gate を整備した
 
 直近 bundle:
 

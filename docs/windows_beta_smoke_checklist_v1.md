@@ -1,15 +1,15 @@
-# Windows Beta Smoke Checklist v1
+# Windows Release Smoke Checklist v1
 
 ## Goal
 
 - verify that the desktop GUI can be packaged on Windows 11 Pro
-- verify that the packaged app launches and performs the minimum beta workflows for both `Wired` and `BLE`
+- verify that the packaged app launches and performs the minimum release workflows for both `Wired` and `BLE`
 
 ## Current Packaging Target
 
 - package style: `onedir`
-- package directory name: `zss_demokit_gui_win64_beta4`
-- app version: `0.1.0-beta.4`
+- package directory name: `zss_demokit_gui_win64_1_0_0`
+- app version: `1.0.0`
 - executable name: `zss_demokit_gui.exe`
 
 ## Preconditions
@@ -41,14 +41,14 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 
 Expected result:
 
-- package directory exists at `dist\zss_demokit_gui_win64_beta4\`
-- executable exists at `dist\zss_demokit_gui_win64_beta4\zss_demokit_gui.exe`
+- package directory exists at `dist\zss_demokit_gui_win64_1_0_0\`
+- executable exists at `dist\zss_demokit_gui_win64_1_0_0\zss_demokit_gui.exe`
 
 ## Launch Smoke
 
-1. Launch `dist\zss_demokit_gui_win64_beta4\zss_demokit_gui.exe`
+1. Launch `dist\zss_demokit_gui_win64_1_0_0\zss_demokit_gui.exe`
 2. Confirm that the launcher window appears
-3. Confirm that the app version displayed is `0.1.0-beta.4`
+3. Confirm that the app version displayed is `1.0.0`
 4. Confirm that the generated app icon is shown in the window / taskbar if Windows picks it up
 
 ## Wired Smoke
@@ -122,7 +122,8 @@ Expected result:
 - `0.1.0-beta.2` packaged app の起動成功
 - `0.1.0-beta.2` では `Wired` / `BLE` の両モードで blocking issue なし
 - `0.1.0-beta.3` は Windows 11 Pro 上で user 実施により packaging / smoke 成功
-- `0.1.0-beta.4` は次の確認対象
+- `0.1.0-beta.4` は Windows 11 Pro 上で user 実施により packaging / smoke 成功
+- `1.0.0` release candidate は Windows 11 Pro 上で user 実施により packaging / smoke 成功
 
 ## Follow-up Notes
 

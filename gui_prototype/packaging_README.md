@@ -5,17 +5,17 @@ This note tracks the repeatable PyInstaller path for the desktop GUI.
 ## Current Target
 
 - spec file: `gui_prototype/zss_demokit_gui.spec`
-- application version: `0.1.0-beta.4`
-- distribution directory: `dist/zss_demokit_gui_win64_beta4/`
+- application version: `1.0.0`
+- distribution directory: `dist/zss_demokit_gui_win64_1_0_0/`
 - executable name: `zss_demokit_gui`
 - metadata source: `gui_prototype/src/app_metadata.py`
 
-The current package is a beta-quality `onedir` bundle. Windows 11 Pro source
-run, PyInstaller packaging, wired smoke, and BLE smoke have been confirmed by
-user testing through beta3. The next package candidate is beta4 and adds O2
-filter / zero-reference polish before the first major release decision.
+The current package is a first stable `onedir` bundle for PoC and
+hardware-development use. Windows 11 Pro source run, PyInstaller packaging,
+wired smoke, BLE smoke, startup-mode behavior, and O2 zero-reference behavior
+have been confirmed through the beta4 / release-candidate cycle.
 
-See `docs/distribution_plan_v1.md` for the beta4 distribution gate, tag policy,
+See `docs/distribution_plan_v1.md` for the release gate, tag policy,
 and artifact handling.
 
 ## Release Readiness Preflight
@@ -51,7 +51,7 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 
 ## Expected Output
 
-- `dist/zss_demokit_gui_win64_beta4/`
+- `dist/zss_demokit_gui_win64_1_0_0/`
 - `zss_demokit_gui.exe` on Windows
 - the same launcher flow as `python gui_prototype/main.py`
 
@@ -69,7 +69,7 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 - no code signing path yet
 - no updater path yet
 - generated icon is acceptable for beta but may still need art direction
-- beta4 release notes are tracked in `docs/release_notes_beta4.md`; there is
+- release notes are tracked in `docs/release_notes_v1_0_0.md`; there is
   no installer-integrated changelog yet
 - `onefile` packaging has not been selected; `onedir` remains the recommended
   beta default because startup is faster and debugging is easier

@@ -12,8 +12,8 @@ for AI coding agents working in this repository.
 - Protocol, architecture, validation, backlog, and release planning live in
   `docs/`.
 - Reference-only legacy firmware / GUI assets live under `resource/`.
-- The current distribution candidate is `0.1.0-beta.4`; do not retag or move
-  existing beta tags.
+- The current release candidate is `1.0.0`; do not retag or move existing
+  beta or release tags.
 
 ## Branch And Git Workflow
 
@@ -91,8 +91,8 @@ user reports the result.
 
 ## Release Rules
 
-- The next Windows package candidate is `0.1.0-beta.4` with distribution
-  directory `dist/zss_demokit_gui_win64_beta4/`.
+- The current Windows package candidate is `1.0.0` with distribution
+  directory `dist/zss_demokit_gui_win64_1_0_0/`.
 - Before packaging, run `python tools/release_readiness_check.py`.
 - After Windows packaging, execute `docs/windows_beta_smoke_checklist_v1.md`.
-- Create `v0.1.0-beta.4` only after packaged Windows smoke passes.
+- Create `v1.0.0` only after packaged Windows smoke passes.

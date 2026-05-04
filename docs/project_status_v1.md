@@ -4,21 +4,21 @@
 
 ## 1. Snapshot
 
-`zss_demokit` is active beta software. Firmware and desktop GUI are both active
-implementation surfaces. The current Windows distribution candidate is:
+`zss_demokit` is active PoC / hardware-development software. Firmware and
+desktop GUI are both active implementation surfaces. The current Windows
+release candidate is:
 
 | Item | Value |
 | :--- | :--- |
-| App version | `0.1.0-beta.4` |
-| Distribution directory | `dist/zss_demokit_gui_win64_beta4/` |
+| App version | `1.0.0` |
+| Distribution directory | `dist/zss_demokit_gui_win64_1_0_0/` |
 | Packaging style | PyInstaller `onedir` |
 | Target OS for packaged smoke | Windows 11 Pro |
 | Preferred BLE name | `GasSensor-Proto` |
 | Legacy BLE compatibility | `M5STAMP-MONITOR*` remains accepted by host filters |
 
-The existing `v0.1.0-beta.3` tag points to the Windows-validated beta3
-baseline and must not be moved. The next tag should be `v0.1.0-beta.4` after
-Windows packaged smoke passes.
+The existing `v0.1.0-beta.4` tag points to the Windows-validated beta4
+baseline and must not be moved. The next release tag is `v1.0.0`.
 
 ## 2. Firmware State
 
@@ -48,9 +48,9 @@ Windows packaged smoke passes.
   comparison and summary CSV export.
 - Settings now separates routine device settings from Engineering / Tools
   actions.
-- Beta4 adds configurable O2 output filtering, O2 zero-reference handling with
-  a `2.55 V` default 0% anchor, BLE startup-mode routing, O2 clamp diagnostics,
-  and GUI telemetry data-flow documentation.
+- Release `1.0.0` includes configurable O2 output filtering, O2 zero-reference
+  handling with a `2.55 V` default 0% anchor, BLE startup-mode routing, O2
+  clamp diagnostics, and GUI telemetry data-flow documentation.
 
 ## 4. Validation State
 
@@ -68,8 +68,9 @@ Common local gates:
 - `python tools/o2_filter_smoke.py`
 - `python tools/gui_o2_filter_smoke.py`
 
-Windows beta3 packaging and wired / BLE packaged smoke were confirmed by user
-testing. Beta4 still needs Windows packaged smoke before tagging.
+Windows beta4 and the follow-up release candidate were confirmed by user
+testing on Windows. The remaining release action is tagging and artifact
+handling.
 
 ## 5. Current Non-Blocking Gaps
 
@@ -81,4 +82,4 @@ testing. Beta4 still needs Windows packaged smoke before tagging.
   flow hardware and reference measurement setup are complete.
 - Pump-noise characterization requires hardware-assisted testing.
 
-These gaps do not block PoC / hardware-development beta4 distribution.
+These gaps do not block the first stable PoC / hardware-development release.

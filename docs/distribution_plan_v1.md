@@ -4,42 +4,40 @@
 
 ## 1. 目的
 
-この文書は、ZSS Demo Kit desktop GUI を beta package として配布するための判断、
-前提、作業順、保留事項をまとめる。現時点では formal release 直前の final beta
-candidate として、PoC / hardware-development 向けの beta distribution を対象とする。
+この文書は、ZSS Demo Kit desktop GUI を release package として配布するための判断、
+前提、作業順、保留事項をまとめる。現時点では PoC / hardware-development 向けの
+first stable release を対象とする。
 
 ## 2. 先に片付けたこと
 
-`v0.1.0-beta.3` tag は Windows packaged smoke 済みの beta3 baseline を指す。
-現在の main は O2 filter / zero-reference / data-flow documentation を含むため、
-次の配布候補は beta4 として扱う。
+`v0.1.0-beta.4` tag は Windows packaged smoke 済みの beta4 baseline を指す。
+現在の main は beta4 後の startup behavior と O2 `2.55 V` zero-reference polish を
+含み、Windows release-candidate smoke も通過済みであるため、次の配布候補は
+`1.0.0` として扱う。
 
 | Item | Decision |
 | :--- | :--- |
-| App version | `0.1.0-beta.4` |
-| Distribution directory | `dist/zss_demokit_gui_win64_beta4/` |
+| App version | `1.0.0` |
+| Distribution directory | `dist/zss_demokit_gui_win64_1_0_0/` |
 | Executable | `zss_demokit_gui.exe` |
-| Release note | `docs/release_notes_beta4.md` |
-| Existing beta3 tag | 維持。retag しない |
+| Release note | `docs/release_notes_v1_0_0.md` |
+| Existing beta tags | 維持。retag しない |
 
-## 3. Beta Distribution Policy
+## 3. Release Distribution Policy
 
-| Topic | Beta4 decision | Formal-release follow-up |
+| Topic | 1.0.0 decision | Follow-up |
 | :--- | :--- | :--- |
 | Package style | PyInstaller `onedir` | Installer / `onefile` は後で再検討 |
 | Installer | なし | Inno / NSIS / MSIX 等の候補を別途比較 |
 | Code signing | なし | 外部配布が増える段階で証明書取得と署名 pipeline を検討 |
 | Updater | なし | update channel / artifact hosting 方針を別途決定 |
-| Artifact sharing | zipped `dist/zss_demokit_gui_win64_beta4/` を想定 | GitHub Release / internal share などを選定 |
+| Artifact sharing | zipped `dist/zss_demokit_gui_win64_1_0_0/` を想定 | GitHub Release / internal share などを選定 |
 | Admin rights | 不要を維持 | formal installer 採用時も原則不要にする |
 | Target OS | Windows 11 Pro | 必要なら Windows 10 / 11 matrix を拡張 |
 
-Beta4 では「すぐ配布してテストできること」と「トラブル時に中身を追いやすいこと」を
-優先する。したがって `onedir` を維持し、installer / signing / updater は意図的に
-正式版前の判断点として残す。
-
-Beta4 が Windows packaged smoke と O2 calibration / filtering sanity check を通過し、
-critical regression がなければ、次は `1.0.0-rc.1` または `1.0.0` の判断に進む。
+1.0.0 では「すぐ配布してテスト継続できること」と「トラブル時に中身を追いやすいこと」を
+優先する。したがって `onedir` を維持し、installer / signing / updater は次フェーズの
+判断点として残す。
 
 ## 4. Distribution Gate
 
@@ -90,8 +88,8 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 
 Expected output:
 
-- `dist\zss_demokit_gui_win64_beta4\`
-- `dist\zss_demokit_gui_win64_beta4\zss_demokit_gui.exe`
+- `dist\zss_demokit_gui_win64_1_0_0\`
+- `dist\zss_demokit_gui_win64_1_0_0\zss_demokit_gui.exe`
 
 ### Step 4: Windows Smoke
 
@@ -109,17 +107,17 @@ Expected output:
 Windows smoke が通った後に、配布対象 branch で tag を作る。
 
 ```sh
-git tag -a v0.1.0-beta.4 -m "ZSS Demo Kit beta 4 final beta candidate"
-git push origin v0.1.0-beta.4
+git tag -a v1.0.0 -m "ZSS Demo Kit 1.0.0"
+git push origin v1.0.0
 ```
 
-Artifact は `dist/zss_demokit_gui_win64_beta4/` を zip 化する。zip 名の候補:
+Artifact は `dist/zss_demokit_gui_win64_1_0_0/` を zip 化する。zip 名の候補:
 
 ```text
-zss_demokit_gui_win64_beta4.zip
+zss_demokit_gui_win64_1_0_0.zip
 ```
 
-## 6. Not Blocking Beta4
+## 6. Not Blocking 1.0.0
 
 - final icon art direction
 - installer recipe
@@ -129,4 +127,4 @@ zss_demokit_gui_win64_beta4.zip
 - final flow calibration / selector threshold
 - pump-noise characterization
 
-これらは重要だが、PoC / hardware-development 向け beta4 の配布を止める条件にはしない。
+これらは重要だが、PoC / hardware-development 向け 1.0.0 の配布を止める条件にはしない。
