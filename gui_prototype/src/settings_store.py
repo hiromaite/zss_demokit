@@ -5,7 +5,15 @@ from pathlib import Path
 
 from PySide6.QtCore import QSettings
 
-from app_state import AppSettings, LoggingPreferences, O2CalibrationPreferences, PlotPreferences, WindowPreferences
+from app_state import (
+    AppSettings,
+    LoggingPreferences,
+    O2CalibrationPreferences,
+    O2OutputFilterPreferences,
+    PlotPreferences,
+    WindowPreferences,
+)
+from o2_filter import normalize_o2_filter_preferences
 from protocol_constants import BLE_MODE
 from recording_io import recording_directory
 
@@ -57,6 +65,40 @@ class SettingsStore:
             invert_polarity=self._to_bool(self._settings.value("o2/invert_polarity", False)),
         )
 
+        settings.o2_filter = normalize_o2_filter_preferences(
+            O2OutputFilterPreferences(
+                enabled=self._to_bool(self._settings.value("o2_filter/enabled", True)),
+                filter_type=str(
+                    self._settings.value(
+                        "o2_filter/filter_type",
+                        settings.o2_filter.filter_type,
+                    )
+                ),
+                preset=str(
+                    self._settings.value(
+                        "o2_filter/preset",
+                        settings.o2_filter.preset,
+                    )
+                ),
+                ema_cutoff_hz=self._to_float(
+                    self._settings.value("o2_filter/ema_cutoff_hz", 7.0),
+                    7.0,
+                ),
+                gaussian_sigma_ms=self._to_float(
+                    self._settings.value("o2_filter/gaussian_sigma_ms", 30.0),
+                    30.0,
+                ),
+                gaussian_tail_sigma=self._to_float(
+                    self._settings.value("o2_filter/gaussian_tail_sigma", 3.0),
+                    3.0,
+                ),
+                centered_gaussian_sigma_samples=self._to_float(
+                    self._settings.value("o2_filter/centered_gaussian_sigma_samples", 1.25),
+                    1.25,
+                ),
+            )
+        )
+
         settings.windows = WindowPreferences(
             main_window_width=int(self._settings.value("windows/main_window_width", settings.windows.main_window_width)),
             main_window_height=int(self._settings.value("windows/main_window_height", settings.windows.main_window_height)),
@@ -94,6 +136,17 @@ class SettingsStore:
         )
         self._settings.setValue("o2/calibrated_at_iso", settings.o2.calibrated_at_iso)
         self._settings.setValue("o2/invert_polarity", settings.o2.invert_polarity)
+        o2_filter = normalize_o2_filter_preferences(settings.o2_filter)
+        self._settings.setValue("o2_filter/enabled", o2_filter.enabled)
+        self._settings.setValue("o2_filter/filter_type", o2_filter.filter_type)
+        self._settings.setValue("o2_filter/preset", o2_filter.preset)
+        self._settings.setValue("o2_filter/ema_cutoff_hz", o2_filter.ema_cutoff_hz)
+        self._settings.setValue("o2_filter/gaussian_sigma_ms", o2_filter.gaussian_sigma_ms)
+        self._settings.setValue("o2_filter/gaussian_tail_sigma", o2_filter.gaussian_tail_sigma)
+        self._settings.setValue(
+            "o2_filter/centered_gaussian_sigma_samples",
+            o2_filter.centered_gaussian_sigma_samples,
+        )
         self._settings.setValue("windows/main_window_width", settings.windows.main_window_width)
         self._settings.setValue("windows/main_window_height", settings.windows.main_window_height)
         self._settings.setValue("windows/launcher_window_width", settings.windows.launcher_window_width)

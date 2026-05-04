@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QFrame,
     QGridLayout,
@@ -27,7 +28,17 @@ from PySide6.QtWidgets import (
 )
 
 from app_metadata import APP_NAME
-from app_state import AppSettings
+from app_state import (
+    AppSettings,
+    O2_FILTER_PRESET_CUSTOM,
+    O2_FILTER_PRESETS,
+    O2_FILTER_TYPES,
+    O2_FILTER_TYPE_CENTERED_GAUSSIAN,
+    O2_FILTER_TYPE_EMA_1,
+    O2_FILTER_TYPE_EMA_2,
+    O2_FILTER_TYPE_GAUSSIAN,
+    O2OutputFilterPreferences,
+)
 from dialog_helpers import dialog_header, format_optional, style_dialog_buttons
 from flow_characterization import (
     FLOW_CHARACTERIZATION_CAPTURE_STEP_IDS,
@@ -257,6 +268,18 @@ class SettingsDialog(QDialog):
         return self._pending_o2_calibrated_at_iso
 
     @property
+    def selected_o2_filter_preferences(self) -> O2OutputFilterPreferences:
+        return O2OutputFilterPreferences(
+            enabled=self.o2_filter_enabled_check.isChecked(),
+            filter_type=self.o2_filter_type_combo.currentText(),
+            preset=self.o2_filter_preset_combo.currentText(),
+            ema_cutoff_hz=self.o2_filter_ema_cutoff_spin.value(),
+            gaussian_sigma_ms=self.o2_filter_gaussian_sigma_spin.value(),
+            gaussian_tail_sigma=self.o2_filter_gaussian_tail_spin.value(),
+            centered_gaussian_sigma_samples=self.o2_filter_centered_gaussian_sigma_spin.value(),
+        )
+
+    @property
     def flow_verification_requested(self) -> bool:
         return self._open_flow_verification_requested
 
@@ -419,9 +442,92 @@ class SettingsDialog(QDialog):
         calibration_layout.addLayout(calibration_row)
         layout.addWidget(calibration_card)
 
+        filter_card = QFrame()
+        filter_card.setObjectName("SurfaceCard")
+        filter_layout = QVBoxLayout(filter_card)
+        filter_title = QLabel("O2 Output Filter")
+        filter_title.setObjectName("SectionTitle")
+        filter_layout.addWidget(filter_title)
+
+        filter_form = QFormLayout()
+        self.o2_filter_enabled_check = QCheckBox("Enable O2 output smoothing")
+        self.o2_filter_enabled_check.setChecked(self._settings.o2_filter.enabled)
+        self.o2_filter_type_combo = QComboBox()
+        self.o2_filter_type_combo.addItems(list(O2_FILTER_TYPES))
+        self.o2_filter_type_combo.setCurrentText(self._settings.o2_filter.filter_type)
+        self.o2_filter_preset_combo = QComboBox()
+        self.o2_filter_preset_combo.addItems(list(O2_FILTER_PRESETS))
+        self.o2_filter_preset_combo.setCurrentText(self._settings.o2_filter.preset)
+
+        self.o2_filter_ema_cutoff_spin = QDoubleSpinBox()
+        self.o2_filter_ema_cutoff_spin.setRange(0.1, 25.0)
+        self.o2_filter_ema_cutoff_spin.setDecimals(1)
+        self.o2_filter_ema_cutoff_spin.setSingleStep(0.5)
+        self.o2_filter_ema_cutoff_spin.setSuffix(" Hz")
+        self.o2_filter_ema_cutoff_spin.setValue(self._settings.o2_filter.ema_cutoff_hz)
+
+        self.o2_filter_gaussian_sigma_spin = QDoubleSpinBox()
+        self.o2_filter_gaussian_sigma_spin.setRange(1.0, 1000.0)
+        self.o2_filter_gaussian_sigma_spin.setDecimals(1)
+        self.o2_filter_gaussian_sigma_spin.setSingleStep(5.0)
+        self.o2_filter_gaussian_sigma_spin.setSuffix(" ms")
+        self.o2_filter_gaussian_sigma_spin.setValue(self._settings.o2_filter.gaussian_sigma_ms)
+
+        self.o2_filter_gaussian_tail_spin = QDoubleSpinBox()
+        self.o2_filter_gaussian_tail_spin.setRange(1.0, 6.0)
+        self.o2_filter_gaussian_tail_spin.setDecimals(2)
+        self.o2_filter_gaussian_tail_spin.setSingleStep(0.25)
+        self.o2_filter_gaussian_tail_spin.setSuffix(" sigma")
+        self.o2_filter_gaussian_tail_spin.setValue(self._settings.o2_filter.gaussian_tail_sigma)
+
+        self.o2_filter_centered_gaussian_sigma_spin = QDoubleSpinBox()
+        self.o2_filter_centered_gaussian_sigma_spin.setRange(1.0, 1.5)
+        self.o2_filter_centered_gaussian_sigma_spin.setDecimals(2)
+        self.o2_filter_centered_gaussian_sigma_spin.setSingleStep(0.05)
+        self.o2_filter_centered_gaussian_sigma_spin.setSuffix(" samples")
+        self.o2_filter_centered_gaussian_sigma_spin.setValue(
+            self._settings.o2_filter.centered_gaussian_sigma_samples
+        )
+
+        filter_form.addRow("Enabled", self.o2_filter_enabled_check)
+        filter_form.addRow("Type", self.o2_filter_type_combo)
+        filter_form.addRow("Preset", self.o2_filter_preset_combo)
+        filter_form.addRow("EMA cutoff", self.o2_filter_ema_cutoff_spin)
+        filter_form.addRow("Gaussian sigma", self.o2_filter_gaussian_sigma_spin)
+        filter_form.addRow("Gaussian tail", self.o2_filter_gaussian_tail_spin)
+        filter_form.addRow("Centered Gaussian sigma", self.o2_filter_centered_gaussian_sigma_spin)
+        filter_layout.addLayout(filter_form)
+        layout.addWidget(filter_card)
+
+        self.o2_filter_enabled_check.toggled.connect(self._update_o2_filter_control_state)
+        self.o2_filter_type_combo.currentTextChanged.connect(self._update_o2_filter_control_state)
+        self.o2_filter_preset_combo.currentTextChanged.connect(self._update_o2_filter_control_state)
+        self._update_o2_filter_control_state()
+
         self._refresh_o2_calibration_state()
         layout.addStretch(1)
         return page
+
+    def _update_o2_filter_control_state(self) -> None:
+        if not hasattr(self, "o2_filter_enabled_check"):
+            return
+        enabled = self.o2_filter_enabled_check.isChecked()
+        filter_type = self.o2_filter_type_combo.currentText()
+        custom = self.o2_filter_preset_combo.currentText() == O2_FILTER_PRESET_CUSTOM
+        self.o2_filter_type_combo.setEnabled(enabled)
+        self.o2_filter_preset_combo.setEnabled(enabled)
+        self.o2_filter_ema_cutoff_spin.setEnabled(
+            enabled and custom and filter_type in {O2_FILTER_TYPE_EMA_1, O2_FILTER_TYPE_EMA_2}
+        )
+        self.o2_filter_gaussian_sigma_spin.setEnabled(
+            enabled and custom and filter_type == O2_FILTER_TYPE_GAUSSIAN
+        )
+        self.o2_filter_gaussian_tail_spin.setEnabled(
+            enabled and custom and filter_type == O2_FILTER_TYPE_GAUSSIAN
+        )
+        self.o2_filter_centered_gaussian_sigma_spin.setEnabled(
+            enabled and custom and filter_type == O2_FILTER_TYPE_CENTERED_GAUSSIAN
+        )
 
     def _create_engineering_tools_page(self) -> QWidget:
         page, layout = self._page_wrapper()

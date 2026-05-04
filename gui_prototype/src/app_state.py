@@ -5,6 +5,32 @@ from datetime import datetime
 
 from protocol_constants import BLE_MODE
 
+O2_FILTER_TYPE_EMA_1 = "EMA 1-pole"
+O2_FILTER_TYPE_EMA_2 = "EMA 2-pole"
+O2_FILTER_TYPE_GAUSSIAN = "One-sided Gaussian"
+O2_FILTER_TYPE_SAVGOL_7 = "Savitzky-Golay 7-point"
+O2_FILTER_TYPE_SAVGOL_9 = "Savitzky-Golay 9-point"
+O2_FILTER_TYPE_CENTERED_GAUSSIAN = "Centered Gaussian 7-point"
+O2_FILTER_TYPES = (
+    O2_FILTER_TYPE_EMA_1,
+    O2_FILTER_TYPE_EMA_2,
+    O2_FILTER_TYPE_GAUSSIAN,
+    O2_FILTER_TYPE_SAVGOL_7,
+    O2_FILTER_TYPE_SAVGOL_9,
+    O2_FILTER_TYPE_CENTERED_GAUSSIAN,
+)
+
+O2_FILTER_PRESET_FAST = "Fast"
+O2_FILTER_PRESET_BALANCED = "Balanced"
+O2_FILTER_PRESET_QUIET = "Quiet"
+O2_FILTER_PRESET_CUSTOM = "Custom"
+O2_FILTER_PRESETS = (
+    O2_FILTER_PRESET_FAST,
+    O2_FILTER_PRESET_BALANCED,
+    O2_FILTER_PRESET_QUIET,
+    O2_FILTER_PRESET_CUSTOM,
+)
+
 
 @dataclass
 class PlotPreferences:
@@ -40,6 +66,17 @@ class O2CalibrationPreferences:
 
 
 @dataclass
+class O2OutputFilterPreferences:
+    enabled: bool = True
+    filter_type: str = O2_FILTER_TYPE_GAUSSIAN
+    preset: str = O2_FILTER_PRESET_BALANCED
+    ema_cutoff_hz: float = 7.0
+    gaussian_sigma_ms: float = 30.0
+    gaussian_tail_sigma: float = 3.0
+    centered_gaussian_sigma_samples: float = 1.25
+
+
+@dataclass
 class WindowPreferences:
     main_window_width: int = 1480
     main_window_height: int = 940
@@ -53,6 +90,7 @@ class AppSettings:
     plot: PlotPreferences = field(default_factory=PlotPreferences)
     logging: LoggingPreferences = field(default_factory=LoggingPreferences)
     o2: O2CalibrationPreferences = field(default_factory=O2CalibrationPreferences)
+    o2_filter: O2OutputFilterPreferences = field(default_factory=O2OutputFilterPreferences)
     windows: WindowPreferences = field(default_factory=WindowPreferences)
 
 
