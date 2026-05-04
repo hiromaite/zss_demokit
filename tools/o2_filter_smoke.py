@@ -22,9 +22,11 @@ from app_state import (  # noqa: E402
     O2OutputFilterPreferences,
 )
 from o2_filter import O2OutputFilter, describe_o2_filter  # noqa: E402
+from protocol_constants import derive_o2_concentration_percent  # noqa: E402
 
 
 def main() -> int:
+    _assert_o2_voltage_conversion_uses_configured_zero_anchor()
     _assert_disabled_filter_is_identity()
     _assert_gaussian_default_response()
     _assert_ema_reduces_pump_ripple()
@@ -32,6 +34,32 @@ def main() -> int:
     _assert_centered_gaussian_reduces_ripple()
     print("o2_filter_smoke_ok")
     return 0
+
+
+def _assert_o2_voltage_conversion_uses_configured_zero_anchor() -> None:
+    legacy_value = derive_o2_concentration_percent(
+        0.64,
+        air_calibration_voltage_v=0.64,
+        zero_reference_voltage_v=0.0,
+    )
+    if legacy_value is None or abs(legacy_value - 21.0) > 1e-9:
+        raise AssertionError(f"legacy 0 V zero anchor did not map ambient to 21%: {legacy_value}")
+
+    midpoint_value = derive_o2_concentration_percent(
+        0.64,
+        air_calibration_voltage_v=0.64,
+        zero_reference_voltage_v=2.5,
+    )
+    if midpoint_value is None or abs(midpoint_value - 21.0) > 1e-9:
+        raise AssertionError(f"2.5 V zero anchor did not map ambient to 21%: {midpoint_value}")
+
+    clamped_value = derive_o2_concentration_percent(
+        2.6,
+        air_calibration_voltage_v=0.64,
+        zero_reference_voltage_v=2.5,
+    )
+    if clamped_value != 0.0:
+        raise AssertionError(f"above-zero-reference voltage should clamp to 0%: {clamped_value}")
 
 
 def _assert_disabled_filter_is_identity() -> None:

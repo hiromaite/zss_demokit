@@ -37,6 +37,7 @@ from flow_verification import (
     VerificationStrokeResult,
     ZeroCheckResult,
 )
+from gui_smoke_support import isolate_gui_settings
 from main_window import MainWindow
 from protocol_constants import BLE_MODE
 from qt_runtime import configure_qt_runtime
@@ -251,15 +252,19 @@ def main() -> int:
     app.setApplicationDisplayName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
 
-    with tempfile.TemporaryDirectory(prefix="zss_log_history_smoke_") as tmpdir:
-        window = MainWindow(BLE_MODE)
-        try:
-            window._plot_refresh_timer.stop()  # noqa: SLF001
-            window._telemetry_health_timer.stop()  # noqa: SLF001
-            _exercise_event_log(window, Path(tmpdir))
-        finally:
-            window.close()
-        _exercise_history(Path(tmpdir))
+    settings_dir = isolate_gui_settings("zss_log_history_settings_")
+    try:
+        with tempfile.TemporaryDirectory(prefix="zss_log_history_smoke_") as tmpdir:
+            window = MainWindow(BLE_MODE)
+            try:
+                window._plot_refresh_timer.stop()  # noqa: SLF001
+                window._telemetry_health_timer.stop()  # noqa: SLF001
+                _exercise_event_log(window, Path(tmpdir))
+            finally:
+                window.close()
+            _exercise_history(Path(tmpdir))
+    finally:
+        settings_dir.cleanup()
 
     print("gui_log_history_smoke_ok")
     return 0

@@ -203,18 +203,17 @@ flow_rate_lpm = sign(selected_differential_pressure_pa) * (1.0 * sqrt(abs(select
 - raw / canonical measurement は引き続き `zirconia_output_voltage_v` とする
 - calibration は GUI ローカルに保存し、device 側 persistent state にはしない
 
-初期 calibration model:
+Calibration model:
 
 ```text
-v_zero_ref = 2.5 V
+v_zero_ref = GUI-configured 0% reference voltage
 v_air_cal = zirconia_output_voltage_v captured in ambient air
 o2_percent = clamp(((v_zero_ref - v_measured) / (v_zero_ref - v_air_cal)) * 21.0, 0.0, 100.0)
 ```
 
 補足:
 
-- この式は `v_measured` が低いほど O2% が高い前提である
-- 実機極性が逆なら GUI config で反転可能にする
+- `v_zero_ref` と `v_air_cal` の相対関係で slope が決まるため、prototype wiring / analog frontend に合わせて `v_zero_ref` を GUI から調整できるようにする
 
 ## 21. Dual-SDP Flow Measurement Direction
 

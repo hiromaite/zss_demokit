@@ -27,6 +27,7 @@ from app_state import (  # noqa: E402
     O2OutputFilterPreferences,
 )
 from dialogs import SettingsDialog  # noqa: E402
+from gui_smoke_support import isolate_gui_settings  # noqa: E402
 from main_window import MainWindow  # noqa: E402
 from mock_backend import TelemetryPoint  # noqa: E402
 from protocol_constants import BLE_MODE, TELEMETRY_FIELD_BITS  # noqa: E402
@@ -40,7 +41,11 @@ def main() -> int:
     app.setApplicationName(APP_ID)
     app.setApplicationDisplayName(APP_NAME)
     app.setApplicationVersion(APP_VERSION)
-    _exercise_o2_filter_controls()
+    settings_dir = isolate_gui_settings("zss_o2_filter_smoke_")
+    try:
+        _exercise_o2_filter_controls()
+    finally:
+        settings_dir.cleanup()
     print("gui_o2_filter_smoke_ok")
     return 0
 
@@ -50,6 +55,7 @@ def _exercise_o2_filter_controls() -> None:
     try:
         window._plot_refresh_timer.stop()  # noqa: SLF001 - deterministic smoke
         window.app_settings.o2.air_calibration_voltage_v = 0.70
+        window.app_settings.o2.zero_reference_voltage_v = 0.0
         window.app_settings.o2_filter = O2OutputFilterPreferences(
             enabled=True,
             filter_type=O2_FILTER_TYPE_GAUSSIAN,
@@ -68,6 +74,8 @@ def _exercise_o2_filter_controls() -> None:
         x_data, y_data = window.sensor_secondary_curve.getData()
         if x_data is None or y_data is None or len(y_data) != len(window.plot_controller.time_values):
             raise AssertionError("O2 plot curve did not receive filtered O2 data")
+        if float(y_data[-1]) <= 21.0:
+            raise AssertionError(f"O2 plot curve did not use filtered voltage conversion: {float(y_data[-1])}")
 
         dialog = SettingsDialog(
             window.app_settings,
@@ -79,6 +87,7 @@ def _exercise_o2_filter_controls() -> None:
             parent=window,
         )
         try:
+            dialog.o2_zero_reference_spin.setValue(0.05)
             dialog.o2_filter_enabled_check.setChecked(False)
             if not dialog.o2_filter_type_combo.isEnabled():
                 raise AssertionError("disabled O2 filter blocked filter type editing")
@@ -95,6 +104,8 @@ def _exercise_o2_filter_controls() -> None:
             selected = dialog.selected_o2_filter_preferences
             if selected.enabled:
                 raise AssertionError("dialog did not expose disabled O2 filter state")
+            if abs(dialog.selected_o2_zero_reference_voltage_v - 0.05) > 1e-9:
+                raise AssertionError("dialog did not expose custom O2 zero reference voltage")
             if (
                 selected.filter_type != O2_FILTER_TYPE_CENTERED_GAUSSIAN
                 or abs(selected.centered_gaussian_sigma_samples - 1.35) > 1e-9

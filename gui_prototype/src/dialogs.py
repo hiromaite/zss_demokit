@@ -183,6 +183,7 @@ class SettingsDialog(QDialog):
         self._show_flow_characterization_history_requested = False
         self._pending_o2_air_calibration_voltage_v = settings.o2.air_calibration_voltage_v
         self._pending_o2_calibrated_at_iso = settings.o2.calibrated_at_iso
+        self._pending_o2_zero_reference_voltage_v = settings.o2.zero_reference_voltage_v
         self._syncing_o2_filter_controls = False
         self.setWindowTitle("Settings")
         self.resize(880, 580)
@@ -267,6 +268,12 @@ class SettingsDialog(QDialog):
     @property
     def selected_o2_air_calibration_voltage_v(self) -> float | None:
         return self._pending_o2_air_calibration_voltage_v
+
+    @property
+    def selected_o2_zero_reference_voltage_v(self) -> float:
+        if hasattr(self, "o2_zero_reference_spin"):
+            return self.o2_zero_reference_spin.value()
+        return self._pending_o2_zero_reference_voltage_v
 
     @property
     def selected_o2_calibrated_at_iso(self) -> str:
@@ -425,7 +432,7 @@ class SettingsDialog(QDialog):
         calibration_title.setObjectName("SectionTitle")
         calibration_hint = QLabel(
             "Use the current zirconia output voltage while the sensor is resting in ambient air. "
-            "The GUI will keep 2.5 V as the 0 % anchor and store the ambient point as the 21 % anchor."
+            "Set the 0 % anchor voltage for this prototype and store the ambient point as the 21 % anchor."
         )
         calibration_hint.setObjectName("SectionHint")
         calibration_hint.setWordWrap(True)
@@ -441,6 +448,17 @@ class SettingsDialog(QDialog):
         self.o2_calibration_live_label.setObjectName("SectionHint")
         self.o2_calibration_live_label.setWordWrap(True)
         calibration_layout.addWidget(self.o2_calibration_live_label)
+
+        calibration_form = QFormLayout()
+        self.o2_zero_reference_spin = QDoubleSpinBox()
+        self.o2_zero_reference_spin.setRange(0.0, 5.0)
+        self.o2_zero_reference_spin.setDecimals(3)
+        self.o2_zero_reference_spin.setSingleStep(0.05)
+        self.o2_zero_reference_spin.setSuffix(" V")
+        self.o2_zero_reference_spin.setValue(self._pending_o2_zero_reference_voltage_v)
+        self.o2_zero_reference_spin.valueChanged.connect(self._update_o2_zero_reference_voltage)
+        calibration_form.addRow("0% reference voltage", self.o2_zero_reference_spin)
+        calibration_layout.addLayout(calibration_form)
 
         calibration_row = QHBoxLayout()
         self.o2_calibrate_button = QPushButton("Calibrate to Ambient Air (21%)")
@@ -783,6 +801,10 @@ class SettingsDialog(QDialog):
         self._pending_o2_calibrated_at_iso = ""
         self._refresh_o2_calibration_state(message="O2 calibration reset is staged. Save settings to apply it.")
 
+    def _update_o2_zero_reference_voltage(self, value: float) -> None:
+        self._pending_o2_zero_reference_voltage_v = float(value)
+        self._refresh_o2_calibration_state()
+
     def _refresh_o2_calibration_state(self, message: str | None = None) -> None:
         live_voltage = self._current_zirconia_voltage_v
         if live_voltage is None:
@@ -793,7 +815,10 @@ class SettingsDialog(QDialog):
             self.o2_calibrate_button.setEnabled(True)
 
         if self._pending_o2_air_calibration_voltage_v is None:
-            status_text = "Current calibration state: not calibrated"
+            status_text = (
+                "Current calibration state: not calibrated; "
+                f"0% anchor {self._pending_o2_zero_reference_voltage_v:0.3f} V"
+            )
             if message:
                 status_text = f"{status_text}. {message}"
             self.o2_calibration_status_label.setText(status_text)
@@ -803,6 +828,7 @@ class SettingsDialog(QDialog):
         timestamp_text = self._pending_o2_calibrated_at_iso or "timestamp unavailable"
         status_text = (
             "Current calibration state: "
+            f"0% anchor {self._pending_o2_zero_reference_voltage_v:0.3f} V, "
             f"ambient anchor {self._pending_o2_air_calibration_voltage_v:0.3f} V "
             f"({timestamp_text})"
         )

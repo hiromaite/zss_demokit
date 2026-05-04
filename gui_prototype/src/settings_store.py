@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from PySide6.QtCore import QSettings
@@ -20,7 +21,11 @@ from recording_io import recording_directory
 
 class SettingsStore:
     def __init__(self) -> None:
-        self._settings = QSettings("zss-demokit", "gui-prototype")
+        settings_file = os.environ.get("ZSS_DEMOKIT_SETTINGS_FILE", "").strip()
+        if settings_file:
+            self._settings = QSettings(settings_file, QSettings.IniFormat)
+        else:
+            self._settings = QSettings("zss-demokit", "gui-prototype")
 
     def load(self) -> AppSettings:
         settings = AppSettings()
