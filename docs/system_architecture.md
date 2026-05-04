@@ -242,6 +242,7 @@ GUI で必要なこと:
 - `TelemetryPoint` 以降は transport 非依存の共通 GUI 経路を使う
 - 記録は raw telemetry に近い粒度で処理し、描画は timer-driven refresh でまとめて更新する
 - O2 concentration や flow rate は GUI-derived value であり、canonical measurement は voltage / differential pressure のまま保持する
+- O2 output filter は GUI 表示専用の smoothing layer とし、raw `zirconia_output_voltage_v` と通常CSVスキーマは変更しない
 
 ### 7.1 Runtime Telemetry Flow
 
@@ -261,17 +262,19 @@ flowchart TD
     BACKEND --> CONN["ConnectionController.telemetry_received"]
     CONN --> MAIN["MainWindow._on_telemetry(point)"]
 
-    MAIN --> PLOT_APPEND["PlotController.append_sample(point)"]
+    MAIN --> O2_FILTER["O2OutputFilter.apply()<br/>display smoothing only"]
+    MAIN --> PLOT_APPEND["PlotController.append_sample(point,<br/>o2_zirconia_output_voltage_v)"]
+    O2_FILTER --> PLOT_APPEND
     MAIN --> HEALTH["Telemetry health / session stats"]
     MAIN --> STATUS["Status labels<br/>pump / heater / gaps / diagnostics"]
     MAIN --> REC{"Recording active?"}
 
-    REC -->|"yes"| CSV["RecordingController.append_row()<br/>CSV raw schema"]
+    REC -->|"yes"| CSV["RecordingController.append_row()<br/>CSV raw schema<br/>no filtered O2 value"]
     REC -->|"no"| SKIP["No CSV row"]
 
-    PLOT_APPEND --> BUFFERS["PlotController buffers<br/>time / flow / heater / zirconia"]
+    PLOT_APPEND --> BUFFERS["PlotController buffers<br/>time / flow / heater / zirconia / o2_zirconia"]
     PLOT_APPEND --> METRICS["PlotController.metric_snapshot()"]
-    METRICS --> CARDS["Metric cards"]
+    METRICS --> CARDS["Metric cards<br/>O2 uses o2_zirconia"]
 
     TIMER["150 ms plot timer"] --> REFRESH["MainWindow._refresh_plots()"]
     BUFFERS --> REFRESH
@@ -294,7 +297,9 @@ flowchart LR
     ZIRC --> ZIRC_BUF["zirconia_values"]
     ZIRC_BUF --> ZIRC_PLOT["Zirconia / Heater plot<br/>right axis: Zirconia V"]
 
-    ZIRC_BUF --> O2_DERIVED["derive_o2_concentration_percent()<br/>uses GUI calibration"]
+    ZIRC --> O2_FILTER["O2OutputFilter<br/>disabled: pass-through<br/>enabled: SG / centered Gaussian"]
+    O2_FILTER --> O2_ZIRC_BUF["o2_zirconia_values"]
+    O2_ZIRC_BUF --> O2_DERIVED["derive_o2_concentration_percent()<br/>uses GUI calibration"]
     O2_DERIVED --> O2_PLOT["Flow / O2 plot<br/>right axis: O2 %"]
     O2_DERIVED --> O2_CARD["O2 metric card"]
 
@@ -306,7 +311,9 @@ flowchart LR
     OPTIONAL --> DETAIL["detail labels and flow diagnostics"]
 ```
 
-If a display-only smoothing layer is enabled in a feature branch, it belongs between `zirconia_output_voltage_v` and the O2-derived display path.
+The O2 output filter is stored separately from raw zirconia history as `PlotController.o2_zirconia_values`.
+When disabled, that series is a pass-through copy of `zirconia_output_voltage_v`.
+When enabled, it applies the selected SG or centered Gaussian smoothing before O2 concentration is derived.
 It must not replace the canonical raw `zirconia_output_voltage_v` stored in telemetry or the standard CSV schema unless a future protocol revision explicitly changes that contract.
 
 ### 7.3 Data Ownership
@@ -316,12 +323,13 @@ It must not replace the canonical raw `zirconia_output_voltage_v` stored in tele
 | `sequence` | device telemetry | `PlotController.time_values`, gap tracking | X-axis, gap counter, CSV |
 | `host_received_at` | GUI receive time | `TelemetryPoint` / recording path | CSV timing, health diagnostics |
 | `nominal_sample_period_ms` | device telemetry / capabilities | `TelemetryPoint`, session metadata | elapsed time calculation, CSV metadata |
-| `zirconia_output_voltage_v` | device telemetry | `PlotController.zirconia_values` | Zirconia voltage metric, lower plot right axis, O2-derived display |
+| `zirconia_output_voltage_v` | device telemetry | `PlotController.zirconia_values`, recording path | Zirconia voltage metric, lower plot right axis, standard CSV |
+| `o2_zirconia_output_voltage_v` | GUI O2 filter + raw zirconia voltage | `PlotController.o2_zirconia_values` | O2 metric input, upper plot right axis input; not standard CSV |
 | `heater_rtd_resistance_ohm` | device telemetry | `PlotController.heater_values` | Heater metric, lower plot left axis |
 | `differential_pressure_selected_pa` | device telemetry | `PlotController.differential_pressure_selected_values` | flow-derived metric and upper plot left axis |
 | raw SDP fields | BLE batch / wired optional telemetry | latest diagnostic state | flow detail labels, CSV optional raw columns |
 | `zirconia_ip_voltage_v`, `internal_voltage_v` | wired optional telemetry | latest diagnostic state | device status detail, CSV optional columns |
-| O2 concentration % | GUI calibration + zirconia voltage | derived at metric / render time | O2 metric, upper plot right axis |
+| O2 concentration % | GUI calibration + `o2_zirconia_output_voltage_v` | derived at metric / render time | O2 metric, upper plot right axis |
 | flow rate L/min | selected differential pressure | derived on append | Flow metric, upper plot left axis |
 
 ### 7.4 レート制御方針
