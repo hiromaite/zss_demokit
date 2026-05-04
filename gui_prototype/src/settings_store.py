@@ -54,22 +54,29 @@ class SettingsStore:
             ),
         )
 
+        zero_reference_voltage_v = self._to_float(
+            self._settings.value("o2/zero_reference_voltage_v", 0.0),
+            0.0,
+        )
+        air_calibration_voltage_v = self._to_optional_float(
+            self._settings.value("o2/air_calibration_voltage_v", "")
+        )
+        calibrated_at_iso = str(self._settings.value("o2/calibrated_at_iso", "")).strip()
+        if air_calibration_voltage_v is not None and not calibrated_at_iso:
+            air_calibration_voltage_v = None
+            if abs(zero_reference_voltage_v - 2.5) < 1e-9:
+                zero_reference_voltage_v = 0.0
+
         settings.o2 = O2CalibrationPreferences(
-            zero_reference_voltage_v=self._to_float(
-                self._settings.value("o2/zero_reference_voltage_v", 2.5),
-                2.5,
-            ),
+            zero_reference_voltage_v=zero_reference_voltage_v,
             ambient_reference_percent=self._to_float(
                 self._settings.value("o2/ambient_reference_percent", 21.0),
                 21.0,
             ),
-            air_calibration_voltage_v=self._to_optional_float(
-                self._settings.value("o2/air_calibration_voltage_v", "")
-            ),
-            calibrated_at_iso=str(self._settings.value("o2/calibrated_at_iso", "")),
+            air_calibration_voltage_v=air_calibration_voltage_v,
+            calibrated_at_iso=calibrated_at_iso,
             invert_polarity=self._to_bool(self._settings.value("o2/invert_polarity", False)),
         )
-
         settings.o2_filter = normalize_o2_filter_preferences(
             O2OutputFilterPreferences(
                 enabled=self._to_bool(self._settings.value("o2_filter/enabled", True)),

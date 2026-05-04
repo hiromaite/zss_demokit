@@ -58,7 +58,7 @@ class LoggingPreferences:
 
 @dataclass
 class O2CalibrationPreferences:
-    zero_reference_voltage_v: float = 2.5
+    zero_reference_voltage_v: float = 0.0
     ambient_reference_percent: float = 21.0
     air_calibration_voltage_v: float | None = None
     calibrated_at_iso: str = ""

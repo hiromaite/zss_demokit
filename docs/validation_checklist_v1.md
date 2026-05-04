@@ -72,6 +72,7 @@
 | `GUI-VAL-038` | Flow history comparison smoke | Verification / Characterization の recent history を summary-level に比較し、history summary CSV を export できる | `PASS` | `tools/gui_log_history_smoke.py` で Verification mean/max error comparison、Characterization polarity/peak/rough gain comparison、Settings の Characterization history entry、summary CSV export を確認 |
 | `GUI-VAL-039` | Project organization cleanup smoke | README / docs index / tools/resource guide 更新後も GUI history dialog / event log panel split が退行しない | `PASS` | `flow_history_dialogs.py`、`event_log_panel.py`、`ui_helpers.py`、`plot_interactions.py`、`dialog_helpers.py` へ安全な責務分離を実施し、compileall、`tools/gui_log_history_smoke.py`、`tools/gui_engineering_tools_smoke.py`、`tools/gui_layout_smoke.py`、`tools/gui_plot_controls_smoke.py` で確認 |
 | `GUI-VAL-040` | Release readiness metadata / document smoke | beta3 packaging metadata、icon assets、PyInstaller spec、release docs の整合を機械的に確認できる | `PASS` | `tools/release_readiness_check.py` を追加し、`APP_VERSION=0.1.0-beta.3`、`zss_demokit_gui_win64_beta3`、icon、spec hiddenimports、`README.md`、`AGENTS.md`、`docs/project_status_v1.md`、`docs/distribution_plan_v1.md`、`docs/release_notes_beta3.md`、Windows smoke checklist 参照を確認 |
+| `GUI-VAL-041` | O2 filter/calibration diagnostic smoke | O2 filter controls、stale calibration migration、0% clamp diagnostic が GUI 上で退行しない | `PASS` | `tools/gui_o2_filter_smoke.py` で filter ON/OFF / type / preset / custom persistence、timestamp なし stale O2 calibration の無効化、clamped-to-0% detail 表示を確認 |
 
 ## 5. Firmware Checklist
 

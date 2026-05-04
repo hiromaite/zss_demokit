@@ -52,6 +52,7 @@ from plot_interactions import PlotInteractionAxisItem, PlotInteractionViewBox, T
 from protocol_constants import (
     BLE_FEATURE_TELEMETRY_BATCH,
     BLE_MODE,
+    O2_MIN_CALIBRATION_SPAN_V,
     STATUS_FLAG_HEATER_POWER_ON,
     STATUS_FLAG_PUMP_ON,
     TELEMETRY_FIELD_DIFFERENTIAL_PRESSURE_HIGH_RANGE,
@@ -1660,6 +1661,7 @@ class MainWindow(QMainWindow):
         else:
             self.metric_flow.set_detail("")
         self.metric_o2.set_value(self._format_o2_metric_value(o2_zirconia_value))
+        self.metric_o2.set_detail(self._format_o2_metric_detail(o2_zirconia_value))
 
     def _format_o2_metric_value(self, zirconia_value: float | None) -> str:
         if zirconia_value is None or not math.isfinite(zirconia_value):
@@ -1675,6 +1677,39 @@ class MainWindow(QMainWindow):
         if o2_percent is None:
             return "Calibrate"
         return f"{o2_percent:0.1f} %"
+
+    def _format_o2_metric_detail(self, zirconia_value: float | None) -> str:
+        if zirconia_value is None or not math.isfinite(zirconia_value):
+            return ""
+
+        air_voltage = self.app_settings.o2.air_calibration_voltage_v
+        zero_voltage = self.app_settings.o2.zero_reference_voltage_v
+        if air_voltage is None or not math.isfinite(air_voltage):
+            return "Set ambient calibration in Settings > Device."
+        if not math.isfinite(zero_voltage):
+            return "Set a valid 0% reference voltage in Settings > Device."
+
+        filter_text = describe_o2_filter(self.app_settings.o2_filter)
+        base = (
+            f"Input {zirconia_value:0.3f} V ({filter_text}); "
+            f"air {air_voltage:0.3f} V, 0% {zero_voltage:0.3f} V"
+        )
+        span = zero_voltage - air_voltage
+        if abs(span) < O2_MIN_CALIBRATION_SPAN_V:
+            return (
+                f"{base}. Calibration span is only {abs(span) * 1000.0:0.1f} mV; "
+                "set the 0% reference farther from ambient."
+            )
+
+        normalized = (zero_voltage - zirconia_value) / span
+        if self.app_settings.o2.invert_polarity:
+            normalized *= -1.0
+        unclamped_percent = normalized * self.app_settings.o2.ambient_reference_percent
+        if unclamped_percent <= 0.0:
+            return f"{base}. O2 is clamped to 0%; voltage is outside the calibrated span."
+        if unclamped_percent >= 100.0:
+            return f"{base}. O2 is clamped to 100%; voltage is outside the calibrated span."
+        return base
 
     def _log_o2_calibration_changes(
         self,

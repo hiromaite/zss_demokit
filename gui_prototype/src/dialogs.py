@@ -65,6 +65,7 @@ from o2_filter import effective_o2_filter_preferences
 from protocol_constants import (
     BLE_MODE,
     DERIVED_METRIC_POLICY_ID,
+    O2_MIN_CALIBRATION_SPAN_V,
     PROTOCOL_VERSION_TEXT,
     WIRED_DEFAULT_BAUDRATE,
     WIRED_DEFAULT_LINE_SETTINGS,
@@ -836,6 +837,22 @@ class SettingsDialog(QDialog):
             status_text = f"{status_text}. {message}"
         self.o2_calibration_status_label.setText(status_text)
         self.o2_reset_button.setEnabled(True)
+        self._append_o2_calibration_span_warning()
+
+    def _append_o2_calibration_span_warning(self) -> None:
+        if self._pending_o2_air_calibration_voltage_v is None:
+            return
+        span_v = abs(
+            self._pending_o2_zero_reference_voltage_v
+            - self._pending_o2_air_calibration_voltage_v
+        )
+        if span_v >= O2_MIN_CALIBRATION_SPAN_V:
+            return
+        self.o2_calibration_status_label.setText(
+            f"{self.o2_calibration_status_label.text()}. "
+            f"Warning: calibration span is only {span_v * 1000.0:0.1f} mV; "
+            "set the 0% reference farther from ambient."
+        )
 
     def _refresh_flow_verification_state(self) -> None:
         self.flow_verification_button.setEnabled(self._flow_verification_available)

@@ -8,6 +8,7 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
 
@@ -32,6 +33,7 @@ from main_window import MainWindow  # noqa: E402
 from mock_backend import TelemetryPoint  # noqa: E402
 from protocol_constants import BLE_MODE, TELEMETRY_FIELD_BITS  # noqa: E402
 from qt_runtime import configure_qt_runtime  # noqa: E402
+from settings_store import SettingsStore  # noqa: E402
 
 
 def main() -> int:
@@ -43,11 +45,49 @@ def main() -> int:
     app.setApplicationVersion(APP_VERSION)
     settings_dir = isolate_gui_settings("zss_o2_filter_smoke_")
     try:
+        _exercise_o2_settings_migration()
+        _exercise_o2_clamp_diagnostics()
         _exercise_o2_filter_controls()
     finally:
         settings_dir.cleanup()
     print("gui_o2_filter_smoke_ok")
     return 0
+
+
+def _exercise_o2_settings_migration() -> None:
+    settings_path = os.environ["ZSS_DEMOKIT_SETTINGS_FILE"]
+    raw_settings = QSettings(settings_path, QSettings.IniFormat)
+    raw_settings.setValue("o2/air_calibration_voltage_v", 0.70)
+    raw_settings.setValue("o2/calibrated_at_iso", "")
+    raw_settings.setValue("o2/zero_reference_voltage_v", 2.5)
+    raw_settings.sync()
+
+    loaded = SettingsStore().load()
+    if loaded.o2.air_calibration_voltage_v is not None:
+        raise AssertionError("unversioned O2 calibration anchor was not ignored on load")
+    if loaded.o2.zero_reference_voltage_v != 0.0:
+        raise AssertionError("legacy O2 zero reference was not migrated to 0 V default")
+
+
+def _exercise_o2_clamp_diagnostics() -> None:
+    window = MainWindow(BLE_MODE)
+    try:
+        window._plot_refresh_timer.stop()  # noqa: SLF001 - deterministic smoke
+        window.app_settings.o2.air_calibration_voltage_v = 0.70
+        window.app_settings.o2.zero_reference_voltage_v = 2.5
+        window.app_settings.o2_filter = O2OutputFilterPreferences(enabled=False)
+        window.o2_output_filter.set_preferences(window.app_settings.o2_filter)
+        window._on_telemetry(_telemetry_point(100, 2.60))  # noqa: SLF001
+        window._refresh_plots()  # noqa: SLF001
+
+        _x_data, y_data = window.sensor_secondary_curve.getData()
+        if y_data is None or float(y_data[-1]) != 0.0:
+            raise AssertionError("clamped O2 plot did not reproduce expected 0% condition")
+        detail = window.metric_o2.detail_label.text()
+        if "clamped to 0%" not in detail or "Input 2.600 V" not in detail:
+            raise AssertionError(f"O2 clamp diagnostic detail was not shown: {detail}")
+    finally:
+        window.close()
 
 
 def _exercise_o2_filter_controls() -> None:

@@ -214,6 +214,8 @@ o2_percent = clamp(((v_zero_ref - v_measured) / (v_zero_ref - v_air_cal)) * 21.0
 補足:
 
 - `v_zero_ref` と `v_air_cal` の相対関係で slope が決まるため、prototype wiring / analog frontend に合わせて `v_zero_ref` を GUI から調整できるようにする
+- GUI default の `v_zero_ref` は legacy-compatible な `0.0 V` とし、実機ごとの 0% reference は Device settings で明示的に合わせる
+- 由来が追跡できない古い ambient anchor は読み込み時に未校正扱いへ戻し、O2 plot が stale calibration 由来の `0%` clamp を表示し続けないようにする
 
 ## 21. Dual-SDP Flow Measurement Direction
 

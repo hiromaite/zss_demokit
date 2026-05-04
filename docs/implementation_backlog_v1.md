@@ -1003,6 +1003,8 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 補足:
 
 - `v_zero_ref` は GUI の Device settings で調整可能にし、prototype wiring / analog frontend の0%基準に合わせる
+- default `v_zero_ref` は `0.0 V` とする。古い固定 `2.5 V` 想定の設定は、timestamp なしの ambient anchor と一緒に残っている場合は stale calibration として無効化する
+- O2 metric detail には filter 入力電圧、air anchor、0% anchor、clamp reason を表示し、plot が `0%` に張り付く場合の校正起因を見えるようにする
 
 現状メモ:
 
