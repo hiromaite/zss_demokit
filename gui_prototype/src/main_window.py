@@ -957,6 +957,13 @@ class MainWindow(QMainWindow):
             self.app_settings.o2.zero_reference_voltage_v,
             self.app_settings.o2.ambient_reference_percent,
             self.app_settings.o2.invert_polarity,
+            self.app_settings.o2_filter.enabled,
+            self.app_settings.o2_filter.filter_type,
+            self.app_settings.o2_filter.preset,
+            self.app_settings.o2_filter.ema_cutoff_hz,
+            self.app_settings.o2_filter.gaussian_sigma_ms,
+            self.app_settings.o2_filter.gaussian_tail_sigma,
+            self.app_settings.o2_filter.centered_gaussian_sigma_samples,
         )
         if data_key != self._last_plot_data_key:
             o2_values = self._build_o2_series(o2_zirconia_values)
@@ -1355,6 +1362,7 @@ class MainWindow(QMainWindow):
         if requested_mode == previous_mode:
             self.app_settings.last_mode = previous_mode
             self._apply_settings_to_widgets()
+            self._refresh_plots()
             self._refresh_metric_cards()
             self._persist_current_settings()
             self._log_o2_calibration_changes(
@@ -1368,6 +1376,7 @@ class MainWindow(QMainWindow):
         if confirm.exec() != QDialog.DialogCode.Accepted:
             self.app_settings.last_mode = previous_mode
             self._apply_settings_to_widgets()
+            self._refresh_plots()
             self._persist_current_settings()
             return
         self._log_o2_calibration_changes(

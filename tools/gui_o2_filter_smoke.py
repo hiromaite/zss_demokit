@@ -64,6 +64,10 @@ def _exercise_o2_filter_controls() -> None:
             raise AssertionError(f"raw zirconia plot value changed: {raw_latest}")
         if not (0.70 < filtered_latest < raw_latest):
             raise AssertionError(f"Gaussian filter did not smooth step: {filtered_latest}")
+        window._refresh_plots()  # noqa: SLF001
+        x_data, y_data = window.sensor_secondary_curve.getData()
+        if x_data is None or y_data is None or len(y_data) != len(window.plot_controller.time_values):
+            raise AssertionError("O2 plot curve did not receive filtered O2 data")
 
         dialog = SettingsDialog(
             window.app_settings,
@@ -76,10 +80,17 @@ def _exercise_o2_filter_controls() -> None:
         )
         try:
             dialog.o2_filter_enabled_check.setChecked(False)
+            if not dialog.o2_filter_type_combo.isEnabled():
+                raise AssertionError("disabled O2 filter blocked filter type editing")
             dialog.o2_filter_type_combo.setCurrentText(O2_FILTER_TYPE_EMA_2)
-            dialog.o2_filter_preset_combo.setCurrentText(O2_FILTER_PRESET_CUSTOM)
+            if not dialog.o2_filter_ema_cutoff_spin.isEnabled():
+                raise AssertionError("EMA cutoff control was not editable for EMA filter")
             dialog.o2_filter_ema_cutoff_spin.setValue(7.5)
+            if dialog.o2_filter_preset_combo.currentText() != O2_FILTER_PRESET_CUSTOM:
+                raise AssertionError("editing an O2 filter coefficient did not switch to Custom preset")
             dialog.o2_filter_type_combo.setCurrentText(O2_FILTER_TYPE_CENTERED_GAUSSIAN)
+            if not dialog.o2_filter_centered_gaussian_sigma_spin.isEnabled():
+                raise AssertionError("centered Gaussian sigma control was not editable")
             dialog.o2_filter_centered_gaussian_sigma_spin.setValue(1.35)
             selected = dialog.selected_o2_filter_preferences
             if selected.enabled:

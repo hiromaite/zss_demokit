@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFileDialog
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -37,6 +37,8 @@ from app_state import (
     O2_FILTER_TYPE_EMA_1,
     O2_FILTER_TYPE_EMA_2,
     O2_FILTER_TYPE_GAUSSIAN,
+    O2_FILTER_TYPE_SAVGOL_7,
+    O2_FILTER_TYPE_SAVGOL_9,
     O2OutputFilterPreferences,
 )
 from dialog_helpers import dialog_header, format_optional, style_dialog_buttons
@@ -59,6 +61,7 @@ from flow_verification import (
     VerificationStrokeResult,
     ZeroCheckResult,
 )
+from o2_filter import effective_o2_filter_preferences
 from protocol_constants import (
     BLE_MODE,
     DERIVED_METRIC_POLICY_ID,
@@ -68,6 +71,7 @@ from protocol_constants import (
     WIRED_MODE,
 )
 from recording_io import find_partial_recordings, summarize_partial_recordings
+from ui_helpers import VerticalOnlyScrollArea
 
 
 class PartialRecoveryDialog(QDialog):
@@ -179,6 +183,7 @@ class SettingsDialog(QDialog):
         self._show_flow_characterization_history_requested = False
         self._pending_o2_air_calibration_voltage_v = settings.o2.air_calibration_voltage_v
         self._pending_o2_calibrated_at_iso = settings.o2.calibrated_at_iso
+        self._syncing_o2_filter_controls = False
         self.setWindowTitle("Settings")
         self.resize(880, 580)
 
@@ -299,11 +304,19 @@ class SettingsDialog(QDialog):
     def flow_characterization_history_requested(self) -> bool:
         return self._show_flow_characterization_history_requested
 
-    def _page_wrapper(self) -> tuple[QWidget, QVBoxLayout]:
-        page = QWidget()
-        layout = QVBoxLayout(page)
+    def _page_wrapper(self, *, scrollable: bool = False) -> tuple[QWidget, QVBoxLayout]:
+        content = QWidget()
+        layout = QVBoxLayout(content)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
+        if not scrollable:
+            return content, layout
+
+        page = VerticalOnlyScrollArea()
+        page.setWidgetResizable(True)
+        page.setFrameShape(QFrame.NoFrame)
+        page.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        page.setWidget(content)
         return page, layout
 
     def _create_general_page(self) -> QWidget:
@@ -394,7 +407,7 @@ class SettingsDialog(QDialog):
         return page
 
     def _create_device_page(self) -> QWidget:
-        page, layout = self._page_wrapper()
+        page, layout = self._page_wrapper(scrollable=True)
         summary_card = QFrame()
         summary_card.setObjectName("SurfaceCard")
         summary_form = QFormLayout(summary_card)
@@ -500,8 +513,15 @@ class SettingsDialog(QDialog):
         layout.addWidget(filter_card)
 
         self.o2_filter_enabled_check.toggled.connect(self._update_o2_filter_control_state)
-        self.o2_filter_type_combo.currentTextChanged.connect(self._update_o2_filter_control_state)
-        self.o2_filter_preset_combo.currentTextChanged.connect(self._update_o2_filter_control_state)
+        self.o2_filter_type_combo.currentTextChanged.connect(self._handle_o2_filter_type_changed)
+        self.o2_filter_preset_combo.currentTextChanged.connect(self._handle_o2_filter_preset_changed)
+        for spin_box in (
+            self.o2_filter_ema_cutoff_spin,
+            self.o2_filter_gaussian_sigma_spin,
+            self.o2_filter_gaussian_tail_spin,
+            self.o2_filter_centered_gaussian_sigma_spin,
+        ):
+            spin_box.valueChanged.connect(self._mark_o2_filter_custom)
         self._update_o2_filter_control_state()
 
         self._refresh_o2_calibration_state()
@@ -511,23 +531,51 @@ class SettingsDialog(QDialog):
     def _update_o2_filter_control_state(self) -> None:
         if not hasattr(self, "o2_filter_enabled_check"):
             return
-        enabled = self.o2_filter_enabled_check.isChecked()
         filter_type = self.o2_filter_type_combo.currentText()
-        custom = self.o2_filter_preset_combo.currentText() == O2_FILTER_PRESET_CUSTOM
-        self.o2_filter_type_combo.setEnabled(enabled)
-        self.o2_filter_preset_combo.setEnabled(enabled)
-        self.o2_filter_ema_cutoff_spin.setEnabled(
-            enabled and custom and filter_type in {O2_FILTER_TYPE_EMA_1, O2_FILTER_TYPE_EMA_2}
-        )
-        self.o2_filter_gaussian_sigma_spin.setEnabled(
-            enabled and custom and filter_type == O2_FILTER_TYPE_GAUSSIAN
-        )
-        self.o2_filter_gaussian_tail_spin.setEnabled(
-            enabled and custom and filter_type == O2_FILTER_TYPE_GAUSSIAN
-        )
-        self.o2_filter_centered_gaussian_sigma_spin.setEnabled(
-            enabled and custom and filter_type == O2_FILTER_TYPE_CENTERED_GAUSSIAN
-        )
+        is_ema = filter_type in {O2_FILTER_TYPE_EMA_1, O2_FILTER_TYPE_EMA_2}
+        is_one_sided_gaussian = filter_type == O2_FILTER_TYPE_GAUSSIAN
+        is_centered_gaussian = filter_type == O2_FILTER_TYPE_CENTERED_GAUSSIAN
+        is_fixed_coefficients = filter_type in {O2_FILTER_TYPE_SAVGOL_7, O2_FILTER_TYPE_SAVGOL_9}
+
+        self.o2_filter_type_combo.setEnabled(True)
+        self.o2_filter_preset_combo.setEnabled(not is_fixed_coefficients)
+        self.o2_filter_ema_cutoff_spin.setEnabled(is_ema)
+        self.o2_filter_gaussian_sigma_spin.setEnabled(is_one_sided_gaussian)
+        self.o2_filter_gaussian_tail_spin.setEnabled(is_one_sided_gaussian)
+        self.o2_filter_centered_gaussian_sigma_spin.setEnabled(is_centered_gaussian)
+
+    def _handle_o2_filter_type_changed(self, *_args: object) -> None:
+        self._apply_o2_filter_preset_values()
+        self._update_o2_filter_control_state()
+
+    def _handle_o2_filter_preset_changed(self, *_args: object) -> None:
+        self._apply_o2_filter_preset_values()
+        self._update_o2_filter_control_state()
+
+    def _apply_o2_filter_preset_values(self) -> None:
+        if self._syncing_o2_filter_controls:
+            return
+        if self.o2_filter_preset_combo.currentText() == O2_FILTER_PRESET_CUSTOM:
+            return
+
+        effective = effective_o2_filter_preferences(self.selected_o2_filter_preferences)
+        self._syncing_o2_filter_controls = True
+        try:
+            self.o2_filter_ema_cutoff_spin.setValue(effective.ema_cutoff_hz)
+            self.o2_filter_gaussian_sigma_spin.setValue(effective.gaussian_sigma_ms)
+            self.o2_filter_gaussian_tail_spin.setValue(effective.gaussian_tail_sigma)
+            self.o2_filter_centered_gaussian_sigma_spin.setValue(
+                effective.centered_gaussian_sigma_samples
+            )
+        finally:
+            self._syncing_o2_filter_controls = False
+
+    def _mark_o2_filter_custom(self, *_args: object) -> None:
+        if self._syncing_o2_filter_controls:
+            return
+        if self.o2_filter_preset_combo.currentText() == O2_FILTER_PRESET_CUSTOM:
+            return
+        self.o2_filter_preset_combo.setCurrentText(O2_FILTER_PRESET_CUSTOM)
 
     def _create_engineering_tools_page(self) -> QWidget:
         page, layout = self._page_wrapper()
