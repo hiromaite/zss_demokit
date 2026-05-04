@@ -59,6 +59,7 @@ Common local gates:
 - `python -m compileall gui_prototype/src tools`
 - `python tools/protocol_fixture_smoke.py`
 - `python tools/gui_layout_smoke.py`
+- `python tools/gui_plot_controls_smoke.py`
 - `python tools/gui_log_history_smoke.py`
 - `python tools/gui_engineering_tools_smoke.py`
 

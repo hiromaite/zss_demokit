@@ -56,7 +56,8 @@ The following validation paths are recorded in
 - Project organization cleanup smoke: `GUI-VAL-039`
 - Release readiness metadata / document smoke: `GUI-VAL-040`
 
-Before packaging from a fresh checkout, run:
+Before packaging from a fresh checkout, run the full local preflight in
+`docs/distribution_plan_v1.md`. The metadata-only check is:
 
 ```sh
 python tools/release_readiness_check.py
@@ -66,7 +67,8 @@ python tools/release_readiness_check.py
 
 1. Confirm the checkout is on the intended branch or release tag. See
    `docs/distribution_plan_v1.md` for the full gate and tag policy.
-2. Run `python tools/release_readiness_check.py`.
+2. Run the local preflight in `docs/distribution_plan_v1.md`, including
+   `python tools/gui_plot_controls_smoke.py`.
 3. Build with `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec`.
 4. Confirm `dist/zss_demokit_gui_win64_beta3/zss_demokit_gui.exe` exists.
 5. Execute `docs/windows_beta_smoke_checklist_v1.md` on Windows 11 Pro.

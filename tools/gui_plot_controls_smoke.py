@@ -9,6 +9,7 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PySide6.QtCore import QSettings
 from PySide6.QtWidgets import QApplication
 
 
@@ -26,6 +27,15 @@ from protocol_constants import BLE_MODE, TELEMETRY_FIELD_BITS, transport_type_fo
 from qt_runtime import configure_qt_runtime
 
 
+def _configure_isolated_qsettings(settings_dir: Path) -> None:
+    QSettings.setDefaultFormat(QSettings.Format.IniFormat)
+    QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.UserScope, str(settings_dir))
+    QSettings.setPath(QSettings.Format.IniFormat, QSettings.Scope.SystemScope, str(settings_dir))
+    settings = QSettings(APP_ORGANIZATION, "gui-prototype")
+    settings.clear()
+    settings.sync()
+
+
 def _telemetry_point(sequence: int) -> TelemetryPoint:
     sample_index = sequence - 100
     return TelemetryPoint(
@@ -41,9 +51,24 @@ def _telemetry_point(sequence: int) -> TelemetryPoint:
     )
 
 
+def _curve_x_values(curve: object) -> list[float]:
+    if hasattr(curve, "getOriginalDataset"):
+        dataset = curve.getOriginalDataset()
+        x_values, _ = dataset if dataset is not None else curve.getData()
+    else:
+        x_values, _ = curve.getData()
+    return [] if x_values is None else list(x_values)
+
+
 def _curve_sample_count(curve: object) -> int:
-    x_values, _ = curve.getData()
+    x_values = _curve_x_values(curve)
     return 0 if x_values is None else len(x_values)
+
+
+def _disable_view_dependent_plot_optimizations(window: MainWindow) -> None:
+    for plot in window.plot_widgets.values():
+        plot.setClipToView(False)
+        plot.setDownsampling(auto=False)
 
 
 def _start_test_recording(window: MainWindow, base_dir: Path) -> None:
@@ -66,6 +91,10 @@ def _exercise_plot_pause_and_visibility() -> None:
     tmpdir = tempfile.TemporaryDirectory(prefix="zss_plot_controls_")
     try:
         window._plot_refresh_timer.stop()  # noqa: SLF001 - deterministic offscreen smoke
+        _disable_view_dependent_plot_optimizations(window)
+        window.time_span_combo.setCurrentText("30 s")
+        window.plot_controller.x_follow_enabled = True
+        window.app_settings.plot.time_span = "30 s"
         window.app_settings.o2.air_calibration_voltage_v = 0.72
         window.app_settings.plot.series_visibility = {
             "flow": True,
@@ -95,8 +124,10 @@ def _exercise_plot_pause_and_visibility() -> None:
             raise AssertionError("plot curve changed while paused")
 
         window.plot_pause_button.setChecked(False)
-        resumed_visible_count = _curve_sample_count(window.plot_curves["sensor"])
-        if resumed_visible_count < 2:
+        window._refresh_plots()  # noqa: SLF001 - make resume assertion independent of signal timing
+        resumed_x_values = _curve_x_values(window.plot_curves["sensor"])
+        latest_elapsed_s = window.plot_controller.time_values[-1]
+        if len(resumed_x_values) < 2 or abs(resumed_x_values[-1] - latest_elapsed_s) > 1e-9:
             raise AssertionError("plot did not refresh to latest samples after resume")
 
         window.app_settings.plot.series_visibility["flow"] = False
@@ -123,12 +154,14 @@ def _exercise_plot_pause_and_visibility() -> None:
 
 def main() -> int:
     configure_qt_runtime()
-    app = QApplication.instance() or QApplication(sys.argv)
-    app.setOrganizationName(APP_ORGANIZATION)
-    app.setApplicationName(APP_ID)
-    app.setApplicationDisplayName(APP_NAME)
-    app.setApplicationVersion(APP_VERSION)
-    _exercise_plot_pause_and_visibility()
+    with tempfile.TemporaryDirectory(prefix="zss_plot_settings_") as settings_dir:
+        _configure_isolated_qsettings(Path(settings_dir))
+        app = QApplication.instance() or QApplication(sys.argv)
+        app.setOrganizationName(APP_ORGANIZATION)
+        app.setApplicationName(APP_ID)
+        app.setApplicationDisplayName(APP_NAME)
+        app.setApplicationVersion(APP_VERSION)
+        _exercise_plot_pause_and_visibility()
     print("gui_plot_controls_smoke_ok")
     return 0
 

@@ -125,6 +125,8 @@ TelemetrySample
 ## 6. Status Flag Bit Assignment
 
 v1 では `status_flags` を `uint32` として扱う。
+current beta firmware / GUI は heater power state を追加した
+`status_flag_schema_version = 2` を広告する。
 
 | Bit | Name | Meaning | v1 Use |
 | :--- | :--- | :--- | :--- |
@@ -135,12 +137,15 @@ v1 では `status_flags` を `uint32` として扱う。
 | `4` | `sensor_fault` | Sensor read result is invalid or faulted | Recommended |
 | `5` | `telemetry_rate_warning` | Telemetry timing is outside nominal expectations | Recommended |
 | `6` | `command_error_latched` | A command-level error has occurred and is latched | Optional |
-| `7..31` | `reserved` | Reserved for future use | Reserved |
+| `7` | `heater_power_on` | Heater power output is active | Required in schema v2 |
+| `8..31` | `reserved` | Reserved for future use | Reserved |
 
 補足:
 
 - Bit `0` と Bit `2` は old firmware の意味と整合しやすい
 - Bit `3` は old firmware の `processing overrun` を一般化した位置づけとする
+- Bit `7` は schema v2 で追加された heater power state で、pump /
+  heater safety interlock の host-side observation に使う
 
 ## 7. Logical Commands
 
@@ -151,6 +156,7 @@ v1 では `status_flags` を `uint32` として扱う。
 | `get_capabilities` | none | `capabilities` message | 接続直後に実行する |
 | `get_status` | none | `status_snapshot` message | 画面更新、診断に使用する |
 | `set_pump_state` | `state=on|off` | ack or refreshed status | `Pump ON/OFF` の共通表現 |
+| `set_heater_power_state` | `state=on|off` | ack or refreshed status | Heater power enable。pump OFF 中の ON 指令は `invalid_state` になり得る |
 
 ### 7.2 Recommended in v1
 
@@ -169,6 +175,8 @@ BLE では既存の pump control command を維持しつつ、追加 command を
 | `0x30` | `get_status` | New v1 opcode draft |
 | `0x31` | `get_capabilities` | New v1 opcode draft |
 | `0x32` | `ping` | New v1 opcode draft |
+| `0x33` | `set_heater_power_state(on)` | New v1 opcode draft |
+| `0x34` | `set_heater_power_state(off)` | New v1 opcode draft |
 
 方針:
 
@@ -214,7 +222,8 @@ binary transport 上では、一部の項目が code / bit field に符号化さ
 | `1` | `get_status` |
 | `2` | `set_pump_state` |
 | `3` | `ping` |
-| `4..15` | `reserved` |
+| `4` | `set_heater_power_state` |
+| `5..15` | `reserved` |
 
 ### Telemetry Field Bits
 
@@ -254,6 +263,7 @@ binary transport 上では、一部の項目が code / bit field に符号化さ
 | `get_capabilities` | Required | Required | Common logical command |
 | `get_status` | Required | Required | Common logical command |
 | `set_pump_state` | Required | Required | Common logical command |
+| `set_heater_power_state` | Required | Required | Common logical command; subject to pump / heater interlock |
 
 Differential-pressure raw fields are independent diagnostic fields.
 If only one SDP81x sensor is detected, capabilities and telemetry may advertise only that raw channel while still publishing `differential_pressure_selected_pa`.

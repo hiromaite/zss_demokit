@@ -36,6 +36,7 @@ python -m pip install --upgrade pip
 pip install -r gui_prototype\requirements.txt
 pip install "pyinstaller>=6,<7"
 python tools\release_readiness_check.py
+python tools\gui_plot_controls_smoke.py
 pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 ```
 
@@ -93,6 +94,7 @@ Expected result:
 - `Wired` and `BLE` both complete their minimum smoke workflows
 - recording finalizes in both modes
 - `python tools\release_readiness_check.py` reports `release_readiness_check_ok`
+- `python tools\gui_plot_controls_smoke.py` reports `gui_plot_controls_smoke_ok`
 - no blocking packaging issue is discovered
 
 ## Last Confirmed Result

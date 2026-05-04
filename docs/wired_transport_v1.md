@@ -123,7 +123,7 @@ The payload layout is intentionally identical to `telemetry_sample`.
 | `6` | `2` | `uint16` | `supported_command_bits` | See `protocol_catalog_v1.md` |
 | `8` | `2` | `uint16` | `telemetry_field_bits` | See `protocol_catalog_v1.md` |
 | `10` | `2` | `uint16` | `nominal_sample_period_ms` | Expected sample period |
-| `12` | `2` | `uint16` | `status_flag_schema_version` | v1 = `1` |
+| `12` | `2` | `uint16` | `status_flag_schema_version` | current schema = `2` |
 | `14` | `2` | `uint16` | `max_payload_bytes` | Device receive capability |
 | `16` | `4` | `uint32` | `feature_bits` | See section 8.2 |
 
@@ -167,6 +167,7 @@ Payload size: `16 bytes`
 | `0x02` | `get_status` | No args |
 | `0x03` | `set_pump_state` | `arg0_u32 = 0 or 1` |
 | `0x04` | `ping` | No args |
+| `0x05` | `set_heater_power_state` | `arg0_u32 = 0 or 1`; ON can return `invalid_state` while pump is OFF |
 
 ## 10. Command Ack Payload v1
 

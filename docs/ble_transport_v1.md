@@ -86,6 +86,8 @@ If `EXTENSION_SERVICE_UUID` is absent:
 | `0x30` | `get_status` | 1 byte |
 | `0x31` | `get_capabilities` | 1 byte |
 | `0x32` | `ping` | 1 byte |
+| `0x33` | `set_heater_power_state(on)` | 1 byte |
+| `0x34` | `set_heater_power_state(off)` | 1 byte |
 
 方針:
 
@@ -234,7 +236,7 @@ Interpretation:
 | `8` | `2` | `uint16` | `supported_command_bits` | See `protocol_catalog_v1.md` |
 | `10` | `2` | `uint16` | `telemetry_field_bits` | See `protocol_catalog_v1.md` |
 | `12` | `2` | `uint16` | `nominal_sample_period_ms` | Nominal telemetry period |
-| `14` | `2` | `uint16` | `status_flag_schema_version` | v1 = `1` |
+| `14` | `2` | `uint16` | `status_flag_schema_version` | current schema = `2` |
 | `16` | `2` | `uint16` | `max_payload_bytes` | For BLE sizing |
 | `18` | `2` | `uint16` | `reserved` | default `0` |
 | `20` | `4` | `uint32` | `feature_bits` | See section 9.4 |
