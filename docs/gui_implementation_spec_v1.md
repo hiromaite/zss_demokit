@@ -18,7 +18,7 @@
 
 | Screen / Dialog | Purpose | Notes |
 | :--- | :--- | :--- |
-| `LauncherWindow` | 起動時の mode 選択 | `BLE mode` / `Wired mode` の 2 択。過度に大きくしない compact launcher とする |
+| `LauncherWindow` | 起動時の mode 選択 | `BLE mode` / `Wired mode` の 2 択。過度に大きくしない compact launcher とする。Settings で BLE startup mode が選ばれている場合は表示せず、BLE MainWindow へ直接入る |
 | `MainWindow` | 計測、記録、可視化の主画面 | mode に応じて接続パネルが変化 |
 | `SettingsDialog` | mode、plot、logging、advanced の設定 | 起動後の mode change を含む |
 | `ModeSwitchDialog` | mode change 前の確認 | 接続中 / recording 中の中断確認 |
@@ -26,12 +26,14 @@
 
 ## 4. 起動と mode 切替
 
-### 4.1 Launcher Flow
+### 4.1 Launcher / Startup Flow
 
 1. アプリ起動
-2. `LauncherWindow` を表示
+2. startup behavior が `Selection mode` なら `LauncherWindow` を表示
 3. `BLE mode` または `Wired mode` を選択
 4. `MainWindow` を選択 mode で初期化
+5. startup behavior が `BLE startup mode` なら `LauncherWindow` を省略し、`MainWindow(BLE)` を直接開く
+6. BLE startup mode では既存の startup scan / preferred-device auto-connect path を使って接続まで進む
 
 ### 4.2 Mode Switch Flow
 
@@ -275,7 +277,7 @@ AppUiState
 ### 11.3 Persisted Settings
 
 - `QSettings` を用いて local-only persistence を行う
-- restore 対象は `last_mode`, `time_span`, `axis_mode`, `auto_scale`, `selected_plot`,
+- restore 対象は `last_mode`, `startup_mode`, `time_span`, `axis_mode`, `auto_scale`, `selected_plot`,
   `x_follow_enabled`, per-plot manual Y range, recording directory, partial recovery notice flag,
   launcher size, main window size とする
 - launcher は configured recording directory を使って partial file の有無を確認する

@@ -9,9 +9,20 @@ from PySide6.QtGui import QFont, QIcon
 from PySide6.QtWidgets import QApplication
 
 from app_metadata import APP_ID, APP_NAME, APP_ORGANIZATION, APP_VERSION
+from app_state import STARTUP_MODE_BLE
 from launcher_window import LauncherWindow
+from main_window import MainWindow
+from protocol_constants import BLE_MODE
 from qt_runtime import configure_qt_runtime, resolve_runtime_asset
+from settings_store import SettingsStore
 from theme import app_stylesheet
+
+
+def create_startup_window() -> LauncherWindow | MainWindow:
+    settings = SettingsStore().load()
+    if settings.startup_mode == STARTUP_MODE_BLE:
+        return MainWindow(BLE_MODE)
+    return LauncherWindow()
 
 
 def main() -> int:
@@ -28,7 +39,7 @@ def main() -> int:
     if icon_path.exists():
         app.setWindowIcon(QIcon(str(icon_path)))
 
-    window = LauncherWindow()
+    window = create_startup_window()
     window.show()
     return app.exec()
 

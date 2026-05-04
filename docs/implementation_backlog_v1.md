@@ -1006,7 +1006,7 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
 補足:
 
 - `v_zero_ref` は GUI の Device settings で調整可能にし、prototype wiring / analog frontend の0%基準に合わせる
-- default `v_zero_ref` は `0.0 V` とする。古い固定 `2.5 V` 想定の設定は、timestamp なしの ambient anchor と一緒に残っている場合は stale calibration として無効化する
+- default `v_zero_ref` は `2.55 V` とする。legacy beta の default として使われていた `0.0 V` / `2.5 V` は `2.55 V` へ移行し、timestamp なしの ambient anchor は stale calibration として無効化する
 - O2 metric detail には filter 入力電圧、air anchor、0% anchor、clamp reason を表示し、plot が `0%` に張り付く場合の校正起因を見えるようにする
 
 現状メモ:
@@ -1193,10 +1193,10 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
   metadata / document smoke を追加した。既存 `v0.1.0-beta.2` tag は維持し、次の配布は
   `0.1.0-beta.3` として扱う。installer / signing / updater は formal release 前の
   separate decision として残す
-- 2026-05-04 beta4 slice として、O2 output filter、O2 zero-reference handling、
-  stale calibration migration、clamp diagnostics、GUI telemetry data-flow documentation を
-  final beta candidate に含める。beta4 が Windows packaged smoke を通過すれば、次は
-  `1.0.0-rc.1` または `1.0.0` の判断へ進む
+- 2026-05-04 beta4 slice として、O2 output filter、O2 `2.55 V` zero-reference handling、
+  startup behavior setting、stale calibration migration、clamp diagnostics、
+  GUI telemetry data-flow documentation を final beta candidate に含める。beta4 が
+  Windows packaged smoke を通過すれば、次は `1.0.0-rc.1` または `1.0.0` の判断へ進む
 
 直近 bundle:
 

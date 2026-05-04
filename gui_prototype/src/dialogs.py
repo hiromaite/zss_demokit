@@ -37,6 +37,8 @@ from app_state import (
     O2_FILTER_TYPE_CENTERED_GAUSSIAN,
     O2_FILTER_TYPE_SAVGOL,
     O2OutputFilterPreferences,
+    STARTUP_MODE_BLE,
+    STARTUP_MODE_SELECTOR,
 )
 from dialog_helpers import dialog_header, format_optional, style_dialog_buttons
 from flow_characterization import (
@@ -149,6 +151,11 @@ class ModeSwitchDialog(QDialog):
 class SettingsDialog(QDialog):
     device_action_requested = Signal(str)
 
+    STARTUP_MODE_LABELS = {
+        STARTUP_MODE_SELECTOR: "Selection mode (show launcher)",
+        STARTUP_MODE_BLE: "BLE startup mode (open and auto-connect)",
+    }
+
     def __init__(
         self,
         settings: AppSettings,
@@ -238,6 +245,13 @@ class SettingsDialog(QDialog):
     @property
     def requested_mode(self) -> str:
         return BLE_MODE if self.ble_mode_radio.isChecked() else WIRED_MODE
+
+    @property
+    def selected_startup_mode(self) -> str:
+        if not hasattr(self, "startup_mode_combo"):
+            return STARTUP_MODE_SELECTOR
+        selected = self.startup_mode_combo.currentData()
+        return selected if selected in self.STARTUP_MODE_LABELS else STARTUP_MODE_SELECTOR
 
     @property
     def selected_time_span(self) -> str:
@@ -359,6 +373,21 @@ class SettingsDialog(QDialog):
         card_layout.addWidget(self.wired_mode_radio)
         card_layout.addWidget(summary)
         card_layout.addWidget(self.mode_status_label)
+
+        startup_form = QFormLayout()
+        self.startup_mode_combo = QComboBox()
+        for mode, label in self.STARTUP_MODE_LABELS.items():
+            self.startup_mode_combo.addItem(label, mode)
+        startup_index = self.startup_mode_combo.findData(self._settings.startup_mode)
+        self.startup_mode_combo.setCurrentIndex(max(0, startup_index))
+        startup_form.addRow("Startup behavior", self.startup_mode_combo)
+        startup_hint = QLabel(
+            "BLE startup mode skips the launcher, opens BLE mode directly, and uses the existing scan / auto-connect path."
+        )
+        startup_hint.setObjectName("SectionHint")
+        startup_hint.setWordWrap(True)
+        card_layout.addLayout(startup_form)
+        card_layout.addWidget(startup_hint)
         layout.addWidget(card)
         layout.addStretch(1)
         return page

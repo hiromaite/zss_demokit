@@ -644,6 +644,7 @@ class MainWindow(QMainWindow):
         self.app_settings.plot.axis_mode = dialog.selected_axis_mode
         self.app_settings.plot.auto_scale = dialog.selected_auto_scale
         self.app_settings.plot.selected_plot = dialog.selected_plot
+        self.app_settings.startup_mode = dialog.selected_startup_mode
         self.app_settings.logging.recording_directory = dialog.recording_directory
         self.app_settings.logging.partial_recovery_notice_enabled = dialog.partial_recovery_notice_enabled
         self.app_settings.o2.zero_reference_voltage_v = dialog.selected_o2_zero_reference_voltage_v

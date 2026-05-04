@@ -89,11 +89,21 @@ Expected result:
 ## O2 Display And Filter Smoke
 
 1. Open Settings and confirm the O2 calibration / zero-reference fields are visible
-2. Confirm O2 filter controls are visible and presets can be selected
-3. Select a quieter O2 filter preset and apply settings
-4. Confirm the O2 metric and O2 plot continue to update
-5. If the current signal is above the configured zero reference, confirm the O2
+2. Confirm the default 0% reference voltage is `2.550 V` unless intentionally customized
+3. Confirm O2 filter controls are visible and presets can be selected
+4. Select a quieter O2 filter preset and apply settings
+5. Confirm the O2 metric and O2 plot continue to update
+6. If the current signal is above the configured zero reference, confirm the O2
    metric shows the expected clamp diagnostic instead of silently hiding the condition
+
+## Startup Behavior Smoke
+
+1. Open Settings > General
+2. Set Startup behavior to `BLE startup mode`
+3. Close the app and relaunch it
+4. Confirm the main window opens in BLE mode without showing the launcher
+5. If the target device is powered, confirm scan / auto-connect starts without manual mode selection
+6. Return Startup behavior to `Selection mode` unless the next tester wants BLE startup mode
 
 ## Pass Criteria
 
@@ -102,7 +112,8 @@ Expected result:
 - `Wired` and `BLE` both complete their minimum smoke workflows
 - recording finalizes in both modes
 - `python tools\release_readiness_check.py` reports `release_readiness_check_ok`
-- O2 filter / zero-reference controls are visible and do not block telemetry display
+- Startup behavior can switch between launcher and BLE startup mode
+- O2 filter / 2.55 V zero-reference controls are visible and do not block telemetry display
 - no blocking packaging issue is discovered
 
 ## Last Confirmed Result

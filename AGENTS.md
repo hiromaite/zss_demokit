@@ -47,6 +47,7 @@ python tools/protocol_fixture_smoke.py
 python tools/gui_layout_smoke.py
 python tools/gui_log_history_smoke.py
 python tools/gui_engineering_tools_smoke.py
+python tools/gui_startup_mode_smoke.py
 python tools/o2_filter_smoke.py
 python tools/gui_o2_filter_smoke.py
 ```

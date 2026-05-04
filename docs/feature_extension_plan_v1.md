@@ -237,8 +237,8 @@ device 側の canonical measurement は引き続き `zirconia_output_voltage_v` 
 ユーザー要求を初期方針として、`0 % O2` の基準電圧と
 `21 % O2` の ambient-air calibration anchor から一次換算する。
 当初は `0 % O2 = 2.5 V` 固定案だったが、prototype wiring / analog
-frontend の個体差を吸収するため、現在のGUIでは 0% 基準を Device
-settings から調整可能にし、default は `0.0 V` とする。
+frontend の個体差と bias-current 由来の offset を吸収するため、現在のGUIでは 0%
+基準を Device settings から調整可能にし、default は `2.55 V` とする。
 
 定義:
 

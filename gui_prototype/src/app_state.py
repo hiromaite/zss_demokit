@@ -3,7 +3,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from protocol_constants import BLE_MODE
+from protocol_constants import BLE_MODE, O2_ZERO_REFERENCE_V
+
+STARTUP_MODE_SELECTOR = "selector"
+STARTUP_MODE_BLE = "ble"
+STARTUP_MODES = (
+    STARTUP_MODE_SELECTOR,
+    STARTUP_MODE_BLE,
+)
 
 O2_FILTER_TYPE_SAVGOL = "Savitzky-Golay"
 O2_FILTER_TYPE_CENTERED_GAUSSIAN = "Centered Gaussian"
@@ -58,7 +65,7 @@ class LoggingPreferences:
 
 @dataclass
 class O2CalibrationPreferences:
-    zero_reference_voltage_v: float = 0.0
+    zero_reference_voltage_v: float = O2_ZERO_REFERENCE_V
     ambient_reference_percent: float = 21.0
     air_calibration_voltage_v: float | None = None
     calibrated_at_iso: str = ""
@@ -87,6 +94,7 @@ class WindowPreferences:
 @dataclass
 class AppSettings:
     last_mode: str = BLE_MODE
+    startup_mode: str = STARTUP_MODE_SELECTOR
     plot: PlotPreferences = field(default_factory=PlotPreferences)
     logging: LoggingPreferences = field(default_factory=LoggingPreferences)
     o2: O2CalibrationPreferences = field(default_factory=O2CalibrationPreferences)

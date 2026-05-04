@@ -43,18 +43,18 @@ def _assert_o2_voltage_conversion_uses_configured_zero_anchor() -> None:
     if legacy_value is None or abs(legacy_value - 21.0) > 1e-9:
         raise AssertionError(f"legacy 0 V zero anchor did not map ambient to 21%: {legacy_value}")
 
-    midpoint_value = derive_o2_concentration_percent(
+    shifted_zero_value = derive_o2_concentration_percent(
         0.64,
         air_calibration_voltage_v=0.64,
-        zero_reference_voltage_v=2.5,
+        zero_reference_voltage_v=2.55,
     )
-    if midpoint_value is None or abs(midpoint_value - 21.0) > 1e-9:
-        raise AssertionError(f"2.5 V zero anchor did not map ambient to 21%: {midpoint_value}")
+    if shifted_zero_value is None or abs(shifted_zero_value - 21.0) > 1e-9:
+        raise AssertionError(f"2.55 V zero anchor did not map ambient to 21%: {shifted_zero_value}")
 
     clamped_value = derive_o2_concentration_percent(
         2.6,
         air_calibration_voltage_v=0.64,
-        zero_reference_voltage_v=2.5,
+        zero_reference_voltage_v=2.55,
     )
     if clamped_value != 0.0:
         raise AssertionError(f"above-zero-reference voltage should clamp to 0%: {clamped_value}")

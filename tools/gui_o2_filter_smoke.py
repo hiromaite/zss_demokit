@@ -69,12 +69,18 @@ def _exercise_o2_settings_migration() -> None:
     loaded = SettingsStore().load()
     if loaded.o2.air_calibration_voltage_v is not None:
         raise AssertionError("unversioned O2 calibration anchor was not ignored on load")
-    if loaded.o2.zero_reference_voltage_v != 0.0:
-        raise AssertionError("legacy O2 zero reference was not migrated to 0 V default")
+    if loaded.o2.zero_reference_voltage_v != 2.55:
+        raise AssertionError("legacy O2 zero reference was not migrated to 2.55 V default")
     if loaded.o2_filter.filter_type not in O2_FILTER_TYPES:
         raise AssertionError(f"legacy O2 filter type was not migrated: {loaded.o2_filter}")
     if loaded.o2_filter.preset != O2_FILTER_PRESET_DEFAULT:
         raise AssertionError(f"legacy Balanced preset was not migrated: {loaded.o2_filter}")
+
+    loaded.o2.zero_reference_voltage_v = 0.0
+    SettingsStore().save(loaded)
+    reloaded = SettingsStore().load()
+    if reloaded.o2.zero_reference_voltage_v != 0.0:
+        raise AssertionError("explicit custom O2 zero reference was not preserved after migration marker")
 
 
 def _exercise_o2_clamp_diagnostics() -> None:
@@ -82,7 +88,7 @@ def _exercise_o2_clamp_diagnostics() -> None:
     try:
         window._plot_refresh_timer.stop()  # noqa: SLF001 - deterministic smoke
         window.app_settings.o2.air_calibration_voltage_v = 0.70
-        window.app_settings.o2.zero_reference_voltage_v = 2.5
+        window.app_settings.o2.zero_reference_voltage_v = 2.55
         window.app_settings.o2_filter = O2OutputFilterPreferences(enabled=False)
         window.o2_output_filter.set_preferences(window.app_settings.o2_filter)
         window._on_telemetry(_telemetry_point(100, 2.60))  # noqa: SLF001

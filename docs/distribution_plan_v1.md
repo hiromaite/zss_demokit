@@ -70,6 +70,7 @@ python tools/protocol_fixture_smoke.py
 python tools/gui_layout_smoke.py
 python tools/gui_log_history_smoke.py
 python tools/gui_engineering_tools_smoke.py
+python tools/gui_startup_mode_smoke.py
 python tools/o2_filter_smoke.py
 python tools/gui_o2_filter_smoke.py
 ```
@@ -99,7 +100,8 @@ Expected output:
 - packaged app launch
 - Wired connect / telemetry / pump toggle / recording finalize
 - BLE connect / telemetry / pump toggle / status request / reconnect / recording finalize
-- O2 value display, zero reference, filter preset, and clamp diagnostic sanity check
+- Startup behavior setting: selector mode and BLE startup mode
+- O2 value display, 2.55 V zero reference, filter preset, and clamp diagnostic sanity check
 - layout sanity check on the actual Windows display scale
 
 ### Step 5: Tag And Artifact

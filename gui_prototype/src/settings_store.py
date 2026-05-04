@@ -12,10 +12,13 @@ from app_state import (
     O2CalibrationPreferences,
     O2OutputFilterPreferences,
     PlotPreferences,
+    STARTUP_MODE_BLE,
+    STARTUP_MODE_SELECTOR,
+    STARTUP_MODES,
     WindowPreferences,
 )
 from o2_filter import normalize_o2_filter_preferences
-from protocol_constants import BLE_MODE
+from protocol_constants import BLE_MODE, O2_ZERO_REFERENCE_V
 from recording_io import recording_directory
 
 
@@ -30,6 +33,9 @@ class SettingsStore:
     def load(self) -> AppSettings:
         settings = AppSettings()
         settings.last_mode = str(self._settings.value("mode/last_mode", BLE_MODE))
+        settings.startup_mode = self._normalize_startup_mode(
+            str(self._settings.value("mode/startup_mode", STARTUP_MODE_SELECTOR))
+        )
         selected_plot = self._normalize_selected_plot(
             str(self._settings.value("plot/selected_plot", settings.plot.selected_plot))
         )
@@ -55,17 +61,23 @@ class SettingsStore:
         )
 
         zero_reference_voltage_v = self._to_float(
-            self._settings.value("o2/zero_reference_voltage_v", 0.0),
-            0.0,
+            self._settings.value("o2/zero_reference_voltage_v", O2_ZERO_REFERENCE_V),
+            O2_ZERO_REFERENCE_V,
         )
+        zero_reference_default_migrated = self._to_bool(
+            self._settings.value("o2/zero_reference_default_migrated_to_2_55", False)
+        )
+        if (
+            not zero_reference_default_migrated
+            and self._is_legacy_default_o2_zero_reference(zero_reference_voltage_v)
+        ):
+            zero_reference_voltage_v = O2_ZERO_REFERENCE_V
         air_calibration_voltage_v = self._to_optional_float(
             self._settings.value("o2/air_calibration_voltage_v", "")
         )
         calibrated_at_iso = str(self._settings.value("o2/calibrated_at_iso", "")).strip()
         if air_calibration_voltage_v is not None and not calibrated_at_iso:
             air_calibration_voltage_v = None
-            if abs(zero_reference_voltage_v - 2.5) < 1e-9:
-                zero_reference_voltage_v = 0.0
 
         settings.o2 = O2CalibrationPreferences(
             zero_reference_voltage_v=zero_reference_voltage_v,
@@ -137,6 +149,10 @@ class SettingsStore:
 
     def save(self, settings: AppSettings) -> None:
         self._settings.setValue("mode/last_mode", settings.last_mode)
+        self._settings.setValue(
+            "mode/startup_mode",
+            self._normalize_startup_mode(settings.startup_mode),
+        )
         self._settings.setValue("plot/time_span", settings.plot.time_span)
         self._settings.setValue("plot/axis_mode", settings.plot.axis_mode)
         self._settings.setValue("plot/auto_scale", settings.plot.auto_scale)
@@ -153,6 +169,7 @@ class SettingsStore:
             settings.logging.partial_recovery_notice_enabled,
         )
         self._settings.setValue("o2/zero_reference_voltage_v", settings.o2.zero_reference_voltage_v)
+        self._settings.setValue("o2/zero_reference_default_migrated_to_2_55", True)
         self._settings.setValue("o2/ambient_reference_percent", settings.o2.ambient_reference_percent)
         self._settings.setValue(
             "o2/air_calibration_voltage_v",
@@ -220,6 +237,21 @@ class SettingsStore:
             return float(value)
         except (TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _normalize_startup_mode(value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized in {STARTUP_MODE_BLE, "ble_mode", "ble startup", "open_ble"}:
+            return STARTUP_MODE_BLE
+        if normalized in STARTUP_MODES:
+            return normalized
+        return STARTUP_MODE_SELECTOR
+
+    @staticmethod
+    def _is_legacy_default_o2_zero_reference(value: float) -> bool:
+        # Earlier beta builds used either 0.0 V or 2.5 V as a default anchor.
+        # Treat exact legacy defaults as defaults, not as user-specific calibration.
+        return abs(value - 0.0) < 1e-9 or abs(value - 2.5) < 1e-9
 
     def _load_manual_ranges(self) -> dict[str, tuple[float, float]]:
         raw = self._settings.value("plot/manual_y_ranges", "")

@@ -48,8 +48,9 @@ Windows packaged smoke passes.
   comparison and summary CSV export.
 - Settings now separates routine device settings from Engineering / Tools
   actions.
-- Beta4 adds configurable O2 output filtering, O2 zero-reference handling, O2
-  clamp diagnostics, and GUI telemetry data-flow documentation.
+- Beta4 adds configurable O2 output filtering, O2 zero-reference handling with
+  a `2.55 V` default 0% anchor, BLE startup-mode routing, O2 clamp diagnostics,
+  and GUI telemetry data-flow documentation.
 
 ## 4. Validation State
 
@@ -63,6 +64,7 @@ Common local gates:
 - `python tools/gui_layout_smoke.py`
 - `python tools/gui_log_history_smoke.py`
 - `python tools/gui_engineering_tools_smoke.py`
+- `python tools/gui_startup_mode_smoke.py`
 - `python tools/o2_filter_smoke.py`
 - `python tools/gui_o2_filter_smoke.py`
 

@@ -17,8 +17,10 @@ yet include an installer, updater, or code-signing workflow.
 - Builds on the Windows-validated `0.1.0-beta.3` package baseline.
 - Adds configurable O2 output filtering for quieter O2 concentration display
   and plot behavior.
-- Adds O2 zero-reference handling so the calibration path can represent the
-  intended 2.5 V zero anchor while preserving legacy migration behavior.
+- Adds O2 zero-reference handling so the calibration path defaults to the
+  observed 2.55 V zero anchor while preserving legacy migration behavior.
+- Adds an operator setting for startup behavior: keep the mode-selection
+  launcher, or open BLE mode directly and continue into scan / auto-connect.
 - Adds O2 clamp diagnostics so invalid or above-zero-reference input conditions
   are visible to the operator instead of silently flattening the value.
 - Adds GUI smoke coverage for O2 filter controls, settings migration, clamp
@@ -56,6 +58,7 @@ The following validation paths are recorded in
 - Project organization cleanup smoke: `GUI-VAL-039`
 - Release readiness metadata / document smoke: `GUI-VAL-040`
 - O2 output filter / zero-reference smoke: `GUI-VAL-041`
+- Startup mode / O2 zero-reference polish smoke: `GUI-VAL-042`
 
 Before packaging from a fresh checkout, run:
 
@@ -68,8 +71,9 @@ python tools/release_readiness_check.py
 1. Confirm the checkout is on the intended branch or release tag. See
    `docs/distribution_plan_v1.md` for the full gate and tag policy.
 2. Run `python tools/release_readiness_check.py`.
-3. Run the O2 beta4 local gate:
-   `python tools/o2_filter_smoke.py` and `python tools/gui_o2_filter_smoke.py`.
+3. Run the beta4 polish local gate:
+   `python tools/gui_startup_mode_smoke.py`, `python tools/o2_filter_smoke.py`,
+   and `python tools/gui_o2_filter_smoke.py`.
 4. Build with `pyinstaller --noconfirm --clean gui_prototype/zss_demokit_gui.spec`.
 5. Confirm `dist/zss_demokit_gui_win64_beta4/zss_demokit_gui.exe` exists.
 6. Execute `docs/windows_beta_smoke_checklist_v1.md` on Windows 11 Pro.
