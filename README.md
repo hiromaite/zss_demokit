@@ -13,10 +13,10 @@ notes, and reference copies of older implementations.
 
 This project is active beta software. Firmware and desktop GUI are both active
 implementation surfaces. The current Windows distribution candidate is
-`0.1.0-beta.3` with package directory `dist/zss_demokit_gui_win64_beta3/`.
+`0.1.0-beta.4` with package directory `dist/zss_demokit_gui_win64_beta4/`.
 
 See `docs/project_status_v1.md`, `docs/validation_checklist_v1.md`, and
-`docs/release_notes_beta3.md` for the current implementation snapshot,
+`docs/release_notes_beta4.md` for the current implementation snapshot,
 validation evidence, and beta package notes.
 
 ## Repository Map
@@ -121,10 +121,10 @@ python tools\release_readiness_check.py
 pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 ```
 
-Expected beta3 output:
+Expected beta4 output:
 
 ```text
-dist/zss_demokit_gui_win64_beta3/
+dist/zss_demokit_gui_win64_beta4/
 ```
 
 Packaging metadata is centralized in `gui_prototype/src/app_metadata.py`.
@@ -143,6 +143,8 @@ python -m compileall gui_prototype/src tools
 python tools/protocol_fixture_smoke.py
 python tools/gui_layout_smoke.py
 python tools/gui_log_history_smoke.py
+python tools/o2_filter_smoke.py
+python tools/gui_o2_filter_smoke.py
 ```
 
 Firmware baseline:
@@ -181,7 +183,7 @@ Start with:
 - `docs/implementation_backlog_v1.md` for active backlog and milestone state.
 - `docs/validation_checklist_v1.md` for tested behavior.
 - `docs/distribution_plan_v1.md` for beta distribution policy and task order.
-- `docs/release_notes_beta3.md` for the current beta package notes and known gaps.
+- `docs/release_notes_beta4.md` for the current beta package notes and known gaps.
 
 Some documents intentionally preserve historical planning context. When a
 document disagrees with current code, prefer the implementation, the active

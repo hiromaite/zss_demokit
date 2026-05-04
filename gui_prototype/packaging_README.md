@@ -5,17 +5,17 @@ This note tracks the repeatable PyInstaller path for the desktop GUI.
 ## Current Target
 
 - spec file: `gui_prototype/zss_demokit_gui.spec`
-- application version: `0.1.0-beta.3`
-- distribution directory: `dist/zss_demokit_gui_win64_beta3/`
+- application version: `0.1.0-beta.4`
+- distribution directory: `dist/zss_demokit_gui_win64_beta4/`
 - executable name: `zss_demokit_gui`
 - metadata source: `gui_prototype/src/app_metadata.py`
 
 The current package is a beta-quality `onedir` bundle. Windows 11 Pro source
 run, PyInstaller packaging, wired smoke, and BLE smoke have been confirmed by
-user testing for beta2. The next package candidate is beta3 because the existing
-`v0.1.0-beta.2` tag already points to an earlier packaging baseline.
+user testing through beta3. The next package candidate is beta4 and adds O2
+filter / zero-reference polish before the first major release decision.
 
-See `docs/distribution_plan_v1.md` for the beta3 distribution gate, tag policy,
+See `docs/distribution_plan_v1.md` for the beta4 distribution gate, tag policy,
 and artifact handling.
 
 ## Release Readiness Preflight
@@ -51,7 +51,7 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 
 ## Expected Output
 
-- `dist/zss_demokit_gui_win64_beta3/`
+- `dist/zss_demokit_gui_win64_beta4/`
 - `zss_demokit_gui.exe` on Windows
 - the same launcher flow as `python gui_prototype/main.py`
 
@@ -69,7 +69,7 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 - no code signing path yet
 - no updater path yet
 - generated icon is acceptable for beta but may still need art direction
-- beta3 release notes are tracked in `docs/release_notes_beta3.md`; there is
+- beta4 release notes are tracked in `docs/release_notes_beta4.md`; there is
   no installer-integrated changelog yet
 - `onefile` packaging has not been selected; `onedir` remains the recommended
   beta default because startup is faster and debugging is easier

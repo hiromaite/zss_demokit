@@ -8,8 +8,8 @@
 ## Current Packaging Target
 
 - package style: `onedir`
-- package directory name: `zss_demokit_gui_win64_beta3`
-- app version: `0.1.0-beta.3`
+- package directory name: `zss_demokit_gui_win64_beta4`
+- app version: `0.1.0-beta.4`
 - executable name: `zss_demokit_gui.exe`
 
 ## Preconditions
@@ -41,14 +41,14 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 
 Expected result:
 
-- package directory exists at `dist\zss_demokit_gui_win64_beta3\`
-- executable exists at `dist\zss_demokit_gui_win64_beta3\zss_demokit_gui.exe`
+- package directory exists at `dist\zss_demokit_gui_win64_beta4\`
+- executable exists at `dist\zss_demokit_gui_win64_beta4\zss_demokit_gui.exe`
 
 ## Launch Smoke
 
-1. Launch `dist\zss_demokit_gui_win64_beta3\zss_demokit_gui.exe`
+1. Launch `dist\zss_demokit_gui_win64_beta4\zss_demokit_gui.exe`
 2. Confirm that the launcher window appears
-3. Confirm that the app version displayed is `0.1.0-beta.3`
+3. Confirm that the app version displayed is `0.1.0-beta.4`
 4. Confirm that the generated app icon is shown in the window / taskbar if Windows picks it up
 
 ## Wired Smoke
@@ -86,6 +86,15 @@ Expected result:
    - no unexpected error log appears
    - finalized CSV is produced
 
+## O2 Display And Filter Smoke
+
+1. Open Settings and confirm the O2 calibration / zero-reference fields are visible
+2. Confirm O2 filter controls are visible and presets can be selected
+3. Select a quieter O2 filter preset and apply settings
+4. Confirm the O2 metric and O2 plot continue to update
+5. If the current signal is above the configured zero reference, confirm the O2
+   metric shows the expected clamp diagnostic instead of silently hiding the condition
+
 ## Pass Criteria
 
 - package build succeeds
@@ -93,6 +102,7 @@ Expected result:
 - `Wired` and `BLE` both complete their minimum smoke workflows
 - recording finalizes in both modes
 - `python tools\release_readiness_check.py` reports `release_readiness_check_ok`
+- O2 filter / zero-reference controls are visible and do not block telemetry display
 - no blocking packaging issue is discovered
 
 ## Last Confirmed Result
@@ -100,7 +110,8 @@ Expected result:
 - `0.1.0-beta.2` は Windows 11 Pro 上で user 実施により packaging 成功
 - `0.1.0-beta.2` packaged app の起動成功
 - `0.1.0-beta.2` では `Wired` / `BLE` の両モードで blocking issue なし
-- `0.1.0-beta.3` は次の確認対象
+- `0.1.0-beta.3` は Windows 11 Pro 上で user 実施により packaging / smoke 成功
+- `0.1.0-beta.4` は次の確認対象
 
 ## Follow-up Notes
 

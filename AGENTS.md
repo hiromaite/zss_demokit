@@ -12,8 +12,8 @@ for AI coding agents working in this repository.
 - Protocol, architecture, validation, backlog, and release planning live in
   `docs/`.
 - Reference-only legacy firmware / GUI assets live under `resource/`.
-- The current distribution candidate is `0.1.0-beta.3`; do not retag or move
-  the existing `v0.1.0-beta.2` tag.
+- The current distribution candidate is `0.1.0-beta.4`; do not retag or move
+  existing beta tags.
 
 ## Branch And Git Workflow
 
@@ -47,6 +47,8 @@ python tools/protocol_fixture_smoke.py
 python tools/gui_layout_smoke.py
 python tools/gui_log_history_smoke.py
 python tools/gui_engineering_tools_smoke.py
+python tools/o2_filter_smoke.py
+python tools/gui_o2_filter_smoke.py
 ```
 
 Firmware baseline:
@@ -88,8 +90,8 @@ user reports the result.
 
 ## Release Rules
 
-- The next Windows package candidate is `0.1.0-beta.3` with distribution
-  directory `dist/zss_demokit_gui_win64_beta3/`.
+- The next Windows package candidate is `0.1.0-beta.4` with distribution
+  directory `dist/zss_demokit_gui_win64_beta4/`.
 - Before packaging, run `python tools/release_readiness_check.py`.
 - After Windows packaging, execute `docs/windows_beta_smoke_checklist_v1.md`.
-- Create `v0.1.0-beta.3` only after packaged Windows smoke passes.
+- Create `v0.1.0-beta.4` only after packaged Windows smoke passes.

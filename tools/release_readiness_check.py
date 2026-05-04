@@ -6,8 +6,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 GUI_SRC = PROJECT_ROOT / "gui_prototype" / "src"
-EXPECTED_VERSION = "0.1.0-beta.3"
-EXPECTED_DISTRIBUTION = "zss_demokit_gui_win64_beta3"
+EXPECTED_VERSION = "0.1.0-beta.4"
+EXPECTED_DISTRIBUTION = "zss_demokit_gui_win64_beta4"
 
 sys.path.insert(0, str(GUI_SRC))
 
@@ -55,7 +55,7 @@ def main() -> int:
         PROJECT_ROOT / "docs" / "project_status_v1.md",
         PROJECT_ROOT / "docs" / "distribution_plan_v1.md",
         PROJECT_ROOT / "docs" / "windows_beta_smoke_checklist_v1.md",
-        PROJECT_ROOT / "docs" / "release_notes_beta3.md",
+        PROJECT_ROOT / "docs" / "release_notes_beta4.md",
     ]
     for doc_path in required_docs:
         relative = str(doc_path.relative_to(PROJECT_ROOT))

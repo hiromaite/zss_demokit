@@ -1,42 +1,45 @@
 # Distribution Plan v1
 
-更新日: 2026-05-03
+更新日: 2026-05-04
 
 ## 1. 目的
 
 この文書は、ZSS Demo Kit desktop GUI を beta package として配布するための判断、
-前提、作業順、保留事項をまとめる。現時点では formal release ではなく、PoC /
-hardware-development 向けの beta distribution を対象とする。
+前提、作業順、保留事項をまとめる。現時点では formal release 直前の final beta
+candidate として、PoC / hardware-development 向けの beta distribution を対象とする。
 
 ## 2. 先に片付けたこと
 
-`v0.1.0-beta.2` tag は既に過去の packaging baseline を指しているため、現在の
-release-readiness branch を同じ `0.1.0-beta.2` として配布すると tag と実体が
-不一致になる。このため、次の配布候補は以下へ進める。
+`v0.1.0-beta.3` tag は Windows packaged smoke 済みの beta3 baseline を指す。
+現在の main は O2 filter / zero-reference / data-flow documentation を含むため、
+次の配布候補は beta4 として扱う。
 
 | Item | Decision |
 | :--- | :--- |
-| App version | `0.1.0-beta.3` |
-| Distribution directory | `dist/zss_demokit_gui_win64_beta3/` |
+| App version | `0.1.0-beta.4` |
+| Distribution directory | `dist/zss_demokit_gui_win64_beta4/` |
 | Executable | `zss_demokit_gui.exe` |
-| Release note | `docs/release_notes_beta3.md` |
-| Existing beta2 tag | 維持。retag しない |
+| Release note | `docs/release_notes_beta4.md` |
+| Existing beta3 tag | 維持。retag しない |
 
 ## 3. Beta Distribution Policy
 
-| Topic | Beta3 decision | Formal-release follow-up |
+| Topic | Beta4 decision | Formal-release follow-up |
 | :--- | :--- | :--- |
 | Package style | PyInstaller `onedir` | Installer / `onefile` は後で再検討 |
 | Installer | なし | Inno / NSIS / MSIX 等の候補を別途比較 |
 | Code signing | なし | 外部配布が増える段階で証明書取得と署名 pipeline を検討 |
 | Updater | なし | update channel / artifact hosting 方針を別途決定 |
-| Artifact sharing | zipped `dist/zss_demokit_gui_win64_beta3/` を想定 | GitHub Release / internal share などを選定 |
+| Artifact sharing | zipped `dist/zss_demokit_gui_win64_beta4/` を想定 | GitHub Release / internal share などを選定 |
 | Admin rights | 不要を維持 | formal installer 採用時も原則不要にする |
 | Target OS | Windows 11 Pro | 必要なら Windows 10 / 11 matrix を拡張 |
 
-Beta3 では「すぐ配布してテストできること」と「トラブル時に中身を追いやすいこと」を
+Beta4 では「すぐ配布してテストできること」と「トラブル時に中身を追いやすいこと」を
 優先する。したがって `onedir` を維持し、installer / signing / updater は意図的に
 正式版前の判断点として残す。
+
+Beta4 が Windows packaged smoke と O2 calibration / filtering sanity check を通過し、
+critical regression がなければ、次は `1.0.0-rc.1` または `1.0.0` の判断に進む。
 
 ## 4. Distribution Gate
 
@@ -67,6 +70,8 @@ python tools/protocol_fixture_smoke.py
 python tools/gui_layout_smoke.py
 python tools/gui_log_history_smoke.py
 python tools/gui_engineering_tools_smoke.py
+python tools/o2_filter_smoke.py
+python tools/gui_o2_filter_smoke.py
 ```
 
 ### Step 3: Windows Build
@@ -84,8 +89,8 @@ pyinstaller --noconfirm --clean gui_prototype\zss_demokit_gui.spec
 
 Expected output:
 
-- `dist\zss_demokit_gui_win64_beta3\`
-- `dist\zss_demokit_gui_win64_beta3\zss_demokit_gui.exe`
+- `dist\zss_demokit_gui_win64_beta4\`
+- `dist\zss_demokit_gui_win64_beta4\zss_demokit_gui.exe`
 
 ### Step 4: Windows Smoke
 
@@ -94,6 +99,7 @@ Expected output:
 - packaged app launch
 - Wired connect / telemetry / pump toggle / recording finalize
 - BLE connect / telemetry / pump toggle / status request / reconnect / recording finalize
+- O2 value display, zero reference, filter preset, and clamp diagnostic sanity check
 - layout sanity check on the actual Windows display scale
 
 ### Step 5: Tag And Artifact
@@ -101,17 +107,17 @@ Expected output:
 Windows smoke が通った後に、配布対象 branch で tag を作る。
 
 ```sh
-git tag -a v0.1.0-beta.3 -m "ZSS Demo Kit beta 3 distribution candidate"
-git push origin v0.1.0-beta.3
+git tag -a v0.1.0-beta.4 -m "ZSS Demo Kit beta 4 final beta candidate"
+git push origin v0.1.0-beta.4
 ```
 
-Artifact は `dist/zss_demokit_gui_win64_beta3/` を zip 化する。zip 名の候補:
+Artifact は `dist/zss_demokit_gui_win64_beta4/` を zip 化する。zip 名の候補:
 
 ```text
-zss_demokit_gui_win64_beta3.zip
+zss_demokit_gui_win64_beta4.zip
 ```
 
-## 6. Not Blocking Beta3
+## 6. Not Blocking Beta4
 
 - final icon art direction
 - installer recipe
@@ -121,4 +127,4 @@ zss_demokit_gui_win64_beta3.zip
 - final flow calibration / selector threshold
 - pump-noise characterization
 
-これらは重要だが、PoC / hardware-development 向け beta3 の配布を止める条件にはしない。
+これらは重要だが、PoC / hardware-development 向け beta4 の配布を止める条件にはしない。

@@ -22,6 +22,8 @@ python tools/<tool>.py
 | `gui_log_history_smoke.py` | Event log filter/export and flow history comparison regression |
 | `gui_engineering_tools_smoke.py` | Settings Engineering / Tools navigation regression |
 | `gui_observability_smoke.py` | Diagnostic availability label regression |
+| `gui_o2_filter_smoke.py` | O2 filter controls, zero-reference, clamp diagnostic, and filtered plot regression |
+| `o2_filter_smoke.py` | O2 filter math, preset, and voltage conversion regression |
 | `ble_backend_smoke.py` | Fake BLE backend command / reconnect regression |
 
 ## Live GUI Session Probes
@@ -51,6 +53,7 @@ python tools/<tool>.py
 | :--- | :--- |
 | `flow_characterization_analyze.py` | Analyze saved flow characterization sessions |
 | `sampling_batch_budget.py` | Estimate BLE batch payload budget |
+| `o2_filter_analyze.py` | Analyze O2 filter behavior from recorded or synthetic data |
 | `generate_app_icon.py` | Generate beta GUI icon assets |
 | `release_readiness_check.py` | Check packaging metadata, icon assets, spec settings, and release-doc consistency |
 

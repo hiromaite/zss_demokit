@@ -8,11 +8,11 @@ from pathlib import Path
 APP_ORGANIZATION = "zss-demokit"
 APP_ID = "zss_demokit_gui"
 APP_NAME = "ZSS Demo Kit"
-APP_VERSION = "0.1.0-beta.3"
+APP_VERSION = "0.1.0-beta.4"
 APP_SUBTITLE = "Desktop GUI for BLE and Wired sensor workflows"
 
 APP_EXECUTABLE_NAME = "zss_demokit_gui"
-APP_DISTRIBUTION_NAME = "zss_demokit_gui_win64_beta3"
+APP_DISTRIBUTION_NAME = "zss_demokit_gui_win64_beta4"
 APP_COMPANY_NAME = "Hiromasa Ito, Niterra Co., Ltd."
 APP_PRODUCT_NAME = APP_NAME
 APP_FILE_DESCRIPTION = APP_SUBTITLE

@@ -448,6 +448,9 @@
   `docs/release_notes_beta3.md` と
   `tools/release_readiness_check.py` を追加し、metadata / icon / PyInstaller spec /
   release docs の整合を packaging 前に確認できるようにした
+- 2026-05-04 beta4 release-prep slice として、Windows validated `v0.1.0-beta.3` を維持し、
+  O2 filter / zero-reference / data-flow documentation を含む next distribution candidate を
+  `0.1.0-beta.4` / `zss_demokit_gui_win64_beta4` として整理した
 - 残タスクは final art direction の要否判断、installer / signing / updater policy の最終化
 
 ### GUI-010. User Feedback Integration and UX Parity
@@ -1190,6 +1193,10 @@ o2_percent = clamp(normalized * 21.0, 0.0, 100.0)
   metadata / document smoke を追加した。既存 `v0.1.0-beta.2` tag は維持し、次の配布は
   `0.1.0-beta.3` として扱う。installer / signing / updater は formal release 前の
   separate decision として残す
+- 2026-05-04 beta4 slice として、O2 output filter、O2 zero-reference handling、
+  stale calibration migration、clamp diagnostics、GUI telemetry data-flow documentation を
+  final beta candidate に含める。beta4 が Windows packaged smoke を通過すれば、次は
+  `1.0.0-rc.1` または `1.0.0` の判断へ進む
 
 直近 bundle:
 

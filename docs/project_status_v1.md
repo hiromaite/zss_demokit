@@ -1,6 +1,6 @@
 # Project Status v1
 
-更新日: 2026-05-03
+更新日: 2026-05-04
 
 ## 1. Snapshot
 
@@ -9,16 +9,16 @@ implementation surfaces. The current Windows distribution candidate is:
 
 | Item | Value |
 | :--- | :--- |
-| App version | `0.1.0-beta.3` |
-| Distribution directory | `dist/zss_demokit_gui_win64_beta3/` |
+| App version | `0.1.0-beta.4` |
+| Distribution directory | `dist/zss_demokit_gui_win64_beta4/` |
 | Packaging style | PyInstaller `onedir` |
 | Target OS for packaged smoke | Windows 11 Pro |
 | Preferred BLE name | `GasSensor-Proto` |
 | Legacy BLE compatibility | `M5STAMP-MONITOR*` remains accepted by host filters |
 
-The existing `v0.1.0-beta.2` tag points to an earlier packaging baseline and
-must not be moved. The next tag should be `v0.1.0-beta.3` after Windows packaged
-smoke passes.
+The existing `v0.1.0-beta.3` tag points to the Windows-validated beta3
+baseline and must not be moved. The next tag should be `v0.1.0-beta.4` after
+Windows packaged smoke passes.
 
 ## 2. Firmware State
 
@@ -48,6 +48,8 @@ smoke passes.
   comparison and summary CSV export.
 - Settings now separates routine device settings from Engineering / Tools
   actions.
+- Beta4 adds configurable O2 output filtering, O2 zero-reference handling, O2
+  clamp diagnostics, and GUI telemetry data-flow documentation.
 
 ## 4. Validation State
 
@@ -61,10 +63,11 @@ Common local gates:
 - `python tools/gui_layout_smoke.py`
 - `python tools/gui_log_history_smoke.py`
 - `python tools/gui_engineering_tools_smoke.py`
+- `python tools/o2_filter_smoke.py`
+- `python tools/gui_o2_filter_smoke.py`
 
-Windows beta2 packaging and wired / BLE packaged smoke were previously
-confirmed by user testing. Beta3 still needs Windows packaged smoke before
-tagging.
+Windows beta3 packaging and wired / BLE packaged smoke were confirmed by user
+testing. Beta4 still needs Windows packaged smoke before tagging.
 
 ## 5. Current Non-Blocking Gaps
 
@@ -76,4 +79,4 @@ tagging.
   flow hardware and reference measurement setup are complete.
 - Pump-noise characterization requires hardware-assisted testing.
 
-These gaps do not block PoC / hardware-development beta3 distribution.
+These gaps do not block PoC / hardware-development beta4 distribution.
