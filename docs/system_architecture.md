@@ -233,21 +233,98 @@ GUI で必要なこと:
 - `Pump ON/OFF`
 - `Get Status`
 
-## 7. データフロー案
+## 7. データフロー
 
-### 7.1 共通フロー
+この節は、GUI が BLE / wired telemetry を受け取り、metric card・plot・CSV へ反映するまでの実装上の流れを固定する。
+重要な前提は以下である。
 
-1. ユーザーが device type を選ぶ
-   起動時はスプラッシュ / ランチャー画面、起動後は設定モーダルから選択する
-2. GUI が対応 adapter を生成する
-3. adapter が transport を介して接続する
-4. adapter が受信フレームに `host_received_at` を付与し、共通 `TelemetrySample` に変換する
-5. Application Layer が共通モデルを state に反映する
-6. UI が state を見て描画を更新する
-7. GUI が表示寄りの derived values を計算する
-8. Recording Layer が同じ共通モデルを共通スキーマでファイルへ保存する
+- BLE single notify、BLE batch notify、wired frame は最終的に `TelemetryPoint` へ正規化する
+- `TelemetryPoint` 以降は transport 非依存の共通 GUI 経路を使う
+- 記録は raw telemetry に近い粒度で処理し、描画は timer-driven refresh でまとめて更新する
+- O2 concentration や flow rate は GUI-derived value であり、canonical measurement は voltage / differential pressure のまま保持する
 
-### 7.2 レート制御方針
+### 7.1 Runtime Telemetry Flow
+
+```mermaid
+flowchart TD
+    DEVICE["Sensor device"] --> TRANSPORT{"Transport input"}
+
+    TRANSPORT -->|"BLE legacy notify<br/>1 sample"| BLE_SINGLE["BLE telemetry decoder"]
+    TRANSPORT -->|"BLE batch notify<br/>N samples"| BLE_BATCH["BLE batch decoder"]
+    TRANSPORT -->|"Wired serial frame<br/>1 sample"| WIRED["Wired frame decoder"]
+
+    BLE_SINGLE --> TP["TelemetryPoint"]
+    BLE_BATCH --> TP
+    WIRED --> TP
+
+    TP --> BACKEND["MockBackend.telemetry_generated"]
+    BACKEND --> CONN["ConnectionController.telemetry_received"]
+    CONN --> MAIN["MainWindow._on_telemetry(point)"]
+
+    MAIN --> PLOT_APPEND["PlotController.append_sample(point)"]
+    MAIN --> HEALTH["Telemetry health / session stats"]
+    MAIN --> STATUS["Status labels<br/>pump / heater / gaps / diagnostics"]
+    MAIN --> REC{"Recording active?"}
+
+    REC -->|"yes"| CSV["RecordingController.append_row()<br/>CSV raw schema"]
+    REC -->|"no"| SKIP["No CSV row"]
+
+    PLOT_APPEND --> BUFFERS["PlotController buffers<br/>time / flow / heater / zirconia"]
+    PLOT_APPEND --> METRICS["PlotController.metric_snapshot()"]
+    METRICS --> CARDS["Metric cards"]
+
+    TIMER["150 ms plot timer"] --> REFRESH["MainWindow._refresh_plots()"]
+    BUFFERS --> REFRESH
+    REFRESH --> RENDER["PlotController.render_data()<br/>time span / downsample"]
+    RENDER --> PLOTS["Plot curves"]
+```
+
+### 7.2 Plot Series Derivation
+
+```mermaid
+flowchart LR
+    TP["TelemetryPoint"] --> TIME["sequence + nominal_sample_period_ms<br/>elapsed x-axis"]
+
+    TP --> DP["differential_pressure_selected_pa"]
+    DP --> FLOW_DERIVED["derive_flow_rate_lpm_from_selected_differential_pressure_pa()"]
+    FLOW_DERIVED --> FLOW_BUF["flow_rate_values"]
+    FLOW_BUF --> FLOW_PLOT["Flow / O2 plot<br/>left axis: Flow L/min"]
+
+    TP --> ZIRC["zirconia_output_voltage_v"]
+    ZIRC --> ZIRC_BUF["zirconia_values"]
+    ZIRC_BUF --> ZIRC_PLOT["Zirconia / Heater plot<br/>right axis: Zirconia V"]
+
+    ZIRC_BUF --> O2_DERIVED["derive_o2_concentration_percent()<br/>uses GUI calibration"]
+    O2_DERIVED --> O2_PLOT["Flow / O2 plot<br/>right axis: O2 %"]
+    O2_DERIVED --> O2_CARD["O2 metric card"]
+
+    TP --> HEATER["heater_rtd_resistance_ohm"]
+    HEATER --> HEATER_BUF["heater_values"]
+    HEATER_BUF --> HEATER_PLOT["Zirconia / Heater plot<br/>left axis: Heater Ohm"]
+
+    TP --> OPTIONAL["optional diagnostic fields<br/>raw SDP / zirconia Ip / internal voltage"]
+    OPTIONAL --> DETAIL["detail labels and flow diagnostics"]
+```
+
+If a display-only smoothing layer is enabled in a feature branch, it belongs between `zirconia_output_voltage_v` and the O2-derived display path.
+It must not replace the canonical raw `zirconia_output_voltage_v` stored in telemetry or the standard CSV schema unless a future protocol revision explicitly changes that contract.
+
+### 7.3 Data Ownership
+
+| Data | Source | GUI owner | Display / output |
+| :--- | :--- | :--- | :--- |
+| `sequence` | device telemetry | `PlotController.time_values`, gap tracking | X-axis, gap counter, CSV |
+| `host_received_at` | GUI receive time | `TelemetryPoint` / recording path | CSV timing, health diagnostics |
+| `nominal_sample_period_ms` | device telemetry / capabilities | `TelemetryPoint`, session metadata | elapsed time calculation, CSV metadata |
+| `zirconia_output_voltage_v` | device telemetry | `PlotController.zirconia_values` | Zirconia voltage metric, lower plot right axis, O2-derived display |
+| `heater_rtd_resistance_ohm` | device telemetry | `PlotController.heater_values` | Heater metric, lower plot left axis |
+| `differential_pressure_selected_pa` | device telemetry | `PlotController.differential_pressure_selected_values` | flow-derived metric and upper plot left axis |
+| raw SDP fields | BLE batch / wired optional telemetry | latest diagnostic state | flow detail labels, CSV optional raw columns |
+| `zirconia_ip_voltage_v`, `internal_voltage_v` | wired optional telemetry | latest diagnostic state | device status detail, CSV optional columns |
+| O2 concentration % | GUI calibration + zirconia voltage | derived at metric / render time | O2 metric, upper plot right axis |
+| flow rate L/min | selected differential pressure | derived on append | Flow metric, upper plot left axis |
+
+### 7.4 レート制御方針
 
 - 受信レートと描画レートは分離する
 - 記録は受信イベントに近い粒度で処理する
