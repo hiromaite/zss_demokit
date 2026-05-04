@@ -22,9 +22,11 @@ for candidate in [str(GUI_ROOT), str(GUI_SRC)]:
 from app_metadata import APP_ID, APP_NAME, APP_ORGANIZATION, APP_VERSION  # noqa: E402
 from app_state import (  # noqa: E402
     O2_FILTER_PRESET_CUSTOM,
+    O2_FILTER_PRESET_DEFAULT,
+    O2_FILTER_PRESET_QUIET,
     O2_FILTER_TYPE_CENTERED_GAUSSIAN,
-    O2_FILTER_TYPE_EMA_2,
-    O2_FILTER_TYPE_GAUSSIAN,
+    O2_FILTER_TYPE_SAVGOL,
+    O2_FILTER_TYPES,
     O2OutputFilterPreferences,
 )
 from dialogs import SettingsDialog  # noqa: E402
@@ -60,6 +62,8 @@ def _exercise_o2_settings_migration() -> None:
     raw_settings.setValue("o2/air_calibration_voltage_v", 0.70)
     raw_settings.setValue("o2/calibrated_at_iso", "")
     raw_settings.setValue("o2/zero_reference_voltage_v", 2.5)
+    raw_settings.setValue("o2_filter/filter_type", "EMA 2-pole")
+    raw_settings.setValue("o2_filter/preset", "Balanced")
     raw_settings.sync()
 
     loaded = SettingsStore().load()
@@ -67,6 +71,10 @@ def _exercise_o2_settings_migration() -> None:
         raise AssertionError("unversioned O2 calibration anchor was not ignored on load")
     if loaded.o2.zero_reference_voltage_v != 0.0:
         raise AssertionError("legacy O2 zero reference was not migrated to 0 V default")
+    if loaded.o2_filter.filter_type not in O2_FILTER_TYPES:
+        raise AssertionError(f"legacy O2 filter type was not migrated: {loaded.o2_filter}")
+    if loaded.o2_filter.preset != O2_FILTER_PRESET_DEFAULT:
+        raise AssertionError(f"legacy Balanced preset was not migrated: {loaded.o2_filter}")
 
 
 def _exercise_o2_clamp_diagnostics() -> None:
@@ -98,18 +106,21 @@ def _exercise_o2_filter_controls() -> None:
         window.app_settings.o2.zero_reference_voltage_v = 0.0
         window.app_settings.o2_filter = O2OutputFilterPreferences(
             enabled=True,
-            filter_type=O2_FILTER_TYPE_GAUSSIAN,
+            filter_type=O2_FILTER_TYPE_CENTERED_GAUSSIAN,
         )
         window.o2_output_filter.set_preferences(window.app_settings.o2_filter)
 
-        window._on_telemetry(_telemetry_point(100, 0.70))  # noqa: SLF001
-        window._on_telemetry(_telemetry_point(101, 0.90))  # noqa: SLF001
+        for sequence, voltage in enumerate(
+            [0.70, 0.70, 0.70, 0.70, 0.90, 0.90, 0.90, 0.90, 0.90],
+            start=100,
+        ):
+            window._on_telemetry(_telemetry_point(sequence, voltage))  # noqa: SLF001
         raw_latest = window.plot_controller.zirconia_values[-1]
         filtered_latest = window.plot_controller.o2_zirconia_values[-1]
         if raw_latest != 0.90:
             raise AssertionError(f"raw zirconia plot value changed: {raw_latest}")
         if not (0.70 < filtered_latest < raw_latest):
-            raise AssertionError(f"Gaussian filter did not smooth step: {filtered_latest}")
+            raise AssertionError(f"centered Gaussian filter did not smooth step: {filtered_latest}")
         window._refresh_plots()  # noqa: SLF001
         x_data, y_data = window.sensor_secondary_curve.getData()
         if x_data is None or y_data is None or len(y_data) != len(window.plot_controller.time_values):
@@ -131,16 +142,36 @@ def _exercise_o2_filter_controls() -> None:
             dialog.o2_filter_enabled_check.setChecked(False)
             if not dialog.o2_filter_type_combo.isEnabled():
                 raise AssertionError("disabled O2 filter blocked filter type editing")
-            dialog.o2_filter_type_combo.setCurrentText(O2_FILTER_TYPE_EMA_2)
-            if not dialog.o2_filter_ema_cutoff_spin.isEnabled():
-                raise AssertionError("EMA cutoff control was not editable for EMA filter")
-            dialog.o2_filter_ema_cutoff_spin.setValue(7.5)
-            if dialog.o2_filter_preset_combo.currentText() != O2_FILTER_PRESET_CUSTOM:
-                raise AssertionError("editing an O2 filter coefficient did not switch to Custom preset")
+            if [
+                dialog.o2_filter_type_combo.itemText(index)
+                for index in range(dialog.o2_filter_type_combo.count())
+            ] != list(O2_FILTER_TYPES):
+                raise AssertionError("O2 filter type list was not limited to supported filters")
+            dialog.o2_filter_type_combo.setCurrentText(O2_FILTER_TYPE_SAVGOL)
+            dialog.o2_filter_preset_combo.setCurrentText(O2_FILTER_PRESET_DEFAULT)
+            if dialog.o2_filter_savgol_window_spin.value() != 9:
+                raise AssertionError("Savitzky-Golay default preset did not update custom fields")
+            if dialog.o2_filter_savgol_window_spin.isEnabled():
+                raise AssertionError("Savitzky-Golay preset field should be read-only until Custom")
+            dialog.o2_filter_preset_combo.setCurrentText(O2_FILTER_PRESET_CUSTOM)
+            if not dialog.o2_filter_savgol_window_spin.isEnabled():
+                raise AssertionError("Savitzky-Golay custom window control was not editable")
+            dialog.o2_filter_savgol_window_spin.setValue(15)
+            dialog.o2_filter_savgol_order_spin.setValue(3)
             dialog.o2_filter_type_combo.setCurrentText(O2_FILTER_TYPE_CENTERED_GAUSSIAN)
+            dialog.o2_filter_preset_combo.setCurrentText(O2_FILTER_PRESET_QUIET)
+            if (
+                dialog.o2_filter_centered_gaussian_window_spin.value() != 13
+                or abs(dialog.o2_filter_centered_gaussian_sigma_spin.value() - 2.75) > 1e-9
+            ):
+                raise AssertionError("centered Gaussian quiet preset did not update custom fields")
+            if dialog.o2_filter_centered_gaussian_sigma_spin.isEnabled():
+                raise AssertionError("centered Gaussian preset field should be read-only until Custom")
+            dialog.o2_filter_preset_combo.setCurrentText(O2_FILTER_PRESET_CUSTOM)
             if not dialog.o2_filter_centered_gaussian_sigma_spin.isEnabled():
                 raise AssertionError("centered Gaussian sigma control was not editable")
-            dialog.o2_filter_centered_gaussian_sigma_spin.setValue(1.35)
+            dialog.o2_filter_centered_gaussian_window_spin.setValue(17)
+            dialog.o2_filter_centered_gaussian_sigma_spin.setValue(3.25)
             selected = dialog.selected_o2_filter_preferences
             if selected.enabled:
                 raise AssertionError("dialog did not expose disabled O2 filter state")
@@ -148,14 +179,15 @@ def _exercise_o2_filter_controls() -> None:
                 raise AssertionError("dialog did not expose custom O2 zero reference voltage")
             if (
                 selected.filter_type != O2_FILTER_TYPE_CENTERED_GAUSSIAN
-                or abs(selected.centered_gaussian_sigma_samples - 1.35) > 1e-9
+                or selected.centered_gaussian_window_points != 17
+                or abs(selected.centered_gaussian_sigma_samples - 3.25) > 1e-9
             ):
                 raise AssertionError(f"dialog did not expose custom centered Gaussian settings: {selected}")
             window._apply_dialog_settings(dialog)  # noqa: SLF001
         finally:
             dialog.close()
 
-        window._on_telemetry(_telemetry_point(102, 0.82))  # noqa: SLF001
+        window._on_telemetry(_telemetry_point(109, 0.82))  # noqa: SLF001
         if window.plot_controller.o2_zirconia_values[-1] != 0.82:
             raise AssertionError("disabled O2 filter did not pass raw voltage through")
     finally:

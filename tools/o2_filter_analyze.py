@@ -16,16 +16,12 @@ GUI_SRC = REPO_ROOT / "gui_prototype" / "src"
 sys.path.insert(0, str(GUI_SRC))
 
 from app_state import (  # noqa: E402
-    O2_FILTER_PRESET_BALANCED,
     O2_FILTER_PRESET_CUSTOM,
+    O2_FILTER_PRESET_DEFAULT,
     O2_FILTER_PRESET_FAST,
     O2_FILTER_PRESET_QUIET,
     O2_FILTER_TYPE_CENTERED_GAUSSIAN,
-    O2_FILTER_TYPE_EMA_1,
-    O2_FILTER_TYPE_EMA_2,
-    O2_FILTER_TYPE_GAUSSIAN,
-    O2_FILTER_TYPE_SAVGOL_7,
-    O2_FILTER_TYPE_SAVGOL_9,
+    O2_FILTER_TYPE_SAVGOL,
     O2OutputFilterPreferences,
 )
 from o2_filter import O2OutputFilter, describe_o2_filter  # noqa: E402
@@ -136,87 +132,71 @@ def candidate_preferences() -> list[tuple[str, O2OutputFilterPreferences]]:
     return [
         ("Raw", O2OutputFilterPreferences(enabled=False)),
         (
-            "EMA 1-pole Fast 10Hz",
+            "Savitzky-Golay Fast 7-point quadratic",
             O2OutputFilterPreferences(
                 enabled=True,
-                filter_type=O2_FILTER_TYPE_EMA_1,
+                filter_type=O2_FILTER_TYPE_SAVGOL,
                 preset=O2_FILTER_PRESET_FAST,
             ),
         ),
         (
-            "EMA 2-pole Balanced 7Hz",
+            "Savitzky-Golay Default 9-point quadratic",
             O2OutputFilterPreferences(
                 enabled=True,
-                filter_type=O2_FILTER_TYPE_EMA_2,
-                preset=O2_FILTER_PRESET_BALANCED,
+                filter_type=O2_FILTER_TYPE_SAVGOL,
+                preset=O2_FILTER_PRESET_DEFAULT,
             ),
         ),
         (
-            "Gaussian Fast sigma20",
+            "Savitzky-Golay Quiet 13-point quadratic",
             O2OutputFilterPreferences(
                 enabled=True,
-                filter_type=O2_FILTER_TYPE_GAUSSIAN,
-                preset=O2_FILTER_PRESET_CUSTOM,
-                gaussian_sigma_ms=20.0,
-            ),
-        ),
-        (
-            "Gaussian Balanced sigma30",
-            O2OutputFilterPreferences(
-                enabled=True,
-                filter_type=O2_FILTER_TYPE_GAUSSIAN,
-                preset=O2_FILTER_PRESET_BALANCED,
-            ),
-        ),
-        (
-            "Gaussian Quiet sigma40",
-            O2OutputFilterPreferences(
-                enabled=True,
-                filter_type=O2_FILTER_TYPE_GAUSSIAN,
+                filter_type=O2_FILTER_TYPE_SAVGOL,
                 preset=O2_FILTER_PRESET_QUIET,
             ),
         ),
         (
-            "Savitzky-Golay 7-point quadratic",
+            "Savitzky-Golay Custom 15-point quadratic",
             O2OutputFilterPreferences(
                 enabled=True,
-                filter_type=O2_FILTER_TYPE_SAVGOL_7,
+                filter_type=O2_FILTER_TYPE_SAVGOL,
                 preset=O2_FILTER_PRESET_CUSTOM,
+                savgol_window_points=15,
+                savgol_polynomial_order=2,
             ),
         ),
         (
-            "Savitzky-Golay 9-point quadratic",
+            "Centered Gaussian Fast 7-point sigma1.25",
             O2OutputFilterPreferences(
                 enabled=True,
-                filter_type=O2_FILTER_TYPE_SAVGOL_9,
-                preset=O2_FILTER_PRESET_CUSTOM,
+                filter_type=O2_FILTER_TYPE_CENTERED_GAUSSIAN,
+                preset=O2_FILTER_PRESET_FAST,
             ),
         ),
         (
-            "Centered Gaussian 7-point sigma1.0",
+            "Centered Gaussian Default 9-point sigma1.75",
+            O2OutputFilterPreferences(
+                enabled=True,
+                filter_type=O2_FILTER_TYPE_CENTERED_GAUSSIAN,
+                preset=O2_FILTER_PRESET_DEFAULT,
+            ),
+        ),
+        (
+            "Centered Gaussian Quiet 13-point sigma2.75",
+            O2OutputFilterPreferences(
+                enabled=True,
+                filter_type=O2_FILTER_TYPE_CENTERED_GAUSSIAN,
+                preset=O2_FILTER_PRESET_QUIET,
+            ),
+        ),
+        (
+            "Centered Gaussian Custom 17-point sigma3.25",
             O2OutputFilterPreferences(
                 enabled=True,
                 filter_type=O2_FILTER_TYPE_CENTERED_GAUSSIAN,
                 preset=O2_FILTER_PRESET_CUSTOM,
-                centered_gaussian_sigma_samples=1.0,
-            ),
-        ),
-        (
-            "Centered Gaussian 7-point sigma1.25",
-            O2OutputFilterPreferences(
-                enabled=True,
-                filter_type=O2_FILTER_TYPE_CENTERED_GAUSSIAN,
-                preset=O2_FILTER_PRESET_CUSTOM,
-                centered_gaussian_sigma_samples=1.25,
-            ),
-        ),
-        (
-            "Centered Gaussian 7-point sigma1.5",
-            O2OutputFilterPreferences(
-                enabled=True,
-                filter_type=O2_FILTER_TYPE_CENTERED_GAUSSIAN,
-                preset=O2_FILTER_PRESET_CUSTOM,
-                centered_gaussian_sigma_samples=1.5,
+                centered_gaussian_window_points=17,
+                centered_gaussian_sigma_samples=3.25,
             ),
         ),
     ]

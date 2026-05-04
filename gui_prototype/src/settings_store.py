@@ -92,21 +92,33 @@ class SettingsStore:
                         settings.o2_filter.preset,
                     )
                 ),
-                ema_cutoff_hz=self._to_float(
-                    self._settings.value("o2_filter/ema_cutoff_hz", 7.0),
-                    7.0,
+                savgol_window_points=self._to_int(
+                    self._settings.value(
+                        "o2_filter/savgol_window_points",
+                        settings.o2_filter.savgol_window_points,
+                    ),
+                    settings.o2_filter.savgol_window_points,
                 ),
-                gaussian_sigma_ms=self._to_float(
-                    self._settings.value("o2_filter/gaussian_sigma_ms", 30.0),
-                    30.0,
+                savgol_polynomial_order=self._to_int(
+                    self._settings.value(
+                        "o2_filter/savgol_polynomial_order",
+                        settings.o2_filter.savgol_polynomial_order,
+                    ),
+                    settings.o2_filter.savgol_polynomial_order,
                 ),
-                gaussian_tail_sigma=self._to_float(
-                    self._settings.value("o2_filter/gaussian_tail_sigma", 3.0),
-                    3.0,
+                centered_gaussian_window_points=self._to_int(
+                    self._settings.value(
+                        "o2_filter/centered_gaussian_window_points",
+                        settings.o2_filter.centered_gaussian_window_points,
+                    ),
+                    settings.o2_filter.centered_gaussian_window_points,
                 ),
                 centered_gaussian_sigma_samples=self._to_float(
-                    self._settings.value("o2_filter/centered_gaussian_sigma_samples", 1.25),
-                    1.25,
+                    self._settings.value(
+                        "o2_filter/centered_gaussian_sigma_samples",
+                        settings.o2_filter.centered_gaussian_sigma_samples,
+                    ),
+                    settings.o2_filter.centered_gaussian_sigma_samples,
                 ),
             )
         )
@@ -152,13 +164,22 @@ class SettingsStore:
         self._settings.setValue("o2_filter/enabled", o2_filter.enabled)
         self._settings.setValue("o2_filter/filter_type", o2_filter.filter_type)
         self._settings.setValue("o2_filter/preset", o2_filter.preset)
-        self._settings.setValue("o2_filter/ema_cutoff_hz", o2_filter.ema_cutoff_hz)
-        self._settings.setValue("o2_filter/gaussian_sigma_ms", o2_filter.gaussian_sigma_ms)
-        self._settings.setValue("o2_filter/gaussian_tail_sigma", o2_filter.gaussian_tail_sigma)
+        self._settings.setValue("o2_filter/savgol_window_points", o2_filter.savgol_window_points)
+        self._settings.setValue("o2_filter/savgol_polynomial_order", o2_filter.savgol_polynomial_order)
+        self._settings.setValue(
+            "o2_filter/centered_gaussian_window_points",
+            o2_filter.centered_gaussian_window_points,
+        )
         self._settings.setValue(
             "o2_filter/centered_gaussian_sigma_samples",
             o2_filter.centered_gaussian_sigma_samples,
         )
+        for legacy_key in (
+            "o2_filter/ema_cutoff_hz",
+            "o2_filter/gaussian_sigma_ms",
+            "o2_filter/gaussian_tail_sigma",
+        ):
+            self._settings.remove(legacy_key)
         self._settings.setValue("windows/main_window_width", settings.windows.main_window_width)
         self._settings.setValue("windows/main_window_height", settings.windows.main_window_height)
         self._settings.setValue("windows/launcher_window_width", settings.windows.launcher_window_width)
@@ -181,6 +202,13 @@ class SettingsStore:
     def _to_float(value: object, default: float) -> float:
         try:
             return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    @staticmethod
+    def _to_int(value: object, default: int) -> int:
+        try:
+            return int(round(float(value)))
         except (TypeError, ValueError):
             return default
 

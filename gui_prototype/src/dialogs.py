@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QPlainTextEdit,
     QPushButton,
     QRadioButton,
+    QSpinBox,
     QStackedWidget,
     QVBoxLayout,
     QWidget,
@@ -34,11 +35,7 @@ from app_state import (
     O2_FILTER_PRESETS,
     O2_FILTER_TYPES,
     O2_FILTER_TYPE_CENTERED_GAUSSIAN,
-    O2_FILTER_TYPE_EMA_1,
-    O2_FILTER_TYPE_EMA_2,
-    O2_FILTER_TYPE_GAUSSIAN,
-    O2_FILTER_TYPE_SAVGOL_7,
-    O2_FILTER_TYPE_SAVGOL_9,
+    O2_FILTER_TYPE_SAVGOL,
     O2OutputFilterPreferences,
 )
 from dialog_helpers import dialog_header, format_optional, style_dialog_buttons
@@ -286,9 +283,9 @@ class SettingsDialog(QDialog):
             enabled=self.o2_filter_enabled_check.isChecked(),
             filter_type=self.o2_filter_type_combo.currentText(),
             preset=self.o2_filter_preset_combo.currentText(),
-            ema_cutoff_hz=self.o2_filter_ema_cutoff_spin.value(),
-            gaussian_sigma_ms=self.o2_filter_gaussian_sigma_spin.value(),
-            gaussian_tail_sigma=self.o2_filter_gaussian_tail_spin.value(),
+            savgol_window_points=self.o2_filter_savgol_window_spin.value(),
+            savgol_polynomial_order=self.o2_filter_savgol_order_spin.value(),
+            centered_gaussian_window_points=self.o2_filter_centered_gaussian_window_spin.value(),
             centered_gaussian_sigma_samples=self.o2_filter_centered_gaussian_sigma_spin.value(),
         )
 
@@ -491,31 +488,29 @@ class SettingsDialog(QDialog):
         self.o2_filter_preset_combo.addItems(list(O2_FILTER_PRESETS))
         self.o2_filter_preset_combo.setCurrentText(self._settings.o2_filter.preset)
 
-        self.o2_filter_ema_cutoff_spin = QDoubleSpinBox()
-        self.o2_filter_ema_cutoff_spin.setRange(0.1, 25.0)
-        self.o2_filter_ema_cutoff_spin.setDecimals(1)
-        self.o2_filter_ema_cutoff_spin.setSingleStep(0.5)
-        self.o2_filter_ema_cutoff_spin.setSuffix(" Hz")
-        self.o2_filter_ema_cutoff_spin.setValue(self._settings.o2_filter.ema_cutoff_hz)
+        self.o2_filter_savgol_window_spin = QSpinBox()
+        self.o2_filter_savgol_window_spin.setRange(3, 51)
+        self.o2_filter_savgol_window_spin.setSingleStep(2)
+        self.o2_filter_savgol_window_spin.setSuffix(" points")
+        self.o2_filter_savgol_window_spin.setValue(self._settings.o2_filter.savgol_window_points)
 
-        self.o2_filter_gaussian_sigma_spin = QDoubleSpinBox()
-        self.o2_filter_gaussian_sigma_spin.setRange(1.0, 1000.0)
-        self.o2_filter_gaussian_sigma_spin.setDecimals(1)
-        self.o2_filter_gaussian_sigma_spin.setSingleStep(5.0)
-        self.o2_filter_gaussian_sigma_spin.setSuffix(" ms")
-        self.o2_filter_gaussian_sigma_spin.setValue(self._settings.o2_filter.gaussian_sigma_ms)
+        self.o2_filter_savgol_order_spin = QSpinBox()
+        self.o2_filter_savgol_order_spin.setRange(0, 5)
+        self.o2_filter_savgol_order_spin.setSingleStep(1)
+        self.o2_filter_savgol_order_spin.setValue(self._settings.o2_filter.savgol_polynomial_order)
 
-        self.o2_filter_gaussian_tail_spin = QDoubleSpinBox()
-        self.o2_filter_gaussian_tail_spin.setRange(1.0, 6.0)
-        self.o2_filter_gaussian_tail_spin.setDecimals(2)
-        self.o2_filter_gaussian_tail_spin.setSingleStep(0.25)
-        self.o2_filter_gaussian_tail_spin.setSuffix(" sigma")
-        self.o2_filter_gaussian_tail_spin.setValue(self._settings.o2_filter.gaussian_tail_sigma)
+        self.o2_filter_centered_gaussian_window_spin = QSpinBox()
+        self.o2_filter_centered_gaussian_window_spin.setRange(3, 51)
+        self.o2_filter_centered_gaussian_window_spin.setSingleStep(2)
+        self.o2_filter_centered_gaussian_window_spin.setSuffix(" points")
+        self.o2_filter_centered_gaussian_window_spin.setValue(
+            self._settings.o2_filter.centered_gaussian_window_points
+        )
 
         self.o2_filter_centered_gaussian_sigma_spin = QDoubleSpinBox()
-        self.o2_filter_centered_gaussian_sigma_spin.setRange(1.0, 1.5)
+        self.o2_filter_centered_gaussian_sigma_spin.setRange(0.5, 12.0)
         self.o2_filter_centered_gaussian_sigma_spin.setDecimals(2)
-        self.o2_filter_centered_gaussian_sigma_spin.setSingleStep(0.05)
+        self.o2_filter_centered_gaussian_sigma_spin.setSingleStep(0.25)
         self.o2_filter_centered_gaussian_sigma_spin.setSuffix(" samples")
         self.o2_filter_centered_gaussian_sigma_spin.setValue(
             self._settings.o2_filter.centered_gaussian_sigma_samples
@@ -524,10 +519,11 @@ class SettingsDialog(QDialog):
         filter_form.addRow("Enabled", self.o2_filter_enabled_check)
         filter_form.addRow("Type", self.o2_filter_type_combo)
         filter_form.addRow("Preset", self.o2_filter_preset_combo)
-        filter_form.addRow("EMA cutoff", self.o2_filter_ema_cutoff_spin)
-        filter_form.addRow("Gaussian sigma", self.o2_filter_gaussian_sigma_spin)
-        filter_form.addRow("Gaussian tail", self.o2_filter_gaussian_tail_spin)
-        filter_form.addRow("Centered Gaussian sigma", self.o2_filter_centered_gaussian_sigma_spin)
+        filter_form.addRow("SG window", self.o2_filter_savgol_window_spin)
+        filter_form.addRow("SG polynomial order", self.o2_filter_savgol_order_spin)
+        filter_form.addRow("Gaussian window", self.o2_filter_centered_gaussian_window_spin)
+        filter_form.addRow("Gaussian sigma", self.o2_filter_centered_gaussian_sigma_spin)
+        self._o2_filter_form = filter_form
         filter_layout.addLayout(filter_form)
         layout.addWidget(filter_card)
 
@@ -535,33 +531,55 @@ class SettingsDialog(QDialog):
         self.o2_filter_type_combo.currentTextChanged.connect(self._handle_o2_filter_type_changed)
         self.o2_filter_preset_combo.currentTextChanged.connect(self._handle_o2_filter_preset_changed)
         for spin_box in (
-            self.o2_filter_ema_cutoff_spin,
-            self.o2_filter_gaussian_sigma_spin,
-            self.o2_filter_gaussian_tail_spin,
+            self.o2_filter_savgol_window_spin,
+            self.o2_filter_savgol_order_spin,
+            self.o2_filter_centered_gaussian_window_spin,
             self.o2_filter_centered_gaussian_sigma_spin,
         ):
             spin_box.valueChanged.connect(self._mark_o2_filter_custom)
+            spin_box.valueChanged.connect(self._update_o2_filter_control_state)
+        self._apply_o2_filter_preset_values()
         self._update_o2_filter_control_state()
 
         self._refresh_o2_calibration_state()
         layout.addStretch(1)
         return page
 
-    def _update_o2_filter_control_state(self) -> None:
+    def _update_o2_filter_control_state(self, *_args: object) -> None:
         if not hasattr(self, "o2_filter_enabled_check"):
             return
         filter_type = self.o2_filter_type_combo.currentText()
-        is_ema = filter_type in {O2_FILTER_TYPE_EMA_1, O2_FILTER_TYPE_EMA_2}
-        is_one_sided_gaussian = filter_type == O2_FILTER_TYPE_GAUSSIAN
         is_centered_gaussian = filter_type == O2_FILTER_TYPE_CENTERED_GAUSSIAN
-        is_fixed_coefficients = filter_type in {O2_FILTER_TYPE_SAVGOL_7, O2_FILTER_TYPE_SAVGOL_9}
+        is_savgol = filter_type == O2_FILTER_TYPE_SAVGOL
+        is_custom = self.o2_filter_preset_combo.currentText() == O2_FILTER_PRESET_CUSTOM
+
+        max_savgol_order = min(5, max(0, self.o2_filter_savgol_window_spin.value() - 1))
+        self.o2_filter_savgol_order_spin.setMaximum(max_savgol_order)
+        if self.o2_filter_savgol_order_spin.value() > max_savgol_order:
+            self.o2_filter_savgol_order_spin.setValue(max_savgol_order)
 
         self.o2_filter_type_combo.setEnabled(True)
-        self.o2_filter_preset_combo.setEnabled(not is_fixed_coefficients)
-        self.o2_filter_ema_cutoff_spin.setEnabled(is_ema)
-        self.o2_filter_gaussian_sigma_spin.setEnabled(is_one_sided_gaussian)
-        self.o2_filter_gaussian_tail_spin.setEnabled(is_one_sided_gaussian)
-        self.o2_filter_centered_gaussian_sigma_spin.setEnabled(is_centered_gaussian)
+        self.o2_filter_preset_combo.setEnabled(True)
+        self._set_o2_filter_parameter_visible(self.o2_filter_savgol_window_spin, is_savgol)
+        self._set_o2_filter_parameter_visible(self.o2_filter_savgol_order_spin, is_savgol)
+        self._set_o2_filter_parameter_visible(
+            self.o2_filter_centered_gaussian_window_spin,
+            is_centered_gaussian,
+        )
+        self._set_o2_filter_parameter_visible(
+            self.o2_filter_centered_gaussian_sigma_spin,
+            is_centered_gaussian,
+        )
+        self.o2_filter_savgol_window_spin.setEnabled(is_savgol and is_custom)
+        self.o2_filter_savgol_order_spin.setEnabled(is_savgol and is_custom)
+        self.o2_filter_centered_gaussian_window_spin.setEnabled(is_centered_gaussian and is_custom)
+        self.o2_filter_centered_gaussian_sigma_spin.setEnabled(is_centered_gaussian and is_custom)
+
+    def _set_o2_filter_parameter_visible(self, widget: QWidget, visible: bool) -> None:
+        widget.setVisible(visible)
+        label = self._o2_filter_form.labelForField(widget)
+        if label is not None:
+            label.setVisible(visible)
 
     def _handle_o2_filter_type_changed(self, *_args: object) -> None:
         self._apply_o2_filter_preset_values()
@@ -580,9 +598,11 @@ class SettingsDialog(QDialog):
         effective = effective_o2_filter_preferences(self.selected_o2_filter_preferences)
         self._syncing_o2_filter_controls = True
         try:
-            self.o2_filter_ema_cutoff_spin.setValue(effective.ema_cutoff_hz)
-            self.o2_filter_gaussian_sigma_spin.setValue(effective.gaussian_sigma_ms)
-            self.o2_filter_gaussian_tail_spin.setValue(effective.gaussian_tail_sigma)
+            self.o2_filter_savgol_window_spin.setValue(effective.savgol_window_points)
+            self.o2_filter_savgol_order_spin.setValue(effective.savgol_polynomial_order)
+            self.o2_filter_centered_gaussian_window_spin.setValue(
+                effective.centered_gaussian_window_points
+            )
             self.o2_filter_centered_gaussian_sigma_spin.setValue(
                 effective.centered_gaussian_sigma_samples
             )

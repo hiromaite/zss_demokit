@@ -962,9 +962,9 @@ class MainWindow(QMainWindow):
             self.app_settings.o2_filter.enabled,
             self.app_settings.o2_filter.filter_type,
             self.app_settings.o2_filter.preset,
-            self.app_settings.o2_filter.ema_cutoff_hz,
-            self.app_settings.o2_filter.gaussian_sigma_ms,
-            self.app_settings.o2_filter.gaussian_tail_sigma,
+            self.app_settings.o2_filter.savgol_window_points,
+            self.app_settings.o2_filter.savgol_polynomial_order,
+            self.app_settings.o2_filter.centered_gaussian_window_points,
             self.app_settings.o2_filter.centered_gaussian_sigma_samples,
         )
         if data_key != self._last_plot_data_key:
